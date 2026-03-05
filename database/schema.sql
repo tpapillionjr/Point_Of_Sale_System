@@ -7,21 +7,21 @@ CREATE TABLE Orders (
     receipt_number VARCHAR(30),
     order_note VARCHAR(255),
 
-    order_type ENUM('dine_in', 'takeout', 'delivery') NOT NULL DEFAULT 'dine_in',
-    order_channel ENUM('in_store','phone','online') NOT NULL DEFAULT 'in_store',
+    order_type ENUM('Dine_in', 'Takeout', 'Delivery') NOT NULL DEFAULT 'Dine_in',
+    order_channel ENUM('In_Store','Phone','Online') NOT NULL DEFAULT 'In_store',
     guest_count SMALLINT NOT NULL DEFAULT 1,
 
     is_split_check BOOLEAN NOT NULL DEFAULT FALSE,
 
-    status ENUM('open', 'sent', 'completed', 'paid', 'void')
-		NOT NULL DEFAULT 'open',
+    status ENUM('Open', 'Sent', 'Completed', 'Paid', 'Void')
+		NOT NULL DEFAULT 'Open',
 
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at DATETIME NULL,
 
     subtotal DECIMAL(10,2) DEFAULT 0.00,
     discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    discount_type ENUM('none','promo','manager_comp','employee_meal') NOT NULL DEFAULT 'none',
+    discount_type ENUM('None','Promo','Mnager_comp','Employee_meal') NOT NULL DEFAULT 'none',
     tax DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     service_charge DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -76,6 +76,20 @@ CREATE TABLE Payment (
         ON DELETE RESTRICT 
         ON UPDATE CASCADE
 );
+
+    Customer_num_id INT PRIMARY KEY,
+    Phone_number VARCHAR(10) NOT NULL UNIQUE,
+    Points_balance INT DEFAULT 0 CHECK (Points_balance >= 0)
+);
+CREATE TABLE Inventory (
+    Item_name VARCHAR(100) PRIMARY KEY,
+    Amount_available INT NOT NULL CHECK (Amount_available >= 0),
+    Menu_item_id INT NOT NULL,
+    Availability_status BOOLEAN DEFAULT TRUE
+    FOREIGN KEY (Menu_item_id)
+        REFERENCES Menu_Item(Menu_item_id)
+);
+
 CREATE Table User (
     User_Id INT PRIMARY KEY,
     Name  NOT NULL VARCHAR(50),
