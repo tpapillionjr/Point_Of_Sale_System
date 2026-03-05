@@ -81,6 +81,7 @@ CREATE TABLE Payment (
     Phone_number VARCHAR(10) NOT NULL UNIQUE,
     Points_balance INT DEFAULT 0 CHECK (Points_balance >= 0)
 );
+
 CREATE TABLE Inventory (
     Item_name VARCHAR(100) PRIMARY KEY,
     Amount_available INT NOT NULL CHECK (Amount_available >= 0),
@@ -98,11 +99,49 @@ CREATE Table User (
     Role ENUM('employee','manager','kitchen') SMALLINT NOT NULL,
     Is_active BOOLEAN,
 
-)
+);
 
 CREATE TABLE Table (
     Table_Id INT PRIMARY KEY,
     Table_number SMALLINT UNIQUE NOT NULL,
     capacity SMALLINT NULL,
     Status ENUM ('available','occupied','reserved','inactive'),
-)
+);
+
+Create TABLE Menu_Item (
+    menu_Item_id int Primary Key,
+    Name varchar(50) not Null,
+    Caretgory smallint(),
+    Base_price float(),
+    Is_active bool
+);
+
+Create Table Modifier (
+Modifier_id int primary key,
+name varchar(50) not Null,
+Price double,
+Is_active bool
+);
+
+Create TABLE Menu_Item_Modifier (
+    Menu_item_id int foreign key references menu_item(Menu_item_id),
+    modifier_id int foreign key references menu_item(Menu_item_id),
+
+    constraint modifierid foreign key (menu_item)
+        references Menu_item(Menu_item_id)
+    constraint menumodifier foreign key (Modifier)
+        references Modifier(Modifier_id)
+);
+
+CREATE TABLE Kitchen_Ticket (
+                Ticket_id int Primary Key Auto_increment,
+                Order_id int,
+                Table_id smallint,
+                status varchar,
+                created_at time,
+                updated_at time,
+             constraint kitchenorder foreign key (Order_id)
+                references Order(order_id)
+        constraint kitchenTable foreign key (Table_id)
+        references Table(Table_id)
+);
