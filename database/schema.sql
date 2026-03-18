@@ -1,6 +1,3 @@
--- =========================
--- TABLES
--- =========================
 
 CREATE TABLE Dining_Tables (
     table_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -56,17 +53,12 @@ CREATE TABLE Inventory (
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- Loyalty / Customer (your snippet was missing CREATE TABLE)
 CREATE TABLE Customer (
     customer_num_id INT PRIMARY KEY,
     phone_number VARCHAR(10) NOT NULL UNIQUE,
     points_balance INT NOT NULL DEFAULT 0,
     CONSTRAINT chk_points_nonneg CHECK (points_balance >= 0)
 );
-
--- =========================
--- ORDERS + PAYMENTS
--- =========================
 
 CREATE TABLE Orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -156,10 +148,6 @@ CREATE TABLE Payment (
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
--- =========================
--- KITCHEN TICKETS
--- =========================
-
 CREATE TABLE Kitchen_Ticket (
     ticket_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
@@ -174,4 +162,32 @@ CREATE TABLE Kitchen_Ticket (
     CONSTRAINT fk_kitchen_table
         FOREIGN KEY (table_id) REFERENCES Dining_Tables(table_id)
         ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular menu items
+    order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    menu_item_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price DECIMAL(10,2) NOT NULL,
+    
+    CONSTRAINT fk_order_item_order
+        FOREIGN KEY (order_id) REFERENCES Orders(order_id)
+        ON DELETE CASCADE,
+        
+    CONSTRAINT fk_order_item_menu
+        FOREIGN KEY (menu_item_id) REFERENCES Menu_Item(menu_item_id)
+        ON DELETE RESTRICT
+);
+
+xCREATE TABLE Employee_Shift (. --used to calulate employee shifts for reports
+    shift_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    scheduled_start DATETIME,
+    scheduled_end DATETIME,
+    clock_in DATETIME,
+    clock_out DATETIME,
+
+    CONSTRAINT fk_shift_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );
