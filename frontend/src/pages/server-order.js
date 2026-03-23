@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useRouter } from "next/router";
 import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
 
 export default function ServerOrderPage() {
+  const router = useRouter();
   const [cart, setCart] = useState([]);
   const [sentItemIds, setSentItemIds] = useState([]);
   const [tableNumber, setTableNumber] = useState("");
@@ -449,6 +451,34 @@ export default function ServerOrderPage() {
               NO MAKE
             </button>
           </div>
+
+          <button
+            onClick={() => {
+              localStorage.setItem("currentOrder", JSON.stringify({
+                tableNumber,
+                guestCount,
+                orderType,
+                orderNote,
+                cart,
+              }));
+              router.push("/checkout");
+            }}
+            style={{
+              marginTop: "12px",
+              width: "100%",
+              padding: "14px",
+              border: "none",
+              borderRadius: "10px",
+              backgroundColor: "#111827",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "700",
+              letterSpacing: "0.05em",
+            }}
+          >
+            CLOSE TAB
+          </button>
         </div>
       </div>
 
