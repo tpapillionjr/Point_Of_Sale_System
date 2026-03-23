@@ -1,23 +1,16 @@
 import React, { useState } from "react";
+import { useRouter } from "next/router";
 
 const TAX_RATE = 0.0825;
-
-// Mock order 
-const mockOrder = {
-  tableNumber: "5",
-  guestCount: 3,
-  server: "Alex",
-  items: [
-    { id: 1, name: "Cheeseburger", price: 10.99, quantity: 2 },
-    { id: 3, name: "Coke", price: 2.49, quantity: 3 },
-    { id: 4, name: "Caesar Salad", price: 6.99, quantity: 1 },
-    { id: 5, name: "Chicken Alfredo", price: 14.99, quantity: 1 },
-  ],
-};
 
 const TIP_PRESETS = [15, 18, 20];
 
 export default function CheckoutPage() {
+  const router = useRouter();
+  const [order] = useState(() => {
+    const stored = localStorage.getItem("currentOrder");
+    return stored ? JSON.parse(stored) : null;
+  });
   const [selectedTipPct, setSelectedTipPct] = useState(null);
   const [customTipInput, setCustomTipInput] = useState("");
   const [showCustomTip, setShowCustomTip] = useState(false);
@@ -27,7 +20,23 @@ export default function CheckoutPage() {
   const [splitCount, setSplitCount] = useState(2);
   const [stage, setStage] = useState("payment"); // "payment" | "complete"
 
-  const subtotal = mockOrder.items.reduce(
+  if (!order) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ color: "#6b7280", marginBottom: "16px" }}>No active order found.</p>
+          <button
+            onClick={() => router.push("/server-order")}
+            style={{ padding: "10px 24px", borderRadius: "10px", border: "none", backgroundColor: "#111827", color: "white", fontWeight: "600", cursor: "pointer" }}
+          >
+            ← Back to Order
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const subtotal = order.cart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
   );
@@ -88,7 +97,7 @@ export default function CheckoutPage() {
             Check Closed
           </h2>
           <p style={{ color: "#6b7280", marginBottom: "4px" }}>
-            Table {mockOrder.tableNumber} — {mockOrder.server}
+            Table {order.tableNumber}
           </p>
           <p style={{ color: "#6b7280", marginBottom: "24px" }}>
             Total charged: <strong>${total.toFixed(2)}</strong>
@@ -137,13 +146,33 @@ export default function CheckoutPage() {
           justifyContent: "space-between",
         }}
       >
-        <div>
-          <h1 style={{ fontSize: "24px", fontWeight: "700", color: "#111827", margin: 0 }}>
-            Close Check
-          </h1>
-          <p style={{ color: "#6b7280", margin: "4px 0 0", fontSize: "14px" }}>
-            Table {mockOrder.tableNumber} · {mockOrder.guestCount} guests · Server: {mockOrder.server}
-          </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <button
+            onClick={() => router.push("/server-order")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "10px",
+              border: "1px solid #e5e7eb",
+              backgroundColor: "white",
+              color: "#374151",
+              fontWeight: "600",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            ← Back
+          </button>
+          <div>
+            <h1 style={{ fontSize: "24px", fontWeight: "700", color: "#111827", margin: 0 }}>
+              Close Check
+            </h1>
+            <p style={{ color: "#6b7280", margin: "4px 0 0", fontSize: "14px" }}>
+              Table {order.tableNumber} · {order.guestCount} guests · {order.orderType}
+            </p>
+          </div>
         </div>
         <span
           style={{
@@ -198,7 +227,7 @@ export default function CheckoutPage() {
           </div>
 
           {/* Items */}
-          {mockOrder.items.map((item) => (
+          {order.cart.map((item) => (
             <div
               key={item.id}
               style={{
@@ -455,7 +484,7 @@ export default function CheckoutPage() {
                     Math.ceil(total),
                     Math.ceil(total / 5) * 5,
                     Math.ceil(total / 10) * 10,
-                    20, 50, 100,
+                    1, 5, 10, 20, 50, 100,
                   ]
                     .filter((v, i, arr) => arr.indexOf(v) === i)
                     .slice(0, 6)
