@@ -9,8 +9,10 @@ const EMPLOYEES = {
 export default function ClockinPage() {
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
+  const [activePin, setActivePin] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
+  const [employeeSessions, setEmployeeSessions] = useState({});
   const [message, setMessage] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -46,13 +48,34 @@ export default function ClockinPage() {
   }
 
   function pressEnter() {
-    const found = EMPLOYEES[pin];
+    const enteredPin = pin;
+    const found = EMPLOYEES[enteredPin];
+    const savedSession = employeeSessions[enteredPin];
     setPin("");
 
     if (found) {
       setUser(found);
-      setRole(null);
-      setMessage({ type: "success", text: "Welcome, " + found.name + "! Select your role." });
+      setActivePin(enteredPin);
+
+      const rememberedRole = savedSession?.role ?? null;
+      const alreadyClockedIn = Boolean(savedSession?.clockedIn);
+
+      setRole(rememberedRole);
+      setClockedIn(alreadyClockedIn);
+
+      if (alreadyClockedIn && rememberedRole) {
+        setMessage({
+          type: "success",
+          text: "Welcome back, " + found.name + "! Logged as " + rememberedRole + ".",
+        });
+      } else if (rememberedRole) {
+        setMessage({
+          type: "success",
+          text: "Welcome, " + found.name + "! Role " + rememberedRole + " remembered.",
+        });
+      } else {
+        setMessage({ type: "success", text: "Welcome, " + found.name + "! Select your role." });
+      }
     } else {
       setMessage({ type: "error", text: "Incorrect PIN. Try again." });
     }
@@ -64,27 +87,59 @@ export default function ClockinPage() {
   }
 
   function handleClockInOut() {
-    if (!user) return;
+    if (!user || !activePin) return;
 
     const name = user.name;
     const now = new Date();
     const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const roleToUse = role || employeeSessions[activePin]?.role || null;
 
     if (!clockedIn) {
+      if (!roleToUse) {
+        setMessage({ type: "error", text: "Select a role before clocking in." });
+        return;
+      }
+
       setClockedIn(true);
+      setRole(roleToUse);
+      setEmployeeSessions((prev) => ({
+        ...prev,
+        [activePin]: { clockedIn: true, role: roleToUse },
+      }));
       setMessage({
         type: "success",
-        text: name + " (" + role + ") clocked in at " + timeNow,
+        text: name + " (" + roleToUse + ") clocked in at " + timeNow,
       });
     } else {
       setClockedIn(false);
+      setEmployeeSessions((prev) => ({
+        ...prev,
+        [activePin]: { clockedIn: false, role: roleToUse },
+      }));
       setMessage({
         type: "success",
         text: name + " clocked out at " + timeNow,
       });
       setUser(null);
-      setRole(null);
+      setActivePin(null);
     }
+  }
+
+  function handleLogin() {
+    if (!user || !activePin) return;
+
+    const savedSession = employeeSessions[activePin];
+    if (!savedSession?.clockedIn) {
+      setMessage({ type: "error", text: "You must clock in before login." });
+      return;
+    }
+
+    const now = new Date();
+    const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setMessage({
+      type: "success",
+      text: user.name + " logged in as " + savedSession.role + " at " + timeNow,
+    });
   }
 
   const pinDots = [];
@@ -115,7 +170,7 @@ export default function ClockinPage() {
     clockBtnClass += " ci-clock-btn--out";
   }
 
-  const clockBtnDisabled = !user || (!clockedIn && !role);
+  const clockBtnDisabled = !user || (!clockedIn && !(role || (activePin && employeeSessions[activePin]?.role)));
 
   return (
     <div className="ci-page">
@@ -129,7 +184,7 @@ export default function ClockinPage() {
           <p className={"ci-status ci-status--" + message.type}>{message.text}</p>
         )}
 
-        {user && !clockedIn && (
+        {user && !clockedIn && !role && (
           <div className="ci-roles">
             <p className="ci-roles__label">Select role:</p>
             <div className="ci-roles__grid">
@@ -159,6 +214,10 @@ export default function ClockinPage() {
           <span className="ci-clock__time">{timeStr}</span>
           <span className="ci-clock__date">{dateStr}</span>
         </div>
+
+        <button className="ci-login-btn" onClick={handleLogin} disabled={!clockedIn || !user}>
+          Login
+        </button>
 
         <button className={clockBtnClass} onClick={handleClockInOut} disabled={clockBtnDisabled}>
           {clockedIn ? "Clock Out" : "Clock In"}
