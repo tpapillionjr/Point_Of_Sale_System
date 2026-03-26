@@ -23,7 +23,7 @@ export default function ServerOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
-  const supportedMenu = useMemo(() => menuData.filter((item) => [1, 2, 3].includes(item.id)), []);
+  const supportedMenu = useMemo(() => menuData, []);
   const filteredMenu = useMemo(
     () => supportedMenu.filter((item) => item.category === selectedCategory),
     [selectedCategory, supportedMenu]
