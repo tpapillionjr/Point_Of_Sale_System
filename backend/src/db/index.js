@@ -1,5 +1,21 @@
 import mysql from "mysql2/promise";
 
+function buildSslConfig() {
+  const sslEnabled = process.env.DB_SSL === "true" || process.env.DB_SSL === "1";
+
+  if (!sslEnabled) {
+    return undefined;
+  }
+
+  const rejectUnauthorized =
+    process.env.DB_SSL_REJECT_UNAUTHORIZED === "true" ||
+    process.env.DB_SSL_REJECT_UNAUTHORIZED === "1";
+
+  return {
+    rejectUnauthorized,
+  };
+}
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
@@ -9,6 +25,7 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
+  ssl: buildSslConfig(),
 });
 
 async function query(sql, params = []) {
