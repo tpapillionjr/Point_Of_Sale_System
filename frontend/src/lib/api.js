@@ -36,6 +36,11 @@ export async function fetchBackOfficeDashboard() {
   return request("/api/back-office/dashboard");
 }
 
+export async function fetchBackOfficeData(range) {
+  const query = range ? `?range=${encodeURIComponent(range)}` : "";
+  return request(`/api/back-office/data${query}`);
+}
+
 export async function fetchTables() {
   return request("/api/tables");
 }
