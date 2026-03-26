@@ -284,4 +284,33 @@ async function cancelOrder(payload) {
   });
 }
 
-export { createOrder, cancelOrder };
+async function findActiveOrderByTableNumber(tableNumber) {
+  const parsedTableNumber = Number.parseInt(tableNumber, 10);
+
+  if (!Number.isInteger(parsedTableNumber) || parsedTableNumber <= 0) {
+    throw createValidationError("tableNumber must be a positive integer.");
+  }
+
+  const rows = await db.query(
+    `SELECT
+      o.order_id AS orderId,
+      o.table_id AS tableId,
+      dt.table_number AS tableNumber,
+      o.status
+     FROM Orders o
+     JOIN Dining_Tables dt ON dt.table_id = o.table_id
+     WHERE dt.table_number = ?
+       AND o.status IN ('Open', 'Sent', 'Completed')
+     ORDER BY o.created_at DESC
+     LIMIT 1`,
+    [parsedTableNumber]
+  );
+
+  if (rows.length === 0) {
+    throw createValidationError("No active backend order was found for that table.");
+  }
+
+  return rows[0];
+}
+
+export { createOrder, cancelOrder, findActiveOrderByTableNumber };
