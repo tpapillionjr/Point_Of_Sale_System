@@ -15,6 +15,9 @@ async function request(path, options = {}) {
     try {
       const payload = await res.json();
       errorMessage = payload.error || errorMessage;
+      if (Array.isArray(payload.details) && payload.details.length > 0) {
+        errorMessage = `${errorMessage} ${payload.details.join(" ")}`;
+      }
     } catch {
       errorMessage = `Request failed with status ${res.status}`;
     }
