@@ -36,6 +36,17 @@ export async function fetchTables() {
   return request("/api/tables");
 }
 
+export async function fetchKitchenTickets() {
+  return request("/api/kitchen/tickets");
+}
+
+export async function updateKitchenTicket(ticketId, payload) {
+  return request(`/api/kitchen/tickets/${ticketId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateTableStatus(tableId, status) {
   return request(`/api/tables/${tableId}/status`, {
     method: "PATCH",
