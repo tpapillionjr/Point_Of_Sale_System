@@ -1,4 +1,4 @@
-const db = require('../db');
+import db from "../db/index.js";
 
 async function getItems(req, res) {
   try {
@@ -10,11 +10,9 @@ async function getItems(req, res) {
 
     res.json(rows);
   } catch (error) {
-    console.error('Failed to fetch items:', error.message);
-    res.status(500).json({ error: 'Failed to fetch items' });
+    console.error("Failed to fetch items:", error.message);
+    res.status(500).json({ error: "Failed to fetch items" });
   }
 }
 
-module.exports = {
-  getItems
-};
+export { getItems };
