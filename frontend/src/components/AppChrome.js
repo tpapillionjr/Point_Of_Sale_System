@@ -41,6 +41,15 @@ export default function AppChrome({ children }) {
     return true;
   });
 
+  function handleLogout() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("currentEmployee");
+      window.localStorage.removeItem("currentOrder");
+    }
+
+    router.push("/clock-in");
+  }
+
   return (
     <div className="app-shell">
       <header className="app-shell__header">
@@ -75,9 +84,9 @@ export default function AppChrome({ children }) {
             );
           })}
 
-          <Link href="/" className="app-shell__logout">
+          <button type="button" onClick={handleLogout} className="app-shell__logout">
             Logout
-          </Link>
+          </button>
         </nav>
       </header>
 

@@ -1,15 +1,32 @@
 import "@/styles/globals.css";
 import AppChrome from "@/components/AppChrome";
-import { canAccessManagerRoutes, getStoredEmployee, isManagerRoute } from "@/lib/session";
+import {
+  canAccessManagerRoutes,
+  getStoredEmployee,
+  hasStoredEmployee,
+  isManagerRoute,
+  isPublicRoute,
+} from "@/lib/session";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
-  const showChrome = router.pathname !== "/" && router.pathname !== "/clock-in";
+  const showChrome = !isPublicRoute(router.pathname);
   const [isAuthorized, setIsAuthorized] = useState(true);
 
   useEffect(() => {
+    if (isPublicRoute(router.pathname)) {
+      setIsAuthorized(true);
+      return;
+    }
+
+    if (!hasStoredEmployee()) {
+      setIsAuthorized(false);
+      router.replace("/clock-in");
+      return;
+    }
+
     if (!isManagerRoute(router.pathname)) {
       setIsAuthorized(true);
       return;
@@ -23,7 +40,7 @@ export default function App({ Component, pageProps }) {
 
     setIsAuthorized(false);
     router.replace("/tables");
-  }, [router]);
+  }, [router.pathname, router]);
 
   if (!showChrome) {
     return <Component {...pageProps} />;
