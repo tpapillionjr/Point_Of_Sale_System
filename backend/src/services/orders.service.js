@@ -191,4 +191,97 @@ async function createOrder(payload) {
   });
 }
 
-export { createOrder };
+async function cancelOrder(payload) {
+  const orderId = Number.parseInt(payload?.orderId, 10);
+  const voidedBy = Number.parseInt(payload?.voidedBy, 10);
+  const voidReason = payload?.voidReason?.trim() || "Manager canceled order";
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    throw createValidationError("orderId must be a positive integer.");
+  }
+
+  if (!Number.isInteger(voidedBy) || voidedBy <= 0) {
+    throw createValidationError("voidedBy must be a positive integer.");
+  }
+
+  return db.withTransaction(async (connection) => {
+    const user = await ensureUserExists(connection, voidedBy);
+    if (user.role !== "manager") {
+      throw createValidationError("Only managers can cancel an order.");
+    }
+
+    const [orderRows] = await connection.execute(
+      `SELECT order_id, table_id, status
+       FROM Orders
+       WHERE order_id = ?
+       LIMIT 1`,
+      [orderId]
+    );
+
+    if (orderRows.length === 0) {
+      throw createValidationError("Order not found.");
+    }
+
+    if (orderRows[0].status === "Paid") {
+      throw createValidationError("Paid orders cannot be canceled from this screen.");
+    }
+
+    if (orderRows[0].status === "Void") {
+      throw createValidationError("Order is already voided.");
+    }
+
+    const [orderItemRows] = await connection.execute(
+      `SELECT menu_item_id, quantity
+       FROM Order_Item
+       WHERE order_id = ?`,
+      [orderId]
+    );
+
+    for (const item of orderItemRows) {
+      await connection.execute(
+        `UPDATE Inventory
+         SET amount_available = amount_available + ?,
+             availability_status = TRUE
+         WHERE menu_item_id = ?`,
+        [item.quantity, item.menu_item_id]
+      );
+    }
+
+    await connection.execute(
+      `UPDATE Orders
+       SET status = 'Void',
+           void_reason = ?,
+           voided_by = ?,
+           closed_at = CURRENT_TIMESTAMP
+       WHERE order_id = ?`,
+      [voidReason, voidedBy, orderId]
+    );
+
+    const [activeRows] = await connection.execute(
+      `SELECT order_id
+       FROM Orders
+       WHERE table_id = ?
+         AND status IN ('Open', 'Sent', 'Completed')
+       LIMIT 1`,
+      [orderRows[0].table_id]
+    );
+
+    if (activeRows.length === 0) {
+      await connection.execute(
+        `UPDATE Dining_Tables
+         SET status = 'available'
+         WHERE table_id = ?`,
+        [orderRows[0].table_id]
+      );
+    }
+
+    return {
+      orderId,
+      tableId: orderRows[0].table_id,
+      status: "Void",
+      voidReason,
+    };
+  });
+}
+
+export { createOrder, cancelOrder };

@@ -1,4 +1,4 @@
-import { createOrder } from "../services/orders.service.js";
+import { cancelOrder, createOrder } from "../services/orders.service.js";
 
 async function postOrder(req, res) {
   try {
@@ -13,4 +13,17 @@ async function postOrder(req, res) {
   }
 }
 
-export { postOrder };
+async function postCancelOrder(req, res) {
+  try {
+    const result = await cancelOrder(req.body);
+    res.json(result);
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500;
+    res.status(statusCode).json({
+      error: error.message || "Failed to cancel order.",
+      details: error.details ?? [],
+    });
+  }
+}
+
+export { postOrder, postCancelOrder };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { closeOrder } from "../../lib/api";
+import { cancelOrder, closeOrder } from "../../lib/api";
 
 const TAX_RATE = 0.0825;
 
@@ -21,6 +21,7 @@ export default function CheckoutPage() {
   const [employee, setEmployee] = useState(null);
   const [message, setMessage] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentOrder");
@@ -112,6 +113,34 @@ export default function CheckoutPage() {
       setMessage(error.message);
     } finally {
       setIsClosing(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!order?.orderId) {
+      setMessage("No backend order is attached to this check.");
+      return;
+    }
+
+    if (employee?.role !== "manager") {
+      setMessage("Only managers can cancel an order.");
+      return;
+    }
+
+    try {
+      setIsCanceling(true);
+      setMessage(null);
+      await cancelOrder({
+        orderId: order.orderId,
+        voidedBy: employee.userId,
+        voidReason: "Manager canceled order from checkout",
+      });
+      localStorage.removeItem("currentOrder");
+      router.push("/tables");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setIsCanceling(false);
     }
   };
 
@@ -664,6 +693,7 @@ export default function CheckoutPage() {
             onClick={handleCloseCheck}
             disabled={
               isClosing ||
+              isCanceling ||
               !paymentMethod ||
               (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))
             }
@@ -673,24 +703,45 @@ export default function CheckoutPage() {
               border: "none",
               borderRadius: "12px",
               backgroundColor:
-                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#d1d5db"
                   : "#111827",
               color:
-                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#9ca3af"
                   : "white",
               fontWeight: "700",
               fontSize: "16px",
               letterSpacing: "0.05em",
               cursor:
-                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "not-allowed"
                   : "pointer",
             }}
           >
             {isClosing ? "CLOSING..." : `CLOSE CHECK — $${total.toFixed(2)}`}
           </button>
+
+          {employee?.role === "manager" && (
+            <button
+              onClick={handleCancelOrder}
+              disabled={isClosing || isCanceling || !order?.orderId}
+              style={{
+                width: "100%",
+                padding: "16px",
+                border: "none",
+                borderRadius: "12px",
+                backgroundColor: isClosing || isCanceling || !order?.orderId ? "#fecaca" : "#b91c1c",
+                color: isClosing || isCanceling || !order?.orderId ? "#7f1d1d" : "white",
+                fontWeight: "700",
+                fontSize: "16px",
+                letterSpacing: "0.05em",
+                cursor: isClosing || isCanceling || !order?.orderId ? "not-allowed" : "pointer",
+              }}
+            >
+              {isCanceling ? "CANCELING..." : "MANAGER CANCEL ORDER"}
+            </button>
+          )}
         </div>
       </div>
     </div>

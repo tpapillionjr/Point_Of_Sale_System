@@ -50,6 +50,13 @@ export async function createOrder(payload) {
   });
 }
 
+export async function cancelOrder(payload) {
+  return request("/api/orders/cancel", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function closeOrder(payload) {
   return request("/api/payments/close-order", {
     method: "POST",
