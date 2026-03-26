@@ -64,6 +64,14 @@ coverage/
 .dockerignore
 docker-compose.override.yml
 
+# Local env / Vercel / SSL
+.vercel/
+backend/SSL.crt.pem
+*.pem
+*.crt
+*.key
+.env*.local
+
 # Custom Build Artifacts
 *.out
 *.exe
