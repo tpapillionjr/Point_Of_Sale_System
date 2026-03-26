@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
 
 const NAV_ITEMS = [
   { href: "/tables", label: "Tables" },
@@ -25,6 +27,19 @@ function isActiveRoute(pathname, href) {
 
 export default function AppChrome({ children }) {
   const router = useRouter();
+  const [employee, setEmployee] = useState(null);
+
+  useEffect(() => {
+    setEmployee(getStoredEmployee());
+  }, []);
+
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (item.href === "/back-office" || item.href === "/reports") {
+      return canAccessManagerRoutes(employee);
+    }
+
+    return true;
+  });
 
   return (
     <div className="app-shell">
@@ -46,7 +61,7 @@ export default function AppChrome({ children }) {
         </div>
 
         <nav className="app-shell__nav" aria-label="Primary">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = isActiveRoute(router.pathname, item.href);
 
             return (

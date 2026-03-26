@@ -32,6 +32,10 @@ export async function fetchItems() {
   return request("/api/items");
 }
 
+export async function fetchBackOfficeDashboard() {
+  return request("/api/back-office/dashboard");
+}
+
 export async function fetchTables() {
   return request("/api/tables");
 }

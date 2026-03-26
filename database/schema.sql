@@ -16,9 +16,12 @@ CREATE TABLE Users (
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('employee','manager','kitchen') NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_pin_attempts TINYINT NOT NULL DEFAULT 0,
+    is_pos_locked BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT chk_user_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
     CONSTRAINT chk_user_email_format CHECK (email LIKE '%@%.__%'),
-    CONSTRAINT chk_user_pin_digits CHECK (pin_code REGEXP '^[0-9]{4}$')
+    CONSTRAINT chk_user_pin_digits CHECK (pin_code REGEXP '^[0-9]{4}$'),
+    CONSTRAINT chk_failed_pin_attempts_range CHECK (failed_pin_attempts >= 0 AND failed_pin_attempts <= 5)
 );
 
 CREATE TABLE Menu_Item (
@@ -200,6 +203,7 @@ CREATE TABLE Kitchen_Ticket (
     order_id INT NOT NULL,
     table_id INT NOT NULL,
     status ENUM('new','in_progress','done','canceled') NOT NULL DEFAULT 'new',
+    completed_by INT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL,
     CONSTRAINT chk_kitchen_ticket_updated_time CHECK (updated_at IS NULL OR updated_at >= created_at),
@@ -209,7 +213,10 @@ CREATE TABLE Kitchen_Ticket (
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_kitchen_table
         FOREIGN KEY (table_id) REFERENCES Dining_Tables(table_id)
-        ON DELETE RESTRICT ON UPDATE CASCADE
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_kitchen_completed_by
+        FOREIGN KEY (completed_by) REFERENCES Users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular menu items
@@ -233,6 +240,7 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
 CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     shift_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    scheduled_by INT NULL,
     scheduled_start DATETIME NOT NULL,
     scheduled_end DATETIME NOT NULL,
     clock_in DATETIME,
@@ -251,5 +259,8 @@ CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     ),
 
     CONSTRAINT fk_shift_user
-        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    CONSTRAINT fk_shift_scheduled_by
+        FOREIGN KEY (scheduled_by) REFERENCES Users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
 );

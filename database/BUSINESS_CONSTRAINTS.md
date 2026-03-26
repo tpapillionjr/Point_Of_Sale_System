@@ -11,6 +11,9 @@
 - Employees must be scheduled to clock in.
 - No more than 8 staff can be clocked in at once.
 - Servers must declare tips before clocking out.
+- Only managers can see the Back Office and Reports tabs in the frontend.
+- Non-managers are redirected away from `/back-office` and `/reports`.
+- Kitchen tickets can be marked `done` only by kitchen staff or managers.
 
 ## Pending model changes
 
@@ -18,22 +21,19 @@
 Requires reservation and check-in/arrival tables.
 
 - Only managers can set schedules.
-Requires scheduling endpoints plus role-based auth on those routes.
+Schema now includes `Employee_Shift.scheduled_by`, but scheduling endpoints and role-based auth still need to be implemented.
 
 - Only managers can purchase ingredients.
 Requires purchasing/inventory procurement endpoints plus role-based auth.
 
 - Only managers can generate sales reports.
-Requires report endpoints plus role-based auth.
-
-- Cooks only can close tickets.
-Requires ticket update endpoints plus role-based auth.
+Frontend access is restricted now, but backend report endpoints still need role-based auth once those endpoints exist.
 
 - Restaurant capacity must be 101 or less.
 Best enforced with a trigger or application check over total active seating capacity.
 
 - POS locks after 5 failed logins.
-Requires authentication, failed-attempt tracking, and account lock state.
+Schema now includes `Users.failed_pin_attempts` and `Users.is_pos_locked`, but the login flow does not yet increment attempts or enforce the lock.
 
 - Staff cannot make less than their supervisor.
 Requires supervisor relationships and payroll/pay-rate data.

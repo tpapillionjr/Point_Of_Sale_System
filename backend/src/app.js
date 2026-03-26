@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import backOfficeRoutes from "./routes/back-office.routes.js";
 import itemsRoutes from "./routes/items.routes.js";
 import kitchenRoutes from "./routes/kitchen.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
@@ -16,6 +17,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/api/back-office", backOfficeRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/kitchen", kitchenRoutes);
 app.use("/api/orders", ordersRoutes);

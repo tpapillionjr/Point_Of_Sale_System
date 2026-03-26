@@ -1,33 +1,56 @@
+import { useEffect, useState } from "react";
 import BackOfficeShell from "../../components/back-office/BackOfficeShell";
 import ActionList from "../../components/back-office/ActionList";
 import ReportCard from "../../components/reports/ReportCard";
 import ReportSection from "../../components/reports/ReportSection";
 import Link from "next/link";
-
-const managerActions = [
-  {
-    title: "Resolve low stock on Applewood Bacon and Maple Syrup",
-    description: "Both items are below reorder point and may block breakfast menu availability.",
-    priority: "High",
-  },
-  {
-    title: "Review Texas Toast outage before dinner prep",
-    description: "Item is unavailable and currently affects one linked menu offering.",
-    priority: "High",
-  },
-  {
-    title: "Approve two cycle-count variances from opening shift",
-    description: "Count sheet still has unresolved discrepancies from morning inventory.",
-    priority: "Medium",
-  },
-  {
-    title: "Update spring modifier pricing",
-    description: "Menu management change is staged but not yet published to front of house.",
-    priority: "Low",
-  },
-];
+import { fetchBackOfficeDashboard } from "../../lib/api";
 
 export default function BackOfficePage() {
+  const [dashboard, setDashboard] = useState({
+    summary: {
+      openTables: 0,
+      openChecks: 0,
+      kitchenTickets: 0,
+      inventoryAlerts: 0,
+    },
+    managerActions: [],
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboard() {
+      try {
+        const data = await fetchBackOfficeDashboard();
+        if (!isMounted) {
+          return;
+        }
+
+        setDashboard(data);
+        setError("");
+      } catch (loadError) {
+        if (!isMounted) {
+          return;
+        }
+
+        setError(loadError.message || "Failed to load the back office dashboard.");
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <BackOfficeShell
       title="Manager Dashboard"
@@ -35,16 +58,44 @@ export default function BackOfficePage() {
     >
       <ReportSection title="Today at a Glance">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ReportCard title="Open Tables" value="11" />
-          <ReportCard title="Open Checks" value="17" />
-          <ReportCard title="Kitchen Tickets" value="6" />
-          <ReportCard title="Inventory Alerts" value="5" />
+          <ReportCard
+            title="Open Tables"
+            value={isLoading ? "..." : String(dashboard.summary.openTables)}
+          />
+          <ReportCard
+            title="Open Checks"
+            value={isLoading ? "..." : String(dashboard.summary.openChecks)}
+          />
+          <ReportCard
+            title="Kitchen Tickets"
+            value={isLoading ? "..." : String(dashboard.summary.kitchenTickets)}
+          />
+          <ReportCard
+            title="Inventory Alerts"
+            value={isLoading ? "..." : String(dashboard.summary.inventoryAlerts)}
+          />
         </div>
       </ReportSection>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ReportSection title="Manager Actions">
-          <ActionList items={managerActions} />
+          {error ? (
+            <p className="text-sm text-red-600">{error}</p>
+          ) : (
+            <ActionList
+              items={
+                isLoading
+                  ? [
+                      {
+                        title: "Loading manager actions",
+                        description: "Fetching current kitchen and inventory issues.",
+                        priority: "Low",
+                      },
+                    ]
+                  : dashboard.managerActions
+              }
+            />
+          )}
         </ReportSection>
 
         <ReportSection title="Back Office Areas">
