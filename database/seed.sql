@@ -20,7 +20,13 @@ INSERT INTO Dining_Tables (table_id, table_number, capacity, status) VALUES
 (1, 1, 2, 'available'),
 (2, 2, 4, 'occupied'),
 (3, 3, 6, 'reserved'),
-(4, 4, 4, 'available');
+(4, 4, 4, 'available'),
+(5, 5, 2, 'reserved'),
+(6, 6, 2, 'available'),
+(7, 7, 2, 'occupied'),
+(8, 8, 2, 'reserved'),
+(9, 9, 4, 'occupied'),
+(10, 10, 6, 'available');
 
 -- =========================
 -- USERS

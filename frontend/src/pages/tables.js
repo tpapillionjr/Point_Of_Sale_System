@@ -7,15 +7,12 @@ const TABLE_LAYOUT = {
   2: { id: "T2", area: "Main", x: "25%", y: "18%" },
   3: { id: "T3", area: "Main", x: "39%", y: "18%" },
   4: { id: "T4", area: "Main", x: "13%", y: "41%" },
-  5: { id: "T5", area: "Main", x: "29%", y: "40%" },
-  6: { id: "T6", area: "Main", x: "45%", y: "41%" },
-  7: { id: "T7", area: "Patio", x: "17%", y: "67%" },
-  8: { id: "T8", area: "Patio", x: "35%", y: "67%" },
-  9: { id: "T9", area: "Patio", x: "51%", y: "67%" },
-  10: { id: "B1", area: "Bar", x: "66%", y: "21%" },
-  11: { id: "B2", area: "Bar", x: "74%", y: "21%" },
-  12: { id: "B3", area: "Bar", x: "82%", y: "21%" },
-  13: { id: "B4", area: "Bar", x: "90%", y: "21%" },
+  5: { id: "B1", area: "Bar", x: "69%", y: "28%" },
+  6: { id: "B2", area: "Bar", x: "79%", y: "28%" },
+  7: { id: "B3", area: "Bar", x: "89%", y: "28%" },
+  8: { id: "T5", area: "Patio", x: "17%", y: "67%" },
+  9: { id: "T6", area: "Patio", x: "35%", y: "67%" },
+  10: { id: "T7", area: "Patio", x: "53%", y: "67%" },
 };
 
 const STATUS_MAP = {
