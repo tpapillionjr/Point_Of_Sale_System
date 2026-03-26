@@ -47,6 +47,13 @@ export async function createOrder(payload) {
   });
 }
 
+export async function closeOrder(payload) {
+  return request("/api/payments/close-order", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getReportSummary() {
   const res = await fetch(`${API_URL}/api/reports/summary`);
   if (!res.ok) {
