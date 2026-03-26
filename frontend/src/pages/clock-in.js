@@ -139,6 +139,16 @@ export default function ClockinPage() {
       text: user.name + " logged in as " + role + " at " + timeNow,
     });
 
+    localStorage.setItem(
+      "currentEmployee",
+      JSON.stringify({
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+        displayRole: role,
+      })
+    );
+
     if (user.role === "kitchen") {
       router.push("/expo");
       return;
