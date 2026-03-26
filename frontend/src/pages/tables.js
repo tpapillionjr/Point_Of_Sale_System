@@ -1,25 +1,35 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { fetchTables, updateTableStatus } from "../lib/api";
 
-const TABLES = [
-  { id: "T1", area: "Main", x: "11%", y: "18%", seats: 4, status: "open", server: "Maya", time: "15m" },
-  { id: "T2", area: "Main", x: "25%", y: "18%", seats: 4, status: "occupied", server: "Jordan", time: "42m" },
-  { id: "T3", area: "Main", x: "39%", y: "18%", seats: 2, status: "reserved", server: "Avery", time: "7:30 PM" },
-  { id: "T4", area: "Main", x: "13%", y: "41%", seats: 6, status: "open", server: "Maya", time: "06m" },
-  { id: "T5", area: "Main", x: "29%", y: "40%", seats: 4, status: "occupied", server: "Jordan", time: "18m" },
-  { id: "T6", area: "Main", x: "45%", y: "41%", seats: 4, status: "open", server: "Chris", time: "21m" },
-  { id: "T7", area: "Patio", x: "17%", y: "67%", seats: 2, status: "reserved", server: "Avery", time: "8:00 PM" },
-  { id: "T8", area: "Patio", x: "35%", y: "67%", seats: 4, status: "occupied", server: "Chris", time: "26m" },
-  { id: "T9", area: "Patio", x: "51%", y: "67%", seats: 6, status: "open", server: "Maya", time: "09m" },
-  { id: "B1", area: "Bar", x: "66%", y: "21%", seats: 2, status: "reserved", server: "Sam", time: "7:45 PM" },
-  { id: "B2", area: "Bar", x: "74%", y: "21%", seats: 2, status: "open", server: "Sam", time: "12m" },
-  { id: "B3", area: "Bar", x: "82%", y: "21%", seats: 2, status: "occupied", server: "Sam", time: "33m" },
-  { id: "B4", area: "Bar", x: "90%", y: "21%", seats: 2, status: "open", server: "Sam", time: "04m" },
-];
+const TABLE_LAYOUT = {
+  1: { id: "T1", area: "Main", x: "11%", y: "18%" },
+  2: { id: "T2", area: "Main", x: "25%", y: "18%" },
+  3: { id: "T3", area: "Main", x: "39%", y: "18%" },
+  4: { id: "T4", area: "Main", x: "13%", y: "41%" },
+  5: { id: "T5", area: "Main", x: "29%", y: "40%" },
+  6: { id: "T6", area: "Main", x: "45%", y: "41%" },
+  7: { id: "T7", area: "Patio", x: "17%", y: "67%" },
+  8: { id: "T8", area: "Patio", x: "35%", y: "67%" },
+  9: { id: "T9", area: "Patio", x: "51%", y: "67%" },
+  10: { id: "B1", area: "Bar", x: "66%", y: "21%" },
+  11: { id: "B2", area: "Bar", x: "74%", y: "21%" },
+  12: { id: "B3", area: "Bar", x: "82%", y: "21%" },
+  13: { id: "B4", area: "Bar", x: "90%", y: "21%" },
+};
+
+const STATUS_MAP = {
+  available: "open",
+  occupied: "occupied",
+  reserved: "reserved",
+  inactive: "inactive",
+};
 
 const STATUS_META = {
   open: { label: "Open", fill: "#dcfce7", border: "#22c55e", text: "#166534" },
   occupied: { label: "Occupied", fill: "#e2e8f0", border: "#64748b", text: "#334155" },
   reserved: { label: "Reserved", fill: "#dbeafe", border: "#3b82f6", text: "#1d4ed8" },
+  inactive: { label: "Inactive", fill: "#f1f5f9", border: "#94a3b8", text: "#475569" },
 };
 
 const styles = {
@@ -55,9 +65,9 @@ const styles = {
   },
   summary: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(110px, 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(110px, 1fr))",
     gap: "12px",
-    width: "min(100%, 420px)",
+    width: "min(100%, 560px)",
   },
   summaryCard: {
     padding: "16px 18px",
@@ -229,10 +239,12 @@ function FloorTable({ table, active, onSelect }) {
   );
 }
 
-function ActionButton({ children, background }) {
+function ActionButton({ children, background, disabled = false, onClick }) {
   return (
     <button
       type="button"
+      onClick={onClick}
+      disabled={disabled}
       style={{
         minHeight: "46px",
         border: 0,
@@ -241,7 +253,8 @@ function ActionButton({ children, background }) {
         color: "#ffffff",
         fontSize: "0.95rem",
         fontWeight: 700,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
       }}
     >
       {children}
@@ -249,20 +262,116 @@ function ActionButton({ children, background }) {
   );
 }
 
+function normalizeTable(table) {
+  const layout = TABLE_LAYOUT[table.tableNumber] ?? {
+    id: `T${table.tableNumber}`,
+    area: "Main",
+    x: "10%",
+    y: "10%",
+  };
+
+  return {
+    tableId: table.tableId,
+    tableNumber: table.tableNumber,
+    id: layout.id,
+    area: layout.area,
+    x: layout.x,
+    y: layout.y,
+    seats: table.capacity ?? 0,
+    status: STATUS_MAP[table.status] ?? "inactive",
+    dbStatus: table.status,
+    server: "Unassigned",
+    time: table.status === "reserved" ? "Reserved" : "Live",
+  };
+}
+
 export default function TablesPage() {
-  const [selectedTable, setSelectedTable] = useState(TABLES[0]);
+  const router = useRouter();
+  const [tables, setTables] = useState([]);
+  const [selectedTableId, setSelectedTableId] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadTables() {
+      try {
+        const rows = await fetchTables();
+        const normalized = rows.map(normalizeTable);
+
+        if (!active) {
+          return;
+        }
+
+        setTables(normalized);
+        setSelectedTableId((current) => current ?? normalized[0]?.tableId ?? null);
+        setError(null);
+      } catch (loadError) {
+        if (active) {
+          setError(loadError.message);
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadTables();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedTable =
+    tables.find((table) => table.tableId === selectedTableId) ??
+    tables[0] ??
+    null;
 
   const summary = useMemo(
     () =>
-      TABLES.reduce(
+      tables.reduce(
         (totals, table) => {
           totals[table.status] += 1;
           return totals;
         },
-        { open: 0, occupied: 0, reserved: 0 }
+        { open: 0, occupied: 0, reserved: 0, inactive: 0 }
       ),
-    []
+    [tables]
   );
+
+  async function handleStatusChange(status) {
+    if (!selectedTable) {
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      const updated = await updateTableStatus(selectedTable.tableId, status);
+
+      setTables((current) =>
+        current.map((table) =>
+          table.tableId === updated.tableId ? normalizeTable(updated) : table
+        )
+      );
+      setError(null);
+    } catch (updateError) {
+      setError(updateError.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <section style={styles.page}>
+        <div className="app-surface">Loading tables...</div>
+      </section>
+    );
+  }
 
   return (
     <section style={styles.page}>
@@ -271,7 +380,7 @@ export default function TablesPage() {
           <p style={styles.eyebrow}>Dining Room Live View</p>
           <h2 style={styles.title}>Floor Plan</h2>
           <p style={styles.subtext}>
-            Tap a table to review its status, section, and current server assignment.
+            Tap a table to review its status and current seating state.
           </p>
         </div>
 
@@ -288,8 +397,18 @@ export default function TablesPage() {
             <strong style={styles.summaryNumber}>{summary.reserved}</strong>
             <span style={styles.summaryLabel}>Reserved</span>
           </div>
+          <div style={styles.summaryCard}>
+            <strong style={styles.summaryNumber}>{summary.inactive}</strong>
+            <span style={styles.summaryLabel}>Inactive</span>
+          </div>
         </div>
       </div>
+
+      {error && (
+        <div className="app-surface" style={{ color: "#b91c1c" }}>
+          {error}
+        </div>
+      )}
 
       <div style={styles.grid} className="tables-grid">
         <div className="app-surface" style={styles.floor}>
@@ -301,48 +420,71 @@ export default function TablesPage() {
           <div style={styles.horizontalAisle} />
           <div style={styles.barRail} />
 
-          {TABLES.map((table) => (
+          {tables.map((table) => (
             <FloorTable
-              key={table.id}
+              key={table.tableId}
               table={table}
-              active={selectedTable.id === table.id}
-              onSelect={setSelectedTable}
+              active={selectedTable?.tableId === table.tableId}
+              onSelect={(nextTable) => setSelectedTableId(nextTable.tableId)}
             />
           ))}
         </div>
 
         <aside className="app-surface" style={styles.details}>
           <p style={styles.eyebrow}>Selected Table</p>
-          <h3 style={styles.detailsTitle}>{selectedTable.id}</h3>
+          <h3 style={styles.detailsTitle}>{selectedTable?.id ?? "No Table"}</h3>
 
-          <div style={styles.detailsList}>
-            <div style={styles.detailRow}>
-              <span style={styles.detailLabel}>Status</span>
-              <strong style={styles.detailValue}>{STATUS_META[selectedTable.status].label}</strong>
-            </div>
-            <div style={styles.detailRow}>
-              <span style={styles.detailLabel}>Section</span>
-              <strong style={styles.detailValue}>{selectedTable.area}</strong>
-            </div>
-            <div style={styles.detailRow}>
-              <span style={styles.detailLabel}>Server</span>
-              <strong style={styles.detailValue}>{selectedTable.server}</strong>
-            </div>
-            <div style={styles.detailRow}>
-              <span style={styles.detailLabel}>Seats</span>
-              <strong style={styles.detailValue}>{selectedTable.seats}</strong>
-            </div>
-            <div style={styles.detailRow}>
-              <span style={styles.detailLabel}>Timer / Reservation</span>
-              <strong style={styles.detailValue}>{selectedTable.time}</strong>
-            </div>
-          </div>
+          {selectedTable ? (
+            <>
+              <div style={styles.detailsList}>
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Status</span>
+                  <strong style={styles.detailValue}>{STATUS_META[selectedTable.status].label}</strong>
+                </div>
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Section</span>
+                  <strong style={styles.detailValue}>{selectedTable.area}</strong>
+                </div>
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Table Number</span>
+                  <strong style={styles.detailValue}>{selectedTable.tableNumber}</strong>
+                </div>
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>Seats</span>
+                  <strong style={styles.detailValue}>{selectedTable.seats}</strong>
+                </div>
+                <div style={styles.detailRow}>
+                  <span style={styles.detailLabel}>State</span>
+                  <strong style={styles.detailValue}>{selectedTable.time}</strong>
+                </div>
+              </div>
 
-          <div style={styles.actions}>
-            <ActionButton background="#1d4ed8">Start Order</ActionButton>
-            <ActionButton background="#0f766e">Move Guests</ActionButton>
-            <ActionButton background="#475569">Mark Clean</ActionButton>
-          </div>
+              <div style={styles.actions}>
+                <ActionButton
+                  background="#1d4ed8"
+                  onClick={() => router.push("/server-order")}
+                >
+                  Start Order
+                </ActionButton>
+                <ActionButton
+                  background="#0f766e"
+                  onClick={() => handleStatusChange("reserved")}
+                  disabled={isUpdating}
+                >
+                  Mark Reserved
+                </ActionButton>
+                <ActionButton
+                  background="#475569"
+                  onClick={() => handleStatusChange("available")}
+                  disabled={isUpdating}
+                >
+                  Mark Clean
+                </ActionButton>
+              </div>
+            </>
+          ) : (
+            <div>No tables found.</div>
+          )}
         </aside>
       </div>
 
