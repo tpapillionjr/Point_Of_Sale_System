@@ -7,7 +7,7 @@ export default function OperationsReportsPage() {
       title="Operational Reports"
       description="Review voids, discounts, refunds, and payment mix."
     >
-      {() => <OperationsOverviewSection />}
+      {(selectedRange) => <OperationsOverviewSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

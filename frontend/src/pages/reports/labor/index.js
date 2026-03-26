@@ -7,7 +7,7 @@ export default function LaborReportsPage() {
       title="Labor Reports"
       description="Monitor employee performance, attendance, and scheduled versus actual hours."
     >
-      {() => <LaborOverviewSection />}
+      {(selectedRange) => <LaborOverviewSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

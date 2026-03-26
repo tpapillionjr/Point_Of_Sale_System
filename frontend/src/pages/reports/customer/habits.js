@@ -4,7 +4,7 @@ import { CustomerHabitsSection } from "../../../components/reports/ReportPageSec
 export default function CustomerHabitsPage() {
   return (
     <ReportsPageLayout title="Ordering Habits" description="Review common order patterns and traffic behavior.">
-      {() => <CustomerHabitsSection />}
+      {(selectedRange) => <CustomerHabitsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

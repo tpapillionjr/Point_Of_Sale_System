@@ -7,7 +7,7 @@ export default function LaborHoursPage() {
       title="Scheduled vs Actual Hours"
       description="Compare planned labor against worked hours."
     >
-      {() => <LaborHoursSection />}
+      {(selectedRange) => <LaborHoursSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

@@ -4,7 +4,7 @@ import { InventoryUsageSection } from "../../../components/reports/ReportPageSec
 export default function InventoryUsagePage() {
   return (
     <ReportsPageLayout title="Ingredient Usage" description="Review key ingredient consumption trends.">
-      {() => <InventoryUsageSection />}
+      {(selectedRange) => <InventoryUsageSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

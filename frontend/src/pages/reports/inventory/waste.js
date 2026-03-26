@@ -4,7 +4,7 @@ import { InventoryWasteSection } from "../../../components/reports/ReportPageSec
 export default function InventoryWastePage() {
   return (
     <ReportsPageLayout title="Waste Reduction" description="Review waste-related inventory insights.">
-      {() => <InventoryWasteSection />}
+      {(selectedRange) => <InventoryWasteSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }
