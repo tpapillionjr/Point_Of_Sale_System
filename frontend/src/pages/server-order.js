@@ -21,6 +21,7 @@ export default function ServerOrderPage() {
   const [employee, setEmployee] = useState(null);
   const [message, setMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedOrder, setSubmittedOrder] = useState(null);
 
   const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
   const supportedMenu = useMemo(() => menuData, []);
@@ -159,6 +160,7 @@ export default function ServerOrderPage() {
       const order = await createOrder(payload);
       const newSentIds = cart.map((item) => item.id);
       setSentItemIds((prev) => [...new Set([...prev, ...newSentIds])]);
+      setSubmittedOrder(order);
       setMessage({
         type: "success",
         text: `Order #${order.orderId} sent successfully for table ${selectedTable.tableNumber}.`,
@@ -239,7 +241,9 @@ export default function ServerOrderPage() {
               boxSizing: "border-box",
             }}
           >
-            {tables.map((table) => (
+            {tables
+              .filter((table) => table.status !== "occupied")
+              .map((table) => (
               <option key={table.tableId} value={table.tableNumber}>
                 Table {table.tableNumber} ({table.status})
               </option>
@@ -507,9 +511,18 @@ export default function ServerOrderPage() {
 
           <button
             onClick={() => {
+              if (!submittedOrder?.orderId) {
+                setMessage({
+                  type: "error",
+                  text: "Send the order successfully before closing the tab.",
+                });
+                return;
+              }
+
               localStorage.setItem(
                 "currentOrder",
                 JSON.stringify({
+                  orderId: submittedOrder.orderId,
                   tableNumber,
                   guestCount,
                   orderType,
@@ -519,7 +532,7 @@ export default function ServerOrderPage() {
               );
               router.push("/checkout");
             }}
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || !submittedOrder?.orderId}
             style={{
               marginTop: "12px",
               width: "100%",
@@ -532,7 +545,7 @@ export default function ServerOrderPage() {
               fontSize: "14px",
               fontWeight: "700",
               letterSpacing: "0.05em",
-              opacity: cart.length === 0 ? 0.6 : 1,
+              opacity: cart.length === 0 || !submittedOrder?.orderId ? 0.6 : 1,
             }}
           >
             CLOSE TAB
