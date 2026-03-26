@@ -57,6 +57,10 @@ export async function cancelOrder(payload) {
   });
 }
 
+export async function fetchActiveOrderByTable(tableNumber) {
+  return request(`/api/orders/active-by-table/${tableNumber}`);
+}
+
 export async function closeOrder(payload) {
   return request("/api/payments/close-order", {
     method: "POST",

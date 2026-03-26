@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { cancelOrder, closeOrder } from "../../lib/api";
+import { cancelOrder, closeOrder, fetchActiveOrderByTable } from "../../lib/api";
 
 const TAX_RATE = 0.0825;
 
@@ -30,6 +30,31 @@ export default function CheckoutPage() {
     setEmployee(storedEmployee ? JSON.parse(storedEmployee) : null);
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    async function recoverOrderId() {
+      if (!order?.tableNumber || order?.orderId) {
+        return;
+      }
+
+      try {
+        const activeOrder = await fetchActiveOrderByTable(order.tableNumber);
+        setOrder((current) =>
+          current
+            ? {
+                ...current,
+                orderId: activeOrder.orderId,
+              }
+            : current
+        );
+        setMessage(null);
+      } catch (error) {
+        setMessage(error.message);
+      }
+    }
+
+    recoverOrderId();
+  }, [order?.orderId, order?.tableNumber]);
 
   if (!isHydrated) {
     return null;
