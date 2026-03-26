@@ -1,17 +1,16 @@
-const express = require('express');
-const cors = require('cors');
-
-const itemsRoutes = require('./routes/items.routes');
+import express from "express";
+import cors from "cors";
+import itemsRoutes from "./routes/items.routes.js";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
 });
 
-app.use('/api/items', itemsRoutes);
+app.use("/api/items", itemsRoutes);
 
-module.exports = app;
+export default app;
