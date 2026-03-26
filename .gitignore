@@ -75,3 +75,4 @@ backend/SSL.crt.pem
 # Custom Build Artifacts
 *.out
 *.exe
+.vercel
