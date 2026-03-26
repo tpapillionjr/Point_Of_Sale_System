@@ -40,6 +40,13 @@ export async function updateTableStatus(tableId, status) {
   });
 }
 
+export async function createOrder(payload) {
+  return request("/api/orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getReportSummary() {
   const res = await fetch(`${API_URL}/api/reports/summary`);
   if (!res.ok) {

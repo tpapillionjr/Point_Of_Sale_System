@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
+import { createOrder, fetchTables } from "../lib/api";
 
 export default function ServerOrderPage() {
   const router = useRouter();
@@ -16,24 +17,46 @@ export default function ServerOrderPage() {
   const [pendingQty, setPendingQty] = useState(1);
   const [showQtyPad, setShowQtyPad] = useState(false);
   const [qtyInput, setQtyInput] = useState("");
+  const [tables, setTables] = useState([]);
+  const [employee, setEmployee] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
+  const supportedMenu = useMemo(() => menuData.filter((item) => [1, 2, 3].includes(item.id)), []);
+  const filteredMenu = useMemo(
+    () => supportedMenu.filter((item) => item.category === selectedCategory),
+    [selectedCategory, supportedMenu]
+  );
 
-  let filteredMenu = [];
-
-  for (let i = 0; i < menuData.length; i++) {
-    if (menuData[i].category === selectedCategory) {
-      filteredMenu.push(menuData[i]);
+  useEffect(() => {
+    const storedEmployee = localStorage.getItem("currentEmployee");
+    if (storedEmployee) {
+      setEmployee(JSON.parse(storedEmployee));
     }
-  }
+
+    async function loadTables() {
+      try {
+        const rows = await fetchTables();
+        setTables(rows);
+        if (rows.length > 0) {
+          setTableNumber(String(rows[0].tableNumber));
+        }
+      } catch (error) {
+        setMessage({ type: "error", text: error.message });
+      }
+    }
+
+    loadTables();
+  }, []);
 
   const addToCart = (item) => {
     const qty = pendingQty;
     let found = false;
-    let newCart = [];
+    const newCart = [];
 
-    for (let i = 0; i < cart.length; i++) {
-      let currentItem = cart[i];
+    for (let i = 0; i < cart.length; i += 1) {
+      const currentItem = cart[i];
 
       if (currentItem.id === item.id) {
         newCart.push({
@@ -46,7 +69,7 @@ export default function ServerOrderPage() {
       }
     }
 
-    if (found === false) {
+    if (!found) {
       newCart.push({
         ...item,
         quantity: qty,
@@ -63,7 +86,7 @@ export default function ServerOrderPage() {
 
   const handleQtyConfirm = () => {
     const parsed = parseInt(qtyInput, 10);
-    if (!isNaN(parsed) && parsed > 0) {
+    if (!Number.isNaN(parsed) && parsed > 0) {
       setPendingQty(parsed);
     }
     setQtyInput("");
@@ -75,75 +98,88 @@ export default function ServerOrderPage() {
   };
 
   const increaseQuantity = (id) => {
-    let newCart = [];
-
-    for (let i = 0; i < cart.length; i++) {
-      let item = cart[i];
-
-      if (item.id === id) {
-        newCart.push({
-          ...item,
-          quantity: item.quantity + 1,
-        });
-      } else {
-        newCart.push(item);
-      }
-    }
-
-    setCart(newCart);
+    setCart((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
+      )
+    );
   };
 
   const decreaseQuantity = (id) => {
-    let newCart = [];
-
-    for (let i = 0; i < cart.length; i++) {
-      let item = cart[i];
-
-      if (item.id === id) {
-        let newQuantity = item.quantity - 1;
-
-        if (newQuantity > 0) {
-          newCart.push({
-            ...item,
-            quantity: newQuantity,
-          });
-        }
-      } else {
-        newCart.push(item);
-      }
-    }
-
-    setCart(newCart);
+    setCart((current) =>
+      current
+        .map((item) =>
+          item.id === id ? { ...item, quantity: item.quantity - 1 } : item
+        )
+        .filter((item) => item.quantity > 0)
+    );
   };
 
   const removeItem = (id) => {
-    let newCart = [];
+    setCart((current) => current.filter((item) => item.id !== id));
+  };
 
-    for (let i = 0; i < cart.length; i++) {
-      if (cart[i].id !== id) {
-        newCart.push(cart[i]);
-      }
+  async function handleSubmitOrder(action) {
+    if (!employee?.userId) {
+      setMessage({ type: "error", text: "Clock in and log in before sending an order." });
+      return;
     }
 
-    setCart(newCart);
-  };
+    const selectedTable = tables.find((table) => String(table.tableNumber) === String(tableNumber));
+    if (!selectedTable) {
+      setMessage({ type: "error", text: "Select a valid table." });
+      return;
+    }
 
-  const handleSubmitOrder = (action) => {
-    const orderData = {
-      tableNumber: tableNumber,
-      guestCount: guestCount,
-      orderType: orderType,
-      orderNote: orderNote,
-      action: action,
-      cart: cart,
+    if (cart.length === 0) {
+      setMessage({ type: "error", text: "Add at least one item to the order." });
+      return;
+    }
+
+    const payload = {
+      tableId: selectedTable.tableId,
+      createdBy: employee.userId,
+      guestCount: Number(guestCount),
+      orderType: action === "TAKE OUT" ? "Takeout" : "Dine_in",
+      orderChannel: action === "TAKE OUT" ? "Phone" : "In_Store",
+      orderNote: action === "RUSH" ? [orderNote, "RUSH"].filter(Boolean).join(" - ") : orderNote,
+      items: cart.map((item) => ({
+        menuItemId: item.id,
+        quantity: item.quantity,
+        price: Number(item.price),
+      })),
+      discountAmount: 0,
+      tax: 0,
+      serviceCharge: 0,
+      isSplitCheck: false,
     };
 
-    const newSentIds = cart.map((item) => item.id);
-    setSentItemIds((prev) => [...new Set([...prev, ...newSentIds])]);
-
-    console.log("Submitted Order:", orderData);
-    alert(`Order sent as: ${action}`);
-  };
+    try {
+      setIsSubmitting(true);
+      const order = await createOrder(payload);
+      const newSentIds = cart.map((item) => item.id);
+      setSentItemIds((prev) => [...new Set([...prev, ...newSentIds])]);
+      setMessage({
+        type: "success",
+        text: `Order #${order.orderId} sent successfully for table ${selectedTable.tableNumber}.`,
+      });
+      localStorage.setItem(
+        "currentOrder",
+        JSON.stringify({
+          orderId: order.orderId,
+          tableNumber,
+          guestCount,
+          orderType,
+          orderNote,
+          cart,
+        })
+      );
+    } catch (error) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div
@@ -164,7 +200,14 @@ export default function ServerOrderPage() {
         }}
       >
         <h1 style={{ fontSize: "28px", fontWeight: "700", color: "#111827", margin: 0 }}>Server Order Entry</h1>
-        <p style={{ marginTop: "6px", color: "#6b7280", margin: "6px 0 0" }}>Select a table, add items, and submit the order.</p>
+        <p style={{ marginTop: "6px", color: "#6b7280", margin: "6px 0 0" }}>
+          Select a live table, add items, and submit the order.
+        </p>
+        {message && (
+          <p style={{ margin: "12px 0 0", color: message.type === "error" ? "#b91c1c" : "#166534", fontWeight: "600" }}>
+            {message.text}
+          </p>
+        )}
       </div>
 
       <div
@@ -181,8 +224,7 @@ export default function ServerOrderPage() {
       >
         <div>
           <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table Number</label>
-          <input
-            type="text"
+          <select
             value={tableNumber}
             onChange={(e) => setTableNumber(e.target.value)}
             style={{
@@ -193,9 +235,16 @@ export default function ServerOrderPage() {
               border: "1px solid #d1d5db",
               fontSize: "14px",
               color: "#111827",
+              backgroundColor: "white",
               boxSizing: "border-box",
             }}
-          />
+          >
+            {tables.map((table) => (
+              <option key={table.tableId} value={table.tableNumber}>
+                Table {table.tableNumber} ({table.status})
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -203,9 +252,9 @@ export default function ServerOrderPage() {
           <input
             type="number"
             min="1"
-            max="20"
+            max="8"
             value={guestCount}
-            onChange={(e) => setGuestCount(e.target.value)}
+            onChange={(e) => setGuestCount(Number(e.target.value))}
             style={{
               width: "100%",
               marginTop: "6px",
@@ -280,7 +329,7 @@ export default function ServerOrderPage() {
         >
           <h2 style={{ marginBottom: "12px", fontSize: "16px", fontWeight: "600", color: "#111827" }}>Categories</h2>
 
-          {categories.map(function (category) {
+          {categories.map((category) => {
             const isActive = category === selectedCategory;
 
             return (
@@ -324,15 +373,9 @@ export default function ServerOrderPage() {
               gap: "12px",
             }}
           >
-            {filteredMenu.map(function (item) {
-              return (
-                <MenuButton
-                  key={item.id}
-                  item={item}
-                  addToCart={addToCart}
-                />
-              );
-            })}
+            {filteredMenu.map((item) => (
+              <MenuButton key={item.id} item={item} addToCart={addToCart} />
+            ))}
           </div>
         </div>
 
@@ -354,9 +397,11 @@ export default function ServerOrderPage() {
             removeItem={removeItem}
           />
 
-          {/* QTY button */}
           <button
-            onClick={() => { setQtyInput(""); setShowQtyPad(true); }}
+            onClick={() => {
+              setQtyInput("");
+              setShowQtyPad(true);
+            }}
             style={{
               marginTop: "12px",
               width: "100%",
@@ -385,6 +430,7 @@ export default function ServerOrderPage() {
           >
             <button
               onClick={() => handleSubmitOrder("SEND")}
+              disabled={isSubmitting}
               style={{
                 padding: "14px 8px",
                 border: "none",
@@ -395,6 +441,7 @@ export default function ServerOrderPage() {
                 fontSize: "14px",
                 fontWeight: "700",
                 letterSpacing: "0.05em",
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               SEND
@@ -402,6 +449,7 @@ export default function ServerOrderPage() {
 
             <button
               onClick={() => handleSubmitOrder("TAKE OUT")}
+              disabled={isSubmitting}
               style={{
                 padding: "14px 8px",
                 border: "none",
@@ -412,6 +460,7 @@ export default function ServerOrderPage() {
                 fontSize: "14px",
                 fontWeight: "700",
                 letterSpacing: "0.05em",
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               TAKE OUT
@@ -419,6 +468,7 @@ export default function ServerOrderPage() {
 
             <button
               onClick={() => handleSubmitOrder("RUSH")}
+              disabled={isSubmitting}
               style={{
                 padding: "14px 8px",
                 border: "none",
@@ -429,13 +479,15 @@ export default function ServerOrderPage() {
                 fontSize: "14px",
                 fontWeight: "700",
                 letterSpacing: "0.05em",
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               RUSH
             </button>
 
             <button
-              onClick={() => handleSubmitOrder("NO MAKE")}
+              onClick={() => setCart([])}
+              disabled={isSubmitting}
               style={{
                 padding: "14px 8px",
                 border: "none",
@@ -446,23 +498,28 @@ export default function ServerOrderPage() {
                 fontSize: "14px",
                 fontWeight: "700",
                 letterSpacing: "0.05em",
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
-              NO MAKE
+              CLEAR
             </button>
           </div>
 
           <button
             onClick={() => {
-              localStorage.setItem("currentOrder", JSON.stringify({
-                tableNumber,
-                guestCount,
-                orderType,
-                orderNote,
-                cart,
-              }));
+              localStorage.setItem(
+                "currentOrder",
+                JSON.stringify({
+                  tableNumber,
+                  guestCount,
+                  orderType,
+                  orderNote,
+                  cart,
+                })
+              );
               router.push("/checkout");
             }}
+            disabled={cart.length === 0}
             style={{
               marginTop: "12px",
               width: "100%",
@@ -475,6 +532,7 @@ export default function ServerOrderPage() {
               fontSize: "14px",
               fontWeight: "700",
               letterSpacing: "0.05em",
+              opacity: cart.length === 0 ? 0.6 : 1,
             }}
           >
             CLOSE TAB
@@ -482,7 +540,6 @@ export default function ServerOrderPage() {
         </div>
       </div>
 
-      {/* Numpad modal */}
       {showQtyPad && (
         <div
           style={{
@@ -510,7 +567,6 @@ export default function ServerOrderPage() {
               Enter Quantity
             </p>
 
-            {/* Display */}
             <div
               style={{
                 backgroundColor: "#f3f4f6",
@@ -527,12 +583,11 @@ export default function ServerOrderPage() {
               {qtyInput || "0"}
             </div>
 
-            {/* Digit grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
-              {["7","8","9","4","5","6","1","2","3"].map((d) => (
+              {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((digit) => (
                 <button
-                  key={d}
-                  onClick={() => handleQtyDigit(d)}
+                  key={digit}
+                  onClick={() => handleQtyDigit(digit)}
                   style={{
                     padding: "16px",
                     fontSize: "18px",
@@ -543,7 +598,7 @@ export default function ServerOrderPage() {
                     cursor: "pointer",
                   }}
                 >
-                  {d}
+                  {digit}
                 </button>
               ))}
               <button
