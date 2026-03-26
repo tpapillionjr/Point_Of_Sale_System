@@ -29,6 +29,17 @@ export async function fetchItems() {
   return request("/api/items");
 }
 
+export async function fetchTables() {
+  return request("/api/tables");
+}
+
+export async function updateTableStatus(tableId, status) {
+  return request(`/api/tables/${tableId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
 export async function getReportSummary() {
   const res = await fetch(`${API_URL}/api/reports/summary`);
   if (!res.ok) {
