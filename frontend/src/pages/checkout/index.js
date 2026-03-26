@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 
 const TAX_RATE = 0.0825;
@@ -7,10 +7,8 @@ const TIP_PRESETS = [15, 18, 20];
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const [order] = useState(() => {
-    const stored = localStorage.getItem("currentOrder");
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [order, setOrder] = useState(null);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [selectedTipPct, setSelectedTipPct] = useState(null);
   const [customTipInput, setCustomTipInput] = useState("");
   const [showCustomTip, setShowCustomTip] = useState(false);
@@ -19,6 +17,16 @@ export default function CheckoutPage() {
   const [cashInput, setCashInput] = useState("");
   const [splitCount, setSplitCount] = useState(2);
   const [stage, setStage] = useState("payment"); // "payment" | "complete"
+
+  useEffect(() => {
+    const stored = localStorage.getItem("currentOrder");
+    setOrder(stored ? JSON.parse(stored) : null);
+    setIsHydrated(true);
+  }, []);
+
+  if (!isHydrated) {
+    return null;
+  }
 
   if (!order) {
     return (
