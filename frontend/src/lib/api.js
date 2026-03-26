@@ -84,27 +84,12 @@ export async function closeOrder(payload) {
 }
 
 export async function getReportSummary() {
-  const res = await fetch(`${API_URL}/api/reports/summary`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch report summary");
-  }
-  return res.json();
+  return request("/api/reports/overview");
 }
 
-export async function getTopSellingItems() {
-  const res = await fetch(`${API_URL}/api/reports/top-items`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch top selling items");
-  }
-  return res.json();
-}
-
-export async function getLowInventoryItems() {
-  const res = await fetch(`${API_URL}/api/reports/low-inventory`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch low inventory items");
-  }
-  return res.json();
+export async function getReportsOverview(range) {
+  const query = range ? `?range=${encodeURIComponent(range)}` : "";
+  return request(`/api/reports/overview${query}`);
 }
 
 export async function authenticateShift(pin) {
