@@ -11,6 +11,14 @@ export function getStoredEmployee() {
   }
 }
 
+export function hasStoredEmployee() {
+  return Boolean(getStoredEmployee());
+}
+
+export function isPublicRoute(pathname) {
+  return pathname === "/" || pathname === "/clock-in";
+}
+
 export function isManagerRoute(pathname) {
   return pathname.startsWith("/back-office") || pathname.startsWith("/reports");
 }

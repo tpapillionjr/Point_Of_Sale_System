@@ -155,7 +155,7 @@ export default function ClockinPage() {
     }
 
     if (user.role === "manager") {
-      router.push("/reports");
+      router.push("/back-office");
       return;
     }
 
