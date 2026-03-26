@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import itemsRoutes from "./routes/items.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
+import paymentsRoutes from "./routes/payments.routes.js";
 import shiftsRoutes from "./routes/shifts.routes.js";
 import tablesRoutes from "./routes/tables.routes.js";
 
@@ -16,6 +17,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/items", itemsRoutes);
 app.use("/api/orders", ordersRoutes);
+app.use("/api/payments", paymentsRoutes);
 app.use("/api/shifts", shiftsRoutes);
 app.use("/api/tables", tablesRoutes);
 

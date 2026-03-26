@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { closeOrder } from "../../lib/api";
 
 const TAX_RATE = 0.0825;
 
@@ -17,10 +18,15 @@ export default function CheckoutPage() {
   const [cashInput, setCashInput] = useState("");
   const [splitCount, setSplitCount] = useState(2);
   const [stage, setStage] = useState("payment"); // "payment" | "complete"
+  const [employee, setEmployee] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("currentOrder");
     setOrder(stored ? JSON.parse(stored) : null);
+    const storedEmployee = localStorage.getItem("currentEmployee");
+    setEmployee(storedEmployee ? JSON.parse(storedEmployee) : null);
     setIsHydrated(true);
   }, []);
 
@@ -73,9 +79,40 @@ export default function CheckoutPage() {
 
   const handleCashClear = () => setCashInput("");
 
-  const handleCloseCheck = () => {
+  const handleCloseCheck = async () => {
+    if (!order?.orderId) {
+      setMessage("No backend order is attached to this check.");
+      return;
+    }
+
+    if (!employee?.userId) {
+      setMessage("You must be logged in to close the check.");
+      return;
+    }
+
     if (paymentMethod === "CASH" && cashTendered < total) return;
-    setStage("complete");
+
+    try {
+      setIsClosing(true);
+      setMessage(null);
+      await closeOrder({
+        orderId: order.orderId,
+        servedBy: employee.userId,
+        paymentMethod,
+        splitCount,
+        subtotal,
+        tax,
+        tipAmount,
+        total,
+        cashTendered,
+      });
+      localStorage.removeItem("currentOrder");
+      setStage("complete");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setIsClosing(false);
+    }
   };
 
   if (stage === "complete") {
@@ -196,6 +233,22 @@ export default function CheckoutPage() {
           OPEN CHECK
         </span>
       </div>
+
+      {message && (
+        <div
+          style={{
+            backgroundColor: "#fef2f2",
+            color: "#b91c1c",
+            border: "1px solid #fecaca",
+            borderRadius: "12px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            fontWeight: "600",
+          }}
+        >
+          {message}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "20px", alignItems: "start" }}>
 
@@ -610,6 +663,7 @@ export default function CheckoutPage() {
           <button
             onClick={handleCloseCheck}
             disabled={
+              isClosing ||
               !paymentMethod ||
               (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))
             }
@@ -619,23 +673,23 @@ export default function CheckoutPage() {
               border: "none",
               borderRadius: "12px",
               backgroundColor:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#d1d5db"
                   : "#111827",
               color:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#9ca3af"
                   : "white",
               fontWeight: "700",
               fontSize: "16px",
               letterSpacing: "0.05em",
               cursor:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "not-allowed"
                   : "pointer",
             }}
           >
-            CLOSE CHECK — ${total.toFixed(2)}
+            {isClosing ? "CLOSING..." : `CLOSE CHECK — $${total.toFixed(2)}`}
           </button>
         </div>
       </div>
