@@ -184,6 +184,12 @@ async function createOrder(payload) {
       [order.tableId]
     );
 
+    await connection.execute(
+      `INSERT INTO Kitchen_Ticket (order_id, table_id, status, created_at, updated_at)
+       VALUES (?, ?, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [orderResult.insertId, order.tableId]
+    );
+
     return {
       orderId: orderResult.insertId,
       ...order,
