@@ -211,6 +211,22 @@ async function getBackOfficeData(range) {
      LIMIT 12`
   );
 
+  const activeOrdersPromise = db.query(
+    `SELECT
+       o.order_id AS orderId,
+       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+       dt.table_number AS tableNumber,
+       u.name AS employeeName,
+       o.total,
+       o.status,
+       o.created_at AS createdAt
+     FROM Orders o
+     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+     LEFT JOIN Users u ON u.user_id = o.created_by
+     WHERE o.status IN ('Open', 'Sent', 'Completed')
+     ORDER BY o.created_at DESC`
+  );
+
   const refundCountsPromise = db.query(
     `SELECT COUNT(*) AS refundCount
      FROM Payment
@@ -234,7 +250,7 @@ async function getBackOfficeData(range) {
      GROUP BY role`
   );
 
-  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, refundCountsRows, customerRows, userCountsRows] =
+  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
     await Promise.all([
       inventoryRowsPromise,
       inventoryUsagePromise,
@@ -243,6 +259,7 @@ async function getBackOfficeData(range) {
       menuItemsPromise,
       modifiersPromise,
       recentOrdersPromise,
+      activeOrdersPromise,
       refundCountsPromise,
       customerRowsPromise,
       userCountsPromise,
@@ -399,6 +416,15 @@ async function getBackOfficeData(range) {
         { title: "Void Orders", value: String(voidOrders) },
         { title: "Refunds", value: String(Number(refundCountsRows[0]?.refundCount ?? 0)) },
       ],
+      activeOrders: activeOrders.map((row) => ({
+        orderId: row.orderId,
+        receiptNumber: row.receiptNumber,
+        tableNumber: row.tableNumber ?? "—",
+        employeeName: row.employeeName ?? "Unknown",
+        total: Number(row.total ?? 0),
+        status: row.status,
+        createdAt: formatDateTime(row.createdAt),
+      })),
       recentOrders: recentOrders.map((row) => ({
         orderId: row.orderId,
         receiptNumber: row.receiptNumber,
