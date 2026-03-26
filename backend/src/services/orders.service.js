@@ -3,7 +3,7 @@ import { createValidationError, validateOrderPayload } from "../validation/busin
 
 async function ensureUserExists(connection, userId) {
   const [rows] = await connection.execute(
-    "SELECT user_id, is_active FROM Users WHERE user_id = ? LIMIT 1",
+    "SELECT user_id, role, is_active FROM Users WHERE user_id = ? LIMIT 1",
     [userId]
   );
 
@@ -14,6 +14,8 @@ async function ensureUserExists(connection, userId) {
   if (!rows[0].is_active) {
     throw createValidationError("createdBy user must be active.");
   }
+
+  return rows[0];
 }
 
 async function ensureTableAvailable(connection, tableId) {
@@ -28,6 +30,21 @@ async function ensureTableAvailable(connection, tableId) {
 
   if (rows[0].status === "inactive") {
     throw createValidationError("Selected dining table is inactive.");
+  }
+}
+
+async function ensureTableCanBeReseated(connection, tableId) {
+  const [rows] = await connection.execute(
+    `SELECT order_id
+     FROM Orders
+     WHERE table_id = ?
+       AND status IN ('Open', 'Sent', 'Completed')
+     LIMIT 1`,
+    [tableId]
+  );
+
+  if (rows.length > 0) {
+    throw createValidationError("Table must be closed before reseating.");
   }
 }
 
@@ -60,8 +77,13 @@ async function createOrder(payload) {
   const order = validateOrderPayload(payload);
 
   return db.withTransaction(async (connection) => {
-    await ensureUserExists(connection, order.createdBy);
+    const user = await ensureUserExists(connection, order.createdBy);
     await ensureTableAvailable(connection, order.tableId);
+    await ensureTableCanBeReseated(connection, order.tableId);
+
+    if (user.role === "employee" && order.discountAmount > 0) {
+      throw createValidationError("Servers cannot apply discounts.");
+    }
 
     const itemIds = [...new Set(order.items.map((item) => item.menuItemId))];
     const menuItems = await fetchMenuItems(connection, itemIds);

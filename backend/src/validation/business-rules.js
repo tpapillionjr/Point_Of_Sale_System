@@ -24,8 +24,8 @@ function validateOrderPayload(payload) {
     issues.push("createdBy must be a positive integer.");
   }
 
-  if (!Number.isInteger(payload.guestCount) || payload.guestCount < 1 || payload.guestCount > 20) {
-    issues.push("guestCount must be between 1 and 20.");
+  if (!Number.isInteger(payload.guestCount) || payload.guestCount < 1 || payload.guestCount > 8) {
+    issues.push("guestCount must be between 1 and 8.");
   }
 
   if (!Array.isArray(payload.items) || payload.items.length === 0) {
@@ -76,6 +76,10 @@ function validateOrderPayload(payload) {
     (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
     0
   );
+
+  if (normalizedItems.length > 0 && !normalizedItems.some((item) => item.price > 0)) {
+    issues.push("Transaction must include at least one priced item.");
+  }
 
   const discountAmount = payload.discountAmount ?? 0;
   const tax = payload.tax ?? 0;

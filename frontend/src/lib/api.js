@@ -1,8 +1,32 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
 
-export async function fetchItems() {
-  const res = await fetch(`${API_URL}/api/items`);
+async function request(path, options = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers ?? {}),
+    },
+    ...options,
+  });
+
+  if (!res.ok) {
+    let errorMessage = "Request failed";
+
+    try {
+      const payload = await res.json();
+      errorMessage = payload.error || errorMessage;
+    } catch {
+      errorMessage = `Request failed with status ${res.status}`;
+    }
+
+    throw new Error(errorMessage);
+  }
+
   return res.json();
+}
+
+export async function fetchItems() {
+  return request("/api/items");
 }
 
 export async function getReportSummary() {
@@ -27,4 +51,25 @@ export async function getLowInventoryItems() {
     throw new Error("Failed to fetch low inventory items");
   }
   return res.json();
+}
+
+export async function authenticateShift(pin) {
+  return request("/api/shifts/auth", {
+    method: "POST",
+    body: JSON.stringify({ pin }),
+  });
+}
+
+export async function clockInShift(pin) {
+  return request("/api/shifts/clock-in", {
+    method: "POST",
+    body: JSON.stringify({ pin }),
+  });
+}
+
+export async function clockOutShift(pin, tipDeclaredAmount) {
+  return request("/api/shifts/clock-out", {
+    method: "POST",
+    body: JSON.stringify({ pin, tipDeclaredAmount }),
+  });
 }
