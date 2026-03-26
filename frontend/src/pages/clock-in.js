@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 
 const EMPLOYEES = {
   "1234": { name: "Alice", roles: ["Server", "Server Trainer"] },
@@ -7,6 +8,7 @@ const EMPLOYEES = {
 };
 
 export default function ClockinPage() {
+  const router = useRouter();
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
   const [activePin, setActivePin] = useState(null);
@@ -140,6 +142,7 @@ export default function ClockinPage() {
       type: "success",
       text: user.name + " logged in as " + savedSession.role + " at " + timeNow,
     });
+    router.push("/tables");
   }
 
   const pinDots = [];
