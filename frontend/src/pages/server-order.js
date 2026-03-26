@@ -148,10 +148,10 @@ export default function ServerOrderPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        backgroundColor: "#f3f4f6",
+        minHeight: "auto",
+        backgroundColor: "transparent",
         color: "#111827",
-        padding: "24px",
+        padding: 0,
       }}
     >
       <div

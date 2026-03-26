@@ -9,6 +9,7 @@ const navSections = [
   { href: "/back-office/menu-management", label: "Menu Management" },
   { href: "/back-office/order-history", label: "Order History" },
   { href: "/back-office/labor", label: "Labor" },
+  { href: "/back-office/customer-loyalty", label: "Customer Loyalty" },
   { href: "/back-office/settings", label: "Settings" },
 ];
 
