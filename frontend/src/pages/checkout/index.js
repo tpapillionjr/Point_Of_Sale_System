@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { cancelOrder, closeOrder, fetchActiveOrderByTable } from "../../lib/api";
 
 const TAX_RATE = 0.0825;
 
@@ -7,10 +8,8 @@ const TIP_PRESETS = [15, 18, 20];
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const [order] = useState(() => {
-    const stored = localStorage.getItem("currentOrder");
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [order, setOrder] = useState(null);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [selectedTipPct, setSelectedTipPct] = useState(null);
   const [customTipInput, setCustomTipInput] = useState("");
   const [showCustomTip, setShowCustomTip] = useState(false);
@@ -19,6 +18,47 @@ export default function CheckoutPage() {
   const [cashInput, setCashInput] = useState("");
   const [splitCount, setSplitCount] = useState(2);
   const [stage, setStage] = useState("payment"); // "payment" | "complete"
+  const [employee, setEmployee] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("currentOrder");
+    setOrder(stored ? JSON.parse(stored) : null);
+    const storedEmployee = localStorage.getItem("currentEmployee");
+    setEmployee(storedEmployee ? JSON.parse(storedEmployee) : null);
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    async function recoverOrderId() {
+      if (!order?.tableNumber || order?.orderId) {
+        return;
+      }
+
+      try {
+        const activeOrder = await fetchActiveOrderByTable(order.tableNumber);
+        setOrder((current) =>
+          current
+            ? {
+                ...current,
+                orderId: activeOrder.orderId,
+              }
+            : current
+        );
+        setMessage(null);
+      } catch (error) {
+        setMessage(error.message);
+      }
+    }
+
+    recoverOrderId();
+  }, [order?.orderId, order?.tableNumber]);
+
+  if (!isHydrated) {
+    return null;
+  }
 
   if (!order) {
     return (
@@ -65,9 +105,68 @@ export default function CheckoutPage() {
 
   const handleCashClear = () => setCashInput("");
 
-  const handleCloseCheck = () => {
+  const handleCloseCheck = async () => {
+    if (!order?.orderId) {
+      setMessage("No backend order is attached to this check.");
+      return;
+    }
+
+    if (!employee?.userId) {
+      setMessage("You must be logged in to close the check.");
+      return;
+    }
+
     if (paymentMethod === "CASH" && cashTendered < total) return;
-    setStage("complete");
+
+    try {
+      setIsClosing(true);
+      setMessage(null);
+      await closeOrder({
+        orderId: order.orderId,
+        servedBy: employee.userId,
+        paymentMethod,
+        splitCount,
+        subtotal,
+        tax,
+        tipAmount,
+        total,
+        cashTendered,
+      });
+      localStorage.removeItem("currentOrder");
+      setStage("complete");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!order?.orderId) {
+      setMessage("No backend order is attached to this check.");
+      return;
+    }
+
+    if (employee?.role !== "manager") {
+      setMessage("Only managers can cancel an order.");
+      return;
+    }
+
+    try {
+      setIsCanceling(true);
+      setMessage(null);
+      await cancelOrder({
+        orderId: order.orderId,
+        voidedBy: employee.userId,
+        voidReason: "Manager canceled order from checkout",
+      });
+      localStorage.removeItem("currentOrder");
+      router.push("/tables");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setIsCanceling(false);
+    }
   };
 
   if (stage === "complete") {
@@ -188,6 +287,22 @@ export default function CheckoutPage() {
           OPEN CHECK
         </span>
       </div>
+
+      {message && (
+        <div
+          style={{
+            backgroundColor: "#fef2f2",
+            color: "#b91c1c",
+            border: "1px solid #fecaca",
+            borderRadius: "12px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            fontWeight: "600",
+          }}
+        >
+          {message}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "20px", alignItems: "start" }}>
 
@@ -602,6 +717,8 @@ export default function CheckoutPage() {
           <button
             onClick={handleCloseCheck}
             disabled={
+              isClosing ||
+              isCanceling ||
               !paymentMethod ||
               (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))
             }
@@ -611,24 +728,45 @@ export default function CheckoutPage() {
               border: "none",
               borderRadius: "12px",
               backgroundColor:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#d1d5db"
                   : "#111827",
               color:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "#9ca3af"
                   : "white",
               fontWeight: "700",
               fontSize: "16px",
               letterSpacing: "0.05em",
               cursor:
-                !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
+                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
                   ? "not-allowed"
                   : "pointer",
             }}
           >
-            CLOSE CHECK — ${total.toFixed(2)}
+            {isClosing ? "CLOSING..." : `CLOSE CHECK — $${total.toFixed(2)}`}
           </button>
+
+          {employee?.role === "manager" && (
+            <button
+              onClick={handleCancelOrder}
+              disabled={isClosing || isCanceling || !order?.orderId}
+              style={{
+                width: "100%",
+                padding: "16px",
+                border: "none",
+                borderRadius: "12px",
+                backgroundColor: isClosing || isCanceling || !order?.orderId ? "#fecaca" : "#b91c1c",
+                color: isClosing || isCanceling || !order?.orderId ? "#7f1d1d" : "white",
+                fontWeight: "700",
+                fontSize: "16px",
+                letterSpacing: "0.05em",
+                cursor: isClosing || isCanceling || !order?.orderId ? "not-allowed" : "pointer",
+              }}
+            >
+              {isCanceling ? "CANCELING..." : "MANAGER CANCEL ORDER"}
+            </button>
+          )}
         </div>
       </div>
     </div>

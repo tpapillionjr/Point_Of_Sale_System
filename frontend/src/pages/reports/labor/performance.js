@@ -7,7 +7,7 @@ export default function LaborPerformancePage() {
       title="Employee Performance"
       description="Review staff productivity and scheduled versus worked hours."
     >
-      {() => <LaborPerformanceSection />}
+      {(selectedRange) => <LaborPerformanceSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

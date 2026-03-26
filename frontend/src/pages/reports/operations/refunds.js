@@ -4,7 +4,7 @@ import { OperationsRefundsSection } from "../../../components/reports/ReportPage
 export default function OperationsRefundsPage() {
   return (
     <ReportsPageLayout title="Refunds" description="Review refunded payments and approval status.">
-      {() => <OperationsRefundsSection />}
+      {(selectedRange) => <OperationsRefundsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

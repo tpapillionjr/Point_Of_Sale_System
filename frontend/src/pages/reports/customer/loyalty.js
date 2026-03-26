@@ -4,7 +4,7 @@ import { CustomerLoyaltySection } from "../../../components/reports/ReportPageSe
 export default function CustomerLoyaltyPage() {
   return (
     <ReportsPageLayout title="Loyalty Usage" description="Review loyalty signups and point activity.">
-      {() => <CustomerLoyaltySection />}
+      {(selectedRange) => <CustomerLoyaltySection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

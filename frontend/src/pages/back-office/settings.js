@@ -1,19 +1,13 @@
 import BackOfficeShell from "../../components/back-office/BackOfficeShell";
-import ReportSection from "../../components/reports/ReportSection";
+import { SettingsSection } from "../../components/back-office/BackOfficeSections";
 
 export default function SettingsPage() {
   return (
     <BackOfficeShell
       title="Settings"
-      description="Central place for POS business rules, taxes, receipt behavior, and configuration."
+      description="Review the current persisted system state and configuration gaps."
     >
-      <ReportSection title="Planned Scope">
-        <div className="space-y-3 text-gray-700">
-          <p>Configure taxes, service charges, and payment defaults.</p>
-          <p>Set manager-only permissions for voids, discounts, and overrides.</p>
-          <p>Control receipt numbering, order routing, and store-level preferences.</p>
-        </div>
-      </ReportSection>
+      <SettingsSection />
     </BackOfficeShell>
   );
 }

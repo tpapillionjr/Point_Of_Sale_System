@@ -1,21 +1,9 @@
-//main server code
-import express from "express"
-import cors from "cors"
-import items from './src/routes/items.routes.js'
+import "dotenv/config";
+import app from "./src/app.js";
 
-const app = express()
+const PORT = process.env.PORT || 4000;
 
-app.use(cors())
-app.use(express.json())
-
-app.use("/api/v1/items",items)
-app.use((req, res) => {
-  res.status(404).json({ error: "not found" });
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-export default app
-
-
-//add a get api for the library for all the data. 
-//post for for server-order.js to checkout/index.js
- 

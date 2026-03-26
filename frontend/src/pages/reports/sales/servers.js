@@ -4,7 +4,7 @@ import { SalesServersSection } from "../../../components/reports/ReportPageSecti
 export default function SalesServersPage() {
   return (
     <ReportsPageLayout title="Sales by Server" description="Compare server-level sales performance.">
-      {() => <SalesServersSection />}
+      {(selectedRange) => <SalesServersSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

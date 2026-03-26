@@ -4,7 +4,7 @@ import { InventoryTopItemsSection } from "../../../components/reports/ReportPage
 export default function InventoryTopItemsPage() {
   return (
     <ReportsPageLayout title="Top Selling Items" description="Review the top-selling items tied to inventory demand.">
-      {() => <InventoryTopItemsSection />}
+      {(selectedRange) => <InventoryTopItemsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

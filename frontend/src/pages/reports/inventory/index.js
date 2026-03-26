@@ -7,7 +7,7 @@ export default function InventoryReportsPage() {
       title="Inventory & Menu Reports"
       description="Track stock health and item sales from the reporting view."
     >
-      {() => <InventoryOverviewSection />}
+      {(selectedRange) => <InventoryOverviewSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

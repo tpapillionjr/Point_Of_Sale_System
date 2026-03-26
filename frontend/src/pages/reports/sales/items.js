@@ -4,7 +4,7 @@ import { SalesItemsSection } from "../../../components/reports/ReportPageSection
 export default function SalesItemsPage() {
   return (
     <ReportsPageLayout title="Sales by Item" description="Compare top-selling menu items and item revenue.">
-      {() => <SalesItemsSection />}
+      {(selectedRange) => <SalesItemsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }
