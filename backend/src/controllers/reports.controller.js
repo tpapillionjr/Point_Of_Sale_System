@@ -1,4 +1,4 @@
-import { getReportsOverview } from "../services/reports.service.js";
+import { getReportsDashboard, getReportsOverview } from "../services/reports.service.js";
 
 async function getOverview(req, res) {
   try {
@@ -10,4 +10,14 @@ async function getOverview(req, res) {
   }
 }
 
-export { getOverview };
+async function getDashboard(req, res) {
+  try {
+    const dashboard = await getReportsDashboard(req.query.range);
+    res.json(dashboard);
+  } catch (error) {
+    console.error("Failed to fetch reports dashboard:", error.message);
+    res.status(500).json({ error: "Failed to fetch reports dashboard" });
+  }
+}
+
+export { getDashboard, getOverview };

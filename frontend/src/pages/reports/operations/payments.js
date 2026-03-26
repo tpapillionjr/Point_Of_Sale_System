@@ -4,7 +4,7 @@ import { OperationsPaymentsSection } from "../../../components/reports/ReportPag
 export default function OperationsPaymentsPage() {
   return (
     <ReportsPageLayout title="Payment Methods" description="Review cash and card transaction mix.">
-      {() => <OperationsPaymentsSection />}
+      {(selectedRange) => <OperationsPaymentsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

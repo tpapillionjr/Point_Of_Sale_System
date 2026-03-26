@@ -4,7 +4,7 @@ import { OperationsVoidsSection } from "../../../components/reports/ReportPageSe
 export default function OperationsVoidsPage() {
   return (
     <ReportsPageLayout title="Voids" description="Review voided checks and reasons.">
-      {() => <OperationsVoidsSection />}
+      {(selectedRange) => <OperationsVoidsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

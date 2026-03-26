@@ -4,7 +4,7 @@ import { LaborClockSection } from "../../../components/reports/ReportPageSection
 export default function LaborClockPage() {
   return (
     <ReportsPageLayout title="Clock In / Out" description="Review recent clock events and status.">
-      {() => <LaborClockSection />}
+      {(selectedRange) => <LaborClockSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

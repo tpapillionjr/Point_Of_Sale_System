@@ -4,7 +4,7 @@ import { OperationsDiscountsSection } from "../../../components/reports/ReportPa
 export default function OperationsDiscountsPage() {
   return (
     <ReportsPageLayout title="Discounts" description="Review discount counts and total value.">
-      {() => <OperationsDiscountsSection />}
+      {(selectedRange) => <OperationsDiscountsSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

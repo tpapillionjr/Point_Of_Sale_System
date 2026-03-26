@@ -92,6 +92,11 @@ export async function getReportsOverview(range) {
   return request(`/api/reports/overview${query}`);
 }
 
+export async function getReportsDashboard(range) {
+  const query = range ? `?range=${encodeURIComponent(range)}` : "";
+  return request(`/api/reports/dashboard${query}`);
+}
+
 export async function authenticateShift(pin) {
   return request("/api/shifts/auth", {
     method: "POST",

@@ -4,7 +4,7 @@ import { SalesCategoriesSection } from "../../../components/reports/ReportPageSe
 export default function SalesCategoriesPage() {
   return (
     <ReportsPageLayout title="Sales by Category" description="View sales totals grouped by menu category.">
-      {() => <SalesCategoriesSection />}
+      {(selectedRange) => <SalesCategoriesSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

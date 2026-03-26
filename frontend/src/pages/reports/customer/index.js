@@ -7,7 +7,7 @@ export default function CustomerReportsPage() {
       title="Customer Behavior"
       description="Review loyalty, repeat traffic, and order habits."
     >
-      {() => <CustomerOverviewSection />}
+      {(selectedRange) => <CustomerOverviewSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

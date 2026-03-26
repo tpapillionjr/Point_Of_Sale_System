@@ -4,7 +4,7 @@ import { CustomerRepeatSection } from "../../../components/reports/ReportPageSec
 export default function CustomerRepeatPage() {
   return (
     <ReportsPageLayout title="Repeat Customers" description="Review repeat-visit behavior and favorite items.">
-      {() => <CustomerRepeatSection />}
+      {(selectedRange) => <CustomerRepeatSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }

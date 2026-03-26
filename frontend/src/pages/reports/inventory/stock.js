@@ -4,7 +4,7 @@ import { InventoryStockSection } from "../../../components/reports/ReportPageSec
 export default function InventoryStockPage() {
   return (
     <ReportsPageLayout title="Stock Levels" description="Review low-stock inventory items.">
-      {() => <InventoryStockSection />}
+      {(selectedRange) => <InventoryStockSection selectedRange={selectedRange} />}
     </ReportsPageLayout>
   );
 }
