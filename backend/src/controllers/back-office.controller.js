@@ -1,4 +1,4 @@
-import { getBackOfficeDashboard } from "../services/back-office.service.js";
+import { getBackOfficeDashboard, getBackOfficeData } from "../services/back-office.service.js";
 
 async function getDashboard(req, res) {
   try {
@@ -10,4 +10,14 @@ async function getDashboard(req, res) {
   }
 }
 
-export { getDashboard };
+async function getData(req, res) {
+  try {
+    const data = await getBackOfficeData(req.query.range);
+    res.json(data);
+  } catch (error) {
+    console.error("Failed to fetch back office data:", error.message);
+    res.status(500).json({ error: "Failed to fetch back office data" });
+  }
+}
+
+export { getDashboard, getData };
