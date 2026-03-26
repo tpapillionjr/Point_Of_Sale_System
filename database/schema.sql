@@ -5,18 +5,20 @@ CREATE TABLE Dining_Tables (
     capacity SMALLINT NULL,
     status ENUM('available','occupied','reserved','inactive') NOT NULL DEFAULT 'available',
     CONSTRAINT chk_table_number_positive CHECK (table_number >= 1),
-    CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 20))
+    CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 8))
 );
 
 CREATE TABLE Users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
     email VARCHAR(250) NOT NULL UNIQUE,
+    pin_code CHAR(4) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('employee','manager','kitchen') NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT chk_user_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
-    CONSTRAINT chk_user_email_format CHECK (email LIKE '%@%.__%')
+    CONSTRAINT chk_user_email_format CHECK (email LIKE '%@%.__%'),
+    CONSTRAINT chk_user_pin_digits CHECK (pin_code REGEXP '^[0-9]{4}$')
 );
 
 CREATE TABLE Menu_Item (
@@ -107,7 +109,7 @@ CREATE TABLE Orders (
     ),
     CONSTRAINT chk_orders_closed_time CHECK (closed_at IS NULL OR closed_at >= created_at),
     CONSTRAINT chk_orders_sent_time CHECK (sent_to_kitchen_at IS NULL OR sent_to_kitchen_at >= created_at),
-    CONSTRAINT chk_guest_count CHECK (guest_count >= 1 AND guest_count <= 20),
+    CONSTRAINT chk_guest_count CHECK (guest_count >= 1 AND guest_count <= 8),
     CONSTRAINT chk_order_totals_consistent CHECK (
         total = subtotal - discount_amount + tax + service_charge
     ),
@@ -231,15 +233,21 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
 CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     shift_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    scheduled_start DATETIME,
-    scheduled_end DATETIME,
+    scheduled_start DATETIME NOT NULL,
+    scheduled_end DATETIME NOT NULL,
     clock_in DATETIME,
     clock_out DATETIME,
+    tip_declared_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    tip_declared_at DATETIME NULL,
     CONSTRAINT chk_shift_scheduled_time CHECK (
-        scheduled_end IS NULL OR scheduled_start IS NULL OR scheduled_end >= scheduled_start
+        scheduled_end >= scheduled_start
     ),
     CONSTRAINT chk_shift_clock_time CHECK (
         clock_out IS NULL OR clock_in IS NULL OR clock_out >= clock_in
+    ),
+    CONSTRAINT chk_shift_tip_nonneg CHECK (tip_declared_amount >= 0),
+    CONSTRAINT chk_shift_tip_declared_time CHECK (
+        tip_declared_at IS NULL OR clock_in IS NULL OR tip_declared_at >= clock_in
     ),
 
     CONSTRAINT fk_shift_user

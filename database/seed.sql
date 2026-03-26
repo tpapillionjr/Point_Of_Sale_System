@@ -1,6 +1,7 @@
 -- =========================
 -- RESET DATA (child -> parent)
 -- =========================
+DELETE FROM Employee_Shift;
 DELETE FROM Kitchen_Ticket;
 DELETE FROM Payment;
 DELETE FROM Orders;
@@ -24,10 +25,20 @@ INSERT INTO Dining_Tables (table_id, table_number, capacity, status) VALUES
 -- =========================
 -- USERS
 -- =========================
-INSERT INTO Users (user_id, name, email, password_hash, role, is_active) VALUES
-(1, 'Theron Papillion', 'theron.manager@pos.local', 'hash_manager_demo', 'manager', TRUE),
-(2, 'Ava Carter', 'ava.employee@pos.local', 'hash_employee_demo', 'employee', TRUE),
-(3, 'Leo Nguyen', 'leo.kitchen@pos.local', 'hash_kitchen_demo', 'kitchen', TRUE);
+INSERT INTO Users (user_id, name, email, pin_code, password_hash, role, is_active) VALUES
+(1, 'Theron Papillion', 'theron.manager@pos.local', '1234', 'hash_manager_demo', 'manager', TRUE),
+(2, 'Ava Carter', 'ava.employee@pos.local', '5678', 'hash_employee_demo', 'employee', TRUE),
+(3, 'Leo Nguyen', 'leo.kitchen@pos.local', '9012', 'hash_kitchen_demo', 'kitchen', TRUE);
+
+-- =========================
+-- EMPLOYEE SHIFTS
+-- =========================
+INSERT INTO Employee_Shift (
+    shift_id, user_id, scheduled_start, scheduled_end, clock_in, clock_out, tip_declared_amount, tip_declared_at
+) VALUES
+(1, 1, DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 HOUR), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 7 HOUR), NULL, NULL, 0.00, NULL),
+(2, 2, DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 HOUR), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 7 HOUR), NULL, NULL, 0.00, NULL),
+(3, 3, DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 HOUR), DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 7 HOUR), NULL, NULL, 0.00, NULL);
 
 -- =========================
 -- MENU + MODIFIERS
