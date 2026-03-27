@@ -70,8 +70,8 @@ export default function ClockinPage() {
         });
       } else if (!session.scheduledToday) {
         setMessage({
-          type: "error",
-          text: `${session.name} is not scheduled to work today.`,
+          type: "success",
+          text: `${session.name} is not scheduled to clock in today, but can still log in.`,
         });
       } else {
         setMessage({
@@ -126,11 +126,6 @@ export default function ClockinPage() {
 
   function handleLogin() {
     if (!user || !activePin) return;
-
-    if (!clockedIn) {
-      setMessage({ type: "error", text: "You must clock in before login." });
-      return;
-    }
 
     const now = new Date();
     const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -250,7 +245,7 @@ export default function ClockinPage() {
           <span className="ci-clock__date">{dateStr}</span>
         </div>
 
-        <button className="ci-login-btn" onClick={handleLogin} disabled={!clockedIn || !user || isLoading}>
+        <button className="ci-login-btn" onClick={handleLogin} disabled={!user || isLoading}>
           Login
         </button>
 
