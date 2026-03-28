@@ -71,7 +71,7 @@ export default function ClockinPage() {
       } else if (!session.scheduledToday) {
         setMessage({
           type: "success",
-          text: `${session.name} is not scheduled to clock in today, but can still log in.`,
+          text: `${session.name} is not scheduled to clock in today`,
         });
       } else {
         setMessage({
