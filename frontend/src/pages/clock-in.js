@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import { authenticateShift, clockInShift, clockOutShift } from "../lib/api";
 
@@ -34,18 +34,18 @@ export default function ClockinPage() {
     day: "numeric",
   });
 
-  function pressNum(num) {
+  const pressNum = useCallback((num) => {
     if (pin.length >= 4) return;
     setPin(pin + num);
     setMessage(null);
-  }
+  }, [pin]);
 
-  function pressBackspace() {
+  const pressBackspace = useCallback(() => {
     setPin(pin.slice(0, -1));
     setMessage(null);
-  }
+  }, [pin]);
 
-  async function pressEnter() {
+  const pressEnter = useCallback(async () => {
     const enteredPin = pin;
     setPin("");
     setIsLoading(true);
@@ -88,7 +88,18 @@ export default function ClockinPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [pin]);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key >= "0" && e.key <= "9") pressNum(e.key);
+      if (e.key === "Backspace") pressBackspace();
+      if (e.key === "Enter") pressEnter();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pressNum, pressBackspace, pressEnter]);
 
   async function handleClockInOut() {
     if (!user || !activePin) return;
