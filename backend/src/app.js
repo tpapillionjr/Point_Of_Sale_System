@@ -8,6 +8,7 @@ import paymentsRoutes from "./routes/payments.routes.js";
 import reportsRoutes from "./routes/reports.routes.js";
 import shiftsRoutes from "./routes/shifts.routes.js";
 import tablesRoutes from "./routes/tables.routes.js";
+import usersRoutes from "./routes/users.routes.js";
 
 const app = express();
 
@@ -26,5 +27,6 @@ app.use("/api/payments", paymentsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/shifts", shiftsRoutes);
 app.use("/api/tables", tablesRoutes);
+app.use("/api/users", usersRoutes);
 
 export default app;
