@@ -122,3 +122,21 @@ export async function clockOutShift(pin, tipDeclaredAmount) {
     body: JSON.stringify({ pin, tipDeclaredAmount }),
   });
 }
+
+export async function fetchUsers() {
+  return request("/api/users");
+}
+
+export async function createUser(payload) {
+  return request("/api/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivateUser(userId, requestingUserId) {
+  return request(`/api/users/${userId}/deactivate`, {
+    method: "PUT",
+    body: JSON.stringify({ requestingUserId }),
+  });
+}
