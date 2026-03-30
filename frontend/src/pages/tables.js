@@ -512,7 +512,9 @@ export default function TablesPage() {
               <div style={styles.actions}>
                 <ActionButton
                   background="#1d4ed8"
-                  onClick={() => router.push("/server-order")}
+                  onClick={() =>
+                    router.push(`/server-order?table=${selectedTable.tableNumber}`)
+                  }
                 >
                   {activeOrder ? "Resume Order" : "Start Order"}
                 </ActionButton>
