@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
-import { createOrder, fetchTables } from "../lib/api";
+import { createOrder, fetchActiveOrderByTable, fetchTables } from "../lib/api";
 
 export default function ServerOrderPage() {
   const router = useRouter();
@@ -31,6 +31,8 @@ export default function ServerOrderPage() {
   );
 
   useEffect(() => {
+    if (!router.isReady) return;
+
     const storedEmployee = localStorage.getItem("currentEmployee");
     if (storedEmployee) {
       setEmployee(JSON.parse(storedEmployee));
@@ -40,8 +42,8 @@ export default function ServerOrderPage() {
       try {
         const rows = await fetchTables();
         setTables(rows);
-        if (rows.length > 0) {
-          setTableNumber(String(rows[0].tableNumber));
+        if (router.query.table) {
+          setTableNumber(String(router.query.table));
         }
       } catch (error) {
         setMessage({ type: "error", text: error.message });
@@ -49,7 +51,33 @@ export default function ServerOrderPage() {
     }
 
     loadTables();
-  }, []);
+  }, [router.isReady, router.query.table]);
+
+  useEffect(() => {
+    if (!tableNumber) return;
+
+    const selectedTable = tables.find((t) => String(t.tableNumber) === String(tableNumber));
+    if (!selectedTable || selectedTable.status !== "occupied") return;
+
+    let active = true;
+
+    fetchActiveOrderByTable(tableNumber)
+      .then((order) => {
+        if (!active) return;
+        const loadedItems = order.items.map((item) => ({
+          id: item.menuItemId,
+          name: item.name,
+          price: Number(item.price),
+          quantity: item.quantity,
+        }));
+        setCart(loadedItems);
+        setSentItemIds(loadedItems.map((item) => item.id));
+        setSubmittedOrder({ orderId: order.orderId });
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, [tableNumber, tables]);
 
   const addToCart = (item) => {
     const qty = pendingQty;
@@ -225,30 +253,21 @@ export default function ServerOrderPage() {
         }}
       >
         <div>
-          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table Number</label>
-          <select
-            value={tableNumber}
-            onChange={(e) => setTableNumber(e.target.value)}
+          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table</label>
+          <div
             style={{
-              width: "100%",
               marginTop: "6px",
               padding: "8px 12px",
               borderRadius: "8px",
               border: "1px solid #d1d5db",
               fontSize: "14px",
+              fontWeight: "700",
               color: "#111827",
-              backgroundColor: "white",
-              boxSizing: "border-box",
+              backgroundColor: "#f9fafb",
             }}
           >
-            {tables
-              .filter((table) => table.status !== "occupied")
-              .map((table) => (
-              <option key={table.tableId} value={table.tableNumber}>
-                Table {table.tableNumber} ({table.status})
-              </option>
-            ))}
-          </select>
+            {router.query.table ? `Table ${router.query.table}` : tableNumber ? `Table ${tableNumber}` : "—"}
+          </div>
         </div>
 
         <div>

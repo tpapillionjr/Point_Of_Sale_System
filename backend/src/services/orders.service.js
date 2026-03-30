@@ -325,6 +325,7 @@ async function findActiveOrderByTableNumber(tableNumber) {
   const itemRows = await db.query(
     `SELECT
       oi.order_item_id AS orderItemId,
+      mi.menu_item_id AS menuItemId,
       mi.name,
       oi.quantity,
       oi.price
