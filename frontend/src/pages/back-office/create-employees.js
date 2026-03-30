@@ -10,7 +10,8 @@ export default function CreateEmployeesPage() {
   const [message, setMessage] = useState("");
 
   const [form, setForm] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     pin_code: "",
     role: "employee",
@@ -39,9 +40,10 @@ export default function CreateEmployeesPage() {
     setError("");
 
     try {
-      await createUser({ ...form, requestingUserId: employee?.userId });
-      setMessage(`Account created for ${form.name}.`);
-      setForm({ name: "", email: "", pin_code: "", role: "employee" });
+      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
+      await createUser({ name: fullName, email: form.email, pin_code: form.pin_code, role: form.role, requestingUserId: employee?.userId });
+      setMessage(`Account created for ${fullName}.`);
+      setForm({ firstName: "", lastName: "", email: "", pin_code: "", role: "employee" });
       loadUsers();
     } catch (err) {
       setError(err.message);
@@ -76,16 +78,29 @@ export default function CreateEmployeesPage() {
           {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Full name"
-                required
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">First Name</label>
+                <input
+                  type="text"
+                  value={form.firstName}
+                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                  placeholder="First name"
+                  required
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Last Name</label>
+                <input
+                  type="text"
+                  value={form.lastName}
+                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                  placeholder="Last name"
+                  required
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
             </div>
 
             <div>
@@ -154,6 +169,7 @@ export default function CreateEmployeesPage() {
                 <div>
                   <p className="text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-gray-500">{user.email} · {user.role}</p>
+                  <p className="text-xs text-gray-400">PIN: {user.pin_code}</p>
                 </div>
 
                 {user.is_active ? (
