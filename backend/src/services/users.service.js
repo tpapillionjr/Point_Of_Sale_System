@@ -28,9 +28,9 @@ function validateUserPayload(payload) {
 
 async function getUsers() {
   const rows = await db.query(
-    `SELECT user_id, name, email, role, is_active
+    `SELECT user_id, name, email, pin_code, role, is_active
      FROM Users
-     ORDER BY name ASC`
+     ORDER BY is_active DESC, name ASC`
   );
   return rows;
 }
