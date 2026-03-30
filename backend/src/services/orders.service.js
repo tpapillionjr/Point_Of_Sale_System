@@ -302,7 +302,11 @@ async function findActiveOrderByTableNumber(tableNumber) {
       o.order_id AS orderId,
       o.table_id AS tableId,
       dt.table_number AS tableNumber,
-      o.status
+      o.status,
+      o.subtotal,
+      o.tax,
+      o.total,
+      o.created_at AS createdAt
      FROM Orders o
      JOIN Dining_Tables dt ON dt.table_id = o.table_id
      WHERE dt.table_number = ?
@@ -316,7 +320,22 @@ async function findActiveOrderByTableNumber(tableNumber) {
     throw createValidationError("No active backend order was found for that table.");
   }
 
-  return rows[0];
+  const order = rows[0];
+
+  const itemRows = await db.query(
+    `SELECT
+      oi.order_item_id AS orderItemId,
+      mi.name,
+      oi.quantity,
+      oi.price
+     FROM Order_Item oi
+     JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+     WHERE oi.order_id = ?
+     ORDER BY oi.order_item_id ASC`,
+    [order.orderId]
+  );
+
+  return { ...order, items: itemRows };
 }
 
 export { createOrder, cancelOrder, findActiveOrderByTableNumber };

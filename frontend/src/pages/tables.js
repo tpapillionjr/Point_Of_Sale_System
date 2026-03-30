@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import { fetchTables, updateTableStatus } from "../lib/api";
+import { fetchActiveOrderByTable, fetchTables, updateTableStatus } from "../lib/api";
 
 const TABLE_LAYOUT = {
   1: { id: "T1", area: "Main", x: "11%", y: "18%" },
@@ -289,6 +289,8 @@ export default function TablesPage() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -327,6 +329,23 @@ export default function TablesPage() {
     tables.find((table) => table.tableId === selectedTableId) ??
     tables[0] ??
     null;
+
+  useEffect(() => {
+    if (!selectedTable || selectedTable.status !== "occupied") {
+      setActiveOrder(null);
+      return;
+    }
+
+    let active = true;
+    setIsLoadingOrder(true);
+
+    fetchActiveOrderByTable(selectedTable.tableNumber)
+      .then((order) => { if (active) setActiveOrder(order); })
+      .catch(() => { if (active) setActiveOrder(null); })
+      .finally(() => { if (active) setIsLoadingOrder(false); });
+
+    return () => { active = false; };
+  }, [selectedTable]);
 
   const summary = useMemo(
     () =>
@@ -456,12 +475,46 @@ export default function TablesPage() {
                 </div>
               </div>
 
+              {selectedTable.status === "occupied" && (
+                <div>
+                  <p style={{ ...styles.eyebrow, marginBottom: "10px" }}>Current Order</p>
+                  {isLoadingOrder ? (
+                    <p style={{ color: "#64748b", fontSize: "0.9rem" }}>Loading...</p>
+                  ) : activeOrder ? (
+                    <div style={{ display: "grid", gap: "6px" }}>
+                      {activeOrder.items.length === 0 ? (
+                        <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No items yet.</p>
+                      ) : (
+                        activeOrder.items.map((item) => (
+                          <div key={item.orderItemId} style={styles.detailRow}>
+                            <span style={styles.detailLabel}>
+                              {item.quantity}× {item.name}
+                            </span>
+                            <strong style={styles.detailValue}>
+                              ${(item.price * item.quantity).toFixed(2)}
+                            </strong>
+                          </div>
+                        ))
+                      )}
+                      <div style={{ ...styles.detailRow, marginTop: "4px" }}>
+                        <span style={styles.detailLabel}>Total</span>
+                        <strong style={{ ...styles.detailValue, color: "#1d4ed8" }}>
+                          ${Number(activeOrder.total).toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No active order found.</p>
+                  )}
+                </div>
+              )}
+
               <div style={styles.actions}>
                 <ActionButton
                   background="#1d4ed8"
                   onClick={() => router.push("/server-order")}
                 >
-                  Start Order
+                  {activeOrder ? "Resume Order" : "Start Order"}
                 </ActionButton>
                 <ActionButton
                   background="#0f766e"
