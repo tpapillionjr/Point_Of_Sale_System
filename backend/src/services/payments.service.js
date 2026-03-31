@@ -45,7 +45,7 @@ async function closeOrder(payload) {
 
   return db.withTransaction(async (connection) => {
     const [orderRows] = await connection.execute(
-      `SELECT order_id, table_id, status
+      `SELECT order_id, table_id, status, order_type
        FROM Orders
        WHERE order_id = ?
        LIMIT 1`,
