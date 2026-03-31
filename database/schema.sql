@@ -67,6 +67,17 @@ CREATE TABLE Inventory (
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
+CREATE TABLE Utensil_Inventory (
+    utensil_id INT AUTO_INCREMENT PRIMARY KEY,
+    utensil_name VARCHAR(100) NOT NULL UNIQUE,
+    amount_available INT NOT NULL,
+    reorder_threshold INT NOT NULL DEFAULT 10,
+    availability_status BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT chk_utensil_name_nonblank CHECK (CHAR_LENGTH(TRIM(utensil_name)) > 0),
+    CONSTRAINT chk_utensil_amount_nonneg CHECK (amount_available >= 0),
+    CONSTRAINT chk_utensil_reorder_threshold_nonneg CHECK (reorder_threshold >= 0)
+);
+
 CREATE TABLE Customer (
     customer_num_id INT PRIMARY KEY,
     phone_number VARCHAR(10) NOT NULL UNIQUE,
