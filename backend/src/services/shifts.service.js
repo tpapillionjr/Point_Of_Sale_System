@@ -1,4 +1,5 @@
 import db from "../db/index.js";
+import jwt from "jsonwebtoken";
 import { createValidationError } from "../validation/business-rules.js";
 
 function validatePin(pin) {
@@ -69,17 +70,28 @@ async function getClockSession(pin) {
 
   return db.withTransaction(async (connection) => {
     const user = await findUserByPin(connection, pin);
+    const token = jwt.sign(
+  {
+    sub: user.user_id,
+    role: user.role,
+    name: user.name,
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
+);
     const shift = await findCurrentShift(connection, user.user_id);
 
     return {
-      userId: user.user_id,
-      name: user.name,
-      role: user.role,
-      roles: [formatRole(user.role)],
-      scheduledToday: Boolean(shift),
-      clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
-      shift,
-    };
+  token,
+  userId: user.user_id,
+  name: user.name,
+  role: user.role,
+  roles: [formatRole(user.role)],
+  scheduledToday: Boolean(shift),
+  clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
+  shift,
+};
+
   });
 }
 
