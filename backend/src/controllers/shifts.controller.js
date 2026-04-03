@@ -1,7 +1,8 @@
-import { clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
+import { authenticatePin, clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
 
 async function authShift(req, res) {
   try {
+    await authenticatePin(req.body?.pin);
     const session = await getClockSession(req.body?.pin);
     res.json(session);
   } catch (error) {
