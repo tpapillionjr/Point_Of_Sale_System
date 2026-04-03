@@ -95,6 +95,24 @@ async function getClockSession(pin) {
   });
 }
 
+async function authenticatePin(pin) {
+  validatePin(pin);
+
+  return db.withTransaction(async (connection) => {
+    const user = await findUserByPin(connection, pin);
+
+    return {
+      authenticated: true,
+      user: {
+        userId: user.user_id,
+        name: user.name,
+        role: user.role,
+        roles: [formatRole(user.role)],
+      },
+    };
+  });
+}
+
 async function clockIn(pin) {
   validatePin(pin);
 
@@ -182,4 +200,4 @@ async function clockOut(pin, tipDeclaredAmount = null) {
   });
 }
 
-export { getClockSession, clockIn, clockOut };
+export { authenticatePin, getClockSession, clockIn, clockOut };
