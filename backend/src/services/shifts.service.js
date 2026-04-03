@@ -24,6 +24,31 @@ function formatRole(role) {
   return role;
 }
 
+function createAuthToken(user) {
+  return jwt.sign(
+    {
+      sub: user.user_id,
+      role: user.role,
+      name: user.name,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
+  );
+}
+
+function toSessionPayload(user, shift) {
+  return {
+    token: createAuthToken(user),
+    userId: user.user_id,
+    name: user.name,
+    role: user.role,
+    roles: [formatRole(user.role)],
+    scheduledToday: Boolean(shift),
+    clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
+    shift,
+  };
+}
+
 async function findUserByPin(connection, pin) {
   const [rows] = await connection.execute(
     `SELECT user_id, name, role, is_active
@@ -35,6 +60,32 @@ async function findUserByPin(connection, pin) {
 
   if (rows.length === 0) {
     throw createValidationError("Incorrect PIN. Try again.");
+  }
+
+  if (!rows[0].is_active) {
+    throw createValidationError("This employee account is inactive.");
+  }
+
+  return rows[0];
+}
+
+async function findUserById(connection, userId) {
+  const parsedUserId = Number.parseInt(userId, 10);
+
+  if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+    throw createValidationError("Authenticated user ID is invalid.");
+  }
+
+  const [rows] = await connection.execute(
+    `SELECT user_id, name, role, is_active
+     FROM Users
+     WHERE user_id = ?
+     LIMIT 1`,
+    [parsedUserId]
+  );
+
+  if (rows.length === 0) {
+    throw createValidationError("Authenticated user does not exist.");
   }
 
   if (!rows[0].is_active) {
@@ -70,28 +121,9 @@ async function getClockSession(pin) {
 
   return db.withTransaction(async (connection) => {
     const user = await findUserByPin(connection, pin);
-    const token = jwt.sign(
-  {
-    sub: user.user_id,
-    role: user.role,
-    name: user.name,
-  },
-  process.env.JWT_SECRET,
-  { expiresIn: process.env.JWT_EXPIRES_IN || "8h" }
-);
     const shift = await findCurrentShift(connection, user.user_id);
 
-    return {
-  token,
-  userId: user.user_id,
-  name: user.name,
-  role: user.role,
-  roles: [formatRole(user.role)],
-  scheduledToday: Boolean(shift),
-  clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
-  shift,
-};
-
+    return toSessionPayload(user, shift);
   });
 }
 
@@ -113,11 +145,9 @@ async function authenticatePin(pin) {
   });
 }
 
-async function clockIn(pin) {
-  validatePin(pin);
-
+async function clockIn(userId) {
   return db.withTransaction(async (connection) => {
-    const user = await findUserByPin(connection, pin);
+    const user = await findUserById(connection, userId);
     const shift = await findCurrentShift(connection, user.user_id);
 
     if (!shift) {
@@ -150,15 +180,14 @@ async function clockIn(pin) {
       [shift.shiftId]
     );
 
-    return getClockSession(pin);
+    const updatedShift = await findCurrentShift(connection, user.user_id);
+    return toSessionPayload(user, updatedShift);
   });
 }
 
-async function clockOut(pin, tipDeclaredAmount = null) {
-  validatePin(pin);
-
+async function clockOut(userId, tipDeclaredAmount = null) {
   return db.withTransaction(async (connection) => {
-    const user = await findUserByPin(connection, pin);
+    const user = await findUserById(connection, userId);
     const shift = await findCurrentShift(connection, user.user_id);
 
     if (!shift || !shift.clockIn || shift.clockOut) {
