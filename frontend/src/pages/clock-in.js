@@ -6,7 +6,6 @@ export default function ClockinPage() {
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
-  const [activePin, setActivePin] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
   const [tipDeclaredAmount, setTipDeclaredAmount] = useState("");
@@ -62,7 +61,6 @@ export default function ClockinPage() {
         roles: session.roles,
         role: session.role,
       });
-      setActivePin(enteredPin);
       setRole(session.roles[0] ?? null);
       setClockedIn(session.clockedIn);
       setTipDeclaredAmount("");
@@ -85,7 +83,6 @@ export default function ClockinPage() {
       }
     } catch (error) {
       setUser(null);
-      setActivePin(null);
       setRole(null);
       setClockedIn(false);
       setAuthToken(null);
@@ -131,7 +128,6 @@ export default function ClockinPage() {
           text: `${session.name} clocked out successfully.`,
         });
         setUser(null);
-        setActivePin(null);
         setRole(null);
         setAuthToken(null);
         localStorage.removeItem("authToken");
@@ -145,7 +141,7 @@ export default function ClockinPage() {
   }
 
   function handleLogin() {
-    if (!user || !activePin || !authToken) return;
+    if (!user || !authToken) return;
 
     const now = new Date();
     const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
