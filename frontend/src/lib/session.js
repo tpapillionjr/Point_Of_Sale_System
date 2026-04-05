@@ -28,7 +28,7 @@ export function hasStoredEmployee() {
 }
 
 export function isPublicRoute(pathname) {
-  return pathname === "/" || pathname === "/clock-in";
+  return pathname === "/" || pathname === "/clock-in" || pathname.startsWith("/customer");
 }
 
 export function isManagerRoute(pathname) {
