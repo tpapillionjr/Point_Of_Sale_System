@@ -1,7 +1,8 @@
-import { clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
+import { authenticatePin, clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
 
 async function authShift(req, res) {
   try {
+    await authenticatePin(req.body?.pin);
     const session = await getClockSession(req.body?.pin);
     res.json(session);
   } catch (error) {
@@ -15,7 +16,7 @@ async function authShift(req, res) {
 
 async function postClockIn(req, res) {
   try {
-    const session = await clockIn(req.body?.pin);
+    const session = await clockIn(req.user?.sub);
     res.json(session);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;
@@ -28,7 +29,7 @@ async function postClockIn(req, res) {
 
 async function postClockOut(req, res) {
   try {
-    const session = await clockOut(req.body?.pin, req.body?.tipDeclaredAmount);
+    const session = await clockOut(req.user?.sub, req.body?.tipDeclaredAmount);
     res.json(session);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;

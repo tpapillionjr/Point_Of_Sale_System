@@ -45,6 +45,7 @@ export default function AppChrome({ children }) {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("currentEmployee");
       window.localStorage.removeItem("currentOrder");
+      window.localStorage.removeItem("authToken");
     }
 
     router.push("/clock-in");
