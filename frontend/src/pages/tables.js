@@ -340,7 +340,19 @@ export default function TablesPage() {
     setIsLoadingOrder(true);
 
     fetchActiveOrderByTable(selectedTable.tableNumber)
-      .then((order) => { if (active) setActiveOrder(order); })
+      .then((order) => {
+        if (!active) return;
+        const merged = [];
+        for (const item of order.items) {
+          const existing = merged.find((c) => c.menuItemId === item.menuItemId);
+          if (existing) {
+            existing.quantity += item.quantity;
+          } else {
+            merged.push({ ...item });
+          }
+        }
+        setActiveOrder({ ...order, items: merged });
+      })
       .catch(() => { if (active) setActiveOrder(null); })
       .finally(() => { if (active) setIsLoadingOrder(false); });
 
