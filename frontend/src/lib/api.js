@@ -1,10 +1,17 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
 
 async function request(path, options = {}) {
+  let token = null;
+
+  if (typeof window !== "undefined") {
+    token = window.localStorage.getItem("authToken");
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...options,
   });
@@ -116,17 +123,17 @@ export async function authenticateShift(pin) {
   });
 }
 
-export async function clockInShift(pin) {
+export async function clockInShift() {
   return request("/api/shifts/clock-in", {
     method: "POST",
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({}),
   });
 }
 
-export async function clockOutShift(pin, tipDeclaredAmount) {
+export async function clockOutShift(tipDeclaredAmount) {
   return request("/api/shifts/clock-out", {
     method: "POST",
-    body: JSON.stringify({ pin, tipDeclaredAmount }),
+    body: JSON.stringify({ tipDeclaredAmount }),
   });
 }
 

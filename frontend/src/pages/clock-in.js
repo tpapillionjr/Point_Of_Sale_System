@@ -6,13 +6,14 @@ export default function ClockinPage() {
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
-  const [activePin, setActivePin] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
   const [tipDeclaredAmount, setTipDeclaredAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [authToken, setAuthToken] = useState(null);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -52,13 +53,14 @@ export default function ClockinPage() {
 
     try {
       const session = await authenticateShift(enteredPin);
+      setAuthToken(session.token);
+      localStorage.setItem("authToken", session.token);
       setUser({
         userId: session.userId,
         name: session.name,
         roles: session.roles,
         role: session.role,
       });
-      setActivePin(enteredPin);
       setRole(session.roles[0] ?? null);
       setClockedIn(session.clockedIn);
       setTipDeclaredAmount("");
@@ -81,9 +83,10 @@ export default function ClockinPage() {
       }
     } catch (error) {
       setUser(null);
-      setActivePin(null);
       setRole(null);
       setClockedIn(false);
+      setAuthToken(null);
+      localStorage.removeItem("authToken");
       setMessage({ type: "error", text: error.message });
     } finally {
       setIsLoading(false);
@@ -102,13 +105,13 @@ export default function ClockinPage() {
   }, [pressNum, pressBackspace, pressEnter]);
 
   async function handleClockInOut() {
-    if (!user || !activePin) return;
+    if (!user || !authToken) return;
 
     setIsLoading(true);
 
     try {
       if (!clockedIn) {
-        const session = await clockInShift(activePin);
+        const session = await clockInShift();
         setClockedIn(true);
         setRole(session.roles[0] ?? role);
         setMessage({
@@ -117,7 +120,7 @@ export default function ClockinPage() {
         });
       } else {
         const tipAmount = tipDeclaredAmount === "" ? null : Number(tipDeclaredAmount);
-        const session = await clockOutShift(activePin, tipAmount);
+        const session = await clockOutShift(tipAmount);
         setClockedIn(false);
         setTipDeclaredAmount("");
         setMessage({
@@ -125,8 +128,10 @@ export default function ClockinPage() {
           text: `${session.name} clocked out successfully.`,
         });
         setUser(null);
-        setActivePin(null);
         setRole(null);
+        setAuthToken(null);
+        localStorage.removeItem("authToken");
+
       }
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -136,7 +141,7 @@ export default function ClockinPage() {
   }
 
   function handleLogin() {
-    if (!user || !activePin) return;
+    if (!user || !authToken) return;
 
     const now = new Date();
     const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -144,6 +149,8 @@ export default function ClockinPage() {
       type: "success",
       text: user.name + " logged in as " + role + " at " + timeNow,
     });
+
+    localStorage.setItem("authToken", authToken);
 
     localStorage.setItem(
       "currentEmployee",

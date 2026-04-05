@@ -2,7 +2,10 @@ import { cancelOrder, createOrder, addItemsToOrder, findActiveOrderByTableNumber
 
 async function postOrder(req, res) {
   try {
-    const order = await createOrder(req.body);
+    const order = await createOrder({
+      ...req.body,
+      createdBy: req.user?.sub,
+    });
     res.status(201).json(order);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;
@@ -15,7 +18,10 @@ async function postOrder(req, res) {
 
 async function postCancelOrder(req, res) {
   try {
-    const result = await cancelOrder(req.body);
+    const result = await cancelOrder({
+      ...req.body,
+      voidedBy: req.user?.sub,
+    });
     res.json(result);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;

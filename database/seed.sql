@@ -5,6 +5,7 @@ DELETE FROM Employee_Shift;
 DELETE FROM Kitchen_Ticket;
 DELETE FROM Payment;
 DELETE FROM Orders;
+DELETE FROM Utensil_Inventory;
 DELETE FROM Inventory;
 DELETE FROM Menu_Item_Modifier;
 DELETE FROM Modifier;
@@ -72,6 +73,13 @@ INSERT INTO Inventory (inventory_item_name, amount_available, menu_item_id, avai
 ('Burger Patty', 50, 1, TRUE),
 ('French Fries Portion', 120, 2, TRUE),
 ('Tea Bags', 200, 3, TRUE);
+
+INSERT INTO Utensil_Inventory (utensil_id, utensil_name, amount_available, reorder_threshold, availability_status) VALUES
+(1, 'Forks', 250, 75, TRUE),
+(2, 'Knives', 220, 60, TRUE),
+(3, 'Spoons', 210, 60, TRUE),
+(4, 'To-Go Utensil Kits', 90, 30, TRUE),
+(5, 'Napkin Packs', 140, 40, TRUE);
 
 -- =========================
 -- CUSTOMERS
