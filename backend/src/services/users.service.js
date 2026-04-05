@@ -41,7 +41,9 @@ async function createUser(payload, requestingUserId) {
   return db.withTransaction(async (connection) => {
     // Verify the requesting user is a manager
     const [managerRows] = await connection.execute(
-      `SELECT role FROM Users WHERE user_id = ? AND is_active = true LIMIT 1`,
+      `SELECT role 
+      FROM Users 
+      WHERE user_id = ? AND is_active = true LIMIT 1`,
       [requestingUserId]
     );
 
@@ -51,7 +53,9 @@ async function createUser(payload, requestingUserId) {
 
     // Check for duplicate email
     const [emailRows] = await connection.execute(
-      `SELECT user_id FROM Users WHERE email = ? LIMIT 1`,
+      `SELECT user_id 
+      FROM Users 
+      WHERE email = ? LIMIT 1`,
       [payload.email.trim()]
     );
 
@@ -61,7 +65,9 @@ async function createUser(payload, requestingUserId) {
 
     // Check for duplicate PIN
     const [pinRows] = await connection.execute(
-      `SELECT user_id FROM Users WHERE pin_code = ? LIMIT 1`,
+      `SELECT user_id 
+      FROM Users 
+      WHERE pin_code = ? LIMIT 1`,
       [payload.pin_code]
     );
 
@@ -105,4 +111,28 @@ async function deactivateUser(userId, requestingUserId) {
   });
 }
 
-export { getUsers, createUser, deactivateUser };
+async function verifyManager(pin) {
+  if (!pin || !/^\d{4}$/.test(pin)) {
+    throw createValidationError("PIN must be exactly 4 digits.");
+  }
+
+  const rows = await db.query(
+    `SELECT user_id, name, role
+     FROM Users
+     WHERE pin_code = ? AND is_active = true
+     LIMIT 1`,
+    [pin]
+  );
+
+  if (rows.length === 0) {
+    throw createValidationError("Incorrect PIN.");
+  }
+
+  if (rows[0].role !== "manager") {
+    throw createValidationError("That PIN does not belong to a manager.");
+  }
+
+  return { approved: true, name: rows[0].name };
+}
+
+export { getUsers, createUser, deactivateUser, verifyManager };

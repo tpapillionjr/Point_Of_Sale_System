@@ -1,4 +1,4 @@
-import { getUsers, createUser, deactivateUser } from "../services/users.service.js";
+import { getUsers, createUser, deactivateUser, verifyManager } from "../services/users.service.js";
 
 async function getAllUsers(_req, res) {
   try {
@@ -41,4 +41,17 @@ async function putDeactivateUser(req, res) {
   }
 }
 
-export { getAllUsers, postCreateUser, putDeactivateUser };
+async function postVerifyManager(req, res) {
+  try {
+    const result = await verifyManager(req.body?.pin);
+    res.json(result);
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500;
+    res.status(statusCode).json({
+      error: error.message || "Manager verification failed.",
+      details: error.details ?? [],
+    });
+  }
+}
+
+export { getAllUsers, postCreateUser, putDeactivateUser, postVerifyManager };

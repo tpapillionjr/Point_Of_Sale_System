@@ -70,6 +70,13 @@ export async function createOrder(payload) {
   });
 }
 
+export async function addItemsToOrder(orderId, items, userId) {
+  return request(`/api/orders/${orderId}/items`, {
+    method: "POST",
+    body: JSON.stringify({ items, userId }),
+  });
+}
+
 export async function cancelOrder(payload) {
   return request("/api/orders/cancel", {
     method: "POST",
@@ -138,5 +145,12 @@ export async function deactivateUser(userId, requestingUserId) {
   return request(`/api/users/${userId}/deactivate`, {
     method: "PUT",
     body: JSON.stringify({ requestingUserId }),
+  });
+}
+
+export async function verifyManager(pin) {
+  return request("/api/users/verify-manager", {
+    method: "POST",
+    body: JSON.stringify({ pin }),
   });
 }
