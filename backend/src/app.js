@@ -9,6 +9,7 @@ import reportsRoutes from "./routes/reports.routes.js";
 import shiftsRoutes from "./routes/shifts.routes.js";
 import tablesRoutes from "./routes/tables.routes.js";
 import usersRoutes from "./routes/users.routes.js";
+import customerRoutes from "./routes/customer.routes.js";
 
 const app = express();
 
@@ -28,5 +29,6 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/shifts", shiftsRoutes);
 app.use("/api/tables", tablesRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/customer", customerRoutes);
 
 export default app;
