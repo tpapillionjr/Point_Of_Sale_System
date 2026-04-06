@@ -73,6 +73,19 @@ async function fetchInventoryRows(connection, itemIds) {
   return new Map(rows.map((row) => [row.menu_item_id, row]));
 }
 
+async function fetchUtensilRow(connection, utensilName) {
+  const [rows] = await connection.execute(
+    `SELECT utensil_id, utensil_name, amount_available, availability_status
+     FROM Utensil_Inventory
+     WHERE utensil_name = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [utensilName]
+  );
+
+  return rows[0] ?? null;
+}
+
 async function createOrder(payload) {
   const order = validateOrderPayload(payload);
 
@@ -88,6 +101,11 @@ async function createOrder(payload) {
     const itemIds = [...new Set(order.items.map((item) => item.menuItemId))];
     const menuItems = await fetchMenuItems(connection, itemIds);
     const inventoryRows = await fetchInventoryRows(connection, itemIds);
+    const requiresToGoUtensils = order.orderType === "Takeout" || order.orderType === "Delivery";
+    const toGoUtensilQty = Math.max(order.guestCount, 1);
+    const toGoUtensilRow = requiresToGoUtensils
+      ? await fetchUtensilRow(connection, "To-Go Utensil Kits")
+      : null;
     const issues = [];
 
     for (const item of order.items) {
@@ -115,6 +133,22 @@ async function createOrder(payload) {
         issues.push(
           `Not enough inventory for ${menuItem.name}. Requested ${item.quantity}, available ${inventory.amount_available}.`
         );
+      }
+    }
+
+    if (requiresToGoUtensils) {
+      if (!toGoUtensilRow) {
+        issues.push("Utensil inventory is not configured for To-Go Utensil Kits.");
+      } else {
+        if (!toGoUtensilRow.availability_status) {
+          issues.push("To-Go Utensil Kits are unavailable.");
+        }
+
+        if (toGoUtensilRow.amount_available < toGoUtensilQty) {
+          issues.push(
+            `Not enough To-Go Utensil Kits. Requested ${toGoUtensilQty}, available ${toGoUtensilRow.amount_available}.`
+          );
+        }
       }
     }
 
@@ -174,6 +208,19 @@ async function createOrder(payload) {
       );
     }
 
+    if (requiresToGoUtensils) {
+      await connection.execute(
+        `UPDATE Utensil_Inventory
+         SET amount_available = amount_available - ?,
+             availability_status = CASE
+               WHEN amount_available - ? > 0 THEN TRUE
+               ELSE FALSE
+             END
+         WHERE utensil_name = ?`,
+        [toGoUtensilQty, toGoUtensilQty, "To-Go Utensil Kits"]
+      );
+    }
+
     await connection.execute(
       `UPDATE Dining_Tables
        SET status = CASE
@@ -217,7 +264,7 @@ async function cancelOrder(payload) {
     }
 
     const [orderRows] = await connection.execute(
-      `SELECT order_id, table_id, status
+      `SELECT order_id, table_id, status, order_type, guest_count
        FROM Orders
        WHERE order_id = ?
        LIMIT 1`,
@@ -250,6 +297,17 @@ async function cancelOrder(payload) {
              availability_status = TRUE
          WHERE menu_item_id = ?`,
         [item.quantity, item.menu_item_id]
+      );
+    }
+
+    if (orderRows[0].order_type === "Takeout" || orderRows[0].order_type === "Delivery") {
+      const toGoUtensilQty = Math.max(Number(orderRows[0].guest_count ?? 1), 1);
+      await connection.execute(
+        `UPDATE Utensil_Inventory
+         SET amount_available = amount_available + ?,
+             availability_status = TRUE
+         WHERE utensil_name = ?`,
+        [toGoUtensilQty, "To-Go Utensil Kits"]
       );
     }
 

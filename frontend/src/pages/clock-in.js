@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import { authenticateShift, clockInShift, clockOutShift } from "../lib/api";
 
@@ -6,13 +6,14 @@ export default function ClockinPage() {
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [user, setUser] = useState(null);
-  const [activePin, setActivePin] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
   const [tipDeclaredAmount, setTipDeclaredAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [authToken, setAuthToken] = useState(null);
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -34,31 +35,39 @@ export default function ClockinPage() {
     day: "numeric",
   });
 
-  function pressNum(num) {
+  const isPinLocked = Boolean(user);
+
+  const pressNum = useCallback((num) => {
+    if (isPinLocked) return;
     if (pin.length >= 4) return;
     setPin(pin + num);
     setMessage(null);
-  }
+  }, [isPinLocked, pin]);
 
-  function pressBackspace() {
+  const pressBackspace = useCallback(() => {
+    if (isPinLocked) return;
     setPin(pin.slice(0, -1));
     setMessage(null);
-  }
+  }, [isPinLocked, pin]);
 
-  async function pressEnter() {
+  const pressEnter = useCallback(async () => {
+    if (isPinLocked) return;
+    if (pin.length !== 4) return;
+
     const enteredPin = pin;
     setPin("");
     setIsLoading(true);
 
     try {
       const session = await authenticateShift(enteredPin);
+      setAuthToken(session.token);
+      localStorage.setItem("authToken", session.token);
       setUser({
         userId: session.userId,
         name: session.name,
         roles: session.roles,
         role: session.role,
       });
-      setActivePin(enteredPin);
       setRole(session.roles[0] ?? null);
       setClockedIn(session.clockedIn);
       setTipDeclaredAmount("");
@@ -70,8 +79,8 @@ export default function ClockinPage() {
         });
       } else if (!session.scheduledToday) {
         setMessage({
-          type: "error",
-          text: `${session.name} is not scheduled to work today.`,
+          type: "success",
+          text: `${session.name} is not scheduled to clock in today`,
         });
       } else {
         setMessage({
@@ -81,23 +90,35 @@ export default function ClockinPage() {
       }
     } catch (error) {
       setUser(null);
-      setActivePin(null);
       setRole(null);
       setClockedIn(false);
+      setAuthToken(null);
+      localStorage.removeItem("authToken");
       setMessage({ type: "error", text: error.message });
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [isPinLocked, pin]);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key >= "0" && e.key <= "9") pressNum(e.key);
+      if (e.key === "Backspace") pressBackspace();
+      if (e.key === "Enter") pressEnter();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pressNum, pressBackspace, pressEnter]);
 
   async function handleClockInOut() {
-    if (!user || !activePin) return;
+    if (!user || !authToken) return;
 
     setIsLoading(true);
 
     try {
       if (!clockedIn) {
-        const session = await clockInShift(activePin);
+        const session = await clockInShift();
         setClockedIn(true);
         setRole(session.roles[0] ?? role);
         setMessage({
@@ -106,7 +127,7 @@ export default function ClockinPage() {
         });
       } else {
         const tipAmount = tipDeclaredAmount === "" ? null : Number(tipDeclaredAmount);
-        const session = await clockOutShift(activePin, tipAmount);
+        const session = await clockOutShift(tipAmount);
         setClockedIn(false);
         setTipDeclaredAmount("");
         setMessage({
@@ -114,8 +135,10 @@ export default function ClockinPage() {
           text: `${session.name} clocked out successfully.`,
         });
         setUser(null);
-        setActivePin(null);
         setRole(null);
+        setAuthToken(null);
+        localStorage.removeItem("authToken");
+
       }
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -125,12 +148,7 @@ export default function ClockinPage() {
   }
 
   function handleLogin() {
-    if (!user || !activePin) return;
-
-    if (!clockedIn) {
-      setMessage({ type: "error", text: "You must clock in before login." });
-      return;
-    }
+    if (!user || !authToken) return;
 
     const now = new Date();
     const timeNow = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -138,6 +156,8 @@ export default function ClockinPage() {
       type: "success",
       text: user.name + " logged in as " + role + " at " + timeNow,
     });
+
+    localStorage.setItem("authToken", authToken);
 
     localStorage.setItem(
       "currentEmployee",
@@ -174,7 +194,7 @@ export default function ClockinPage() {
   for (let n = 1; n <= 9; n++) {
     const label = String(n);
     numButtons.push(
-      <button key={label} className="ci-btn" onClick={() => pressNum(label)}>
+      <button key={label} className="ci-btn" onClick={() => pressNum(label)} disabled={isPinLocked}>
         {label}
       </button>
     );
@@ -240,9 +260,9 @@ export default function ClockinPage() {
 
         <div className="ci-grid">
           {numButtons}
-          <button className="ci-btn ci-btn--ghost" onClick={pressBackspace}>⌫</button>
-          <button className="ci-btn" onClick={() => pressNum("0")}>0</button>
-          <button className="ci-btn ci-btn--enter" onClick={pressEnter}>✓</button>
+          <button className="ci-btn ci-btn--ghost" onClick={pressBackspace} disabled={isPinLocked}>⌫</button>
+          <button className="ci-btn" onClick={() => pressNum("0")} disabled={isPinLocked}>0</button>
+          <button className="ci-btn ci-btn--enter" onClick={pressEnter} disabled={isPinLocked}>✓</button>
         </div>
 
         <div className="ci-clock">
@@ -250,7 +270,7 @@ export default function ClockinPage() {
           <span className="ci-clock__date">{dateStr}</span>
         </div>
 
-        <button className="ci-login-btn" onClick={handleLogin} disabled={!clockedIn || !user || isLoading}>
+        <button className="ci-login-btn" onClick={handleLogin} disabled={!user || isLoading}>
           Login
         </button>
 
@@ -262,3 +282,4 @@ export default function ClockinPage() {
     </div>
   );
 }
+

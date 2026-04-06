@@ -1,3 +1,15 @@
+export function getStoredAuthToken() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem("authToken");
+  } catch {
+    return null;
+  }
+}
+
 export function getStoredEmployee() {
   if (typeof window === "undefined") {
     return null;
@@ -12,7 +24,7 @@ export function getStoredEmployee() {
 }
 
 export function hasStoredEmployee() {
-  return Boolean(getStoredEmployee());
+  return Boolean(getStoredEmployee() && getStoredAuthToken());
 }
 
 export function isPublicRoute(pathname) {

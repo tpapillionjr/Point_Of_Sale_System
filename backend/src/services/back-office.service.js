@@ -135,30 +135,57 @@ async function getBackOfficeDashboard() {
 async function getBackOfficeData(range) {
   const days = RANGE_DAYS[normalizeRange(range)];
   const inventoryRowsPromise = db.query(
-    `SELECT
-       i.inventory_item_name AS inventoryItemName,
-       i.amount_available AS amountAvailable,
-       i.availability_status AS availabilityStatus,
-       i.menu_item_id AS menuItemId,
-       mi.name AS linkedMenuItem,
-       COALESCE(mi.category, 'Uncategorized') AS category,
-       mi.base_price AS basePrice
-     FROM Inventory i
-     LEFT JOIN Menu_Item mi ON mi.menu_item_id = i.menu_item_id
-     ORDER BY i.amount_available ASC, i.inventory_item_name ASC`
+    `SELECT *
+     FROM (
+       SELECT
+         i.inventory_item_name AS inventoryItemName,
+         i.amount_available AS amountAvailable,
+         i.availability_status AS availabilityStatus,
+         i.menu_item_id AS menuItemId,
+         mi.name AS linkedMenuItem,
+         COALESCE(mi.category, 'Uncategorized') AS category,
+         mi.base_price AS basePrice
+       FROM Inventory i
+       LEFT JOIN Menu_Item mi ON mi.menu_item_id = i.menu_item_id
+
+       UNION ALL
+
+       SELECT
+         ui.utensil_name AS inventoryItemName,
+         ui.amount_available AS amountAvailable,
+         ui.availability_status AS availabilityStatus,
+         NULL AS menuItemId,
+         'Utensil Stock' AS linkedMenuItem,
+         'Utensils' AS category,
+         0.00 AS basePrice
+       FROM Utensil_Inventory ui
+     ) inventory_rows
+     ORDER BY amountAvailable ASC, inventoryItemName ASC`
   );
 
   const inventoryUsagePromise = db.query(
-    `SELECT
-       i.inventory_item_name AS inventoryItemName,
-       COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
-       ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
-       COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
-     FROM Inventory i
-     LEFT JOIN Order_Item oi ON oi.menu_item_id = i.menu_item_id
-     LEFT JOIN Orders o ON o.order_id = oi.order_id
-     GROUP BY i.inventory_item_name
-     ORDER BY unitsUsed DESC, revenue DESC, i.inventory_item_name ASC`
+    `SELECT *
+     FROM (
+       SELECT
+         i.inventory_item_name AS inventoryItemName,
+         COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
+         ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
+         COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
+       FROM Inventory i
+       LEFT JOIN Order_Item oi ON oi.menu_item_id = i.menu_item_id
+       LEFT JOIN Orders o ON o.order_id = oi.order_id
+       GROUP BY i.inventory_item_name
+
+       UNION ALL
+
+       SELECT
+         ui.utensil_name AS inventoryItemName,
+         0 AS unitsUsed,
+         0.00 AS revenue,
+         0 AS orderCount
+       FROM Utensil_Inventory ui
+     ) usage_rows
+     ORDER BY unitsUsed DESC, revenue DESC, inventoryItemName ASC`
   );
 
   const inventoryUpdateStatsPromise = db.query(
@@ -211,6 +238,22 @@ async function getBackOfficeData(range) {
      LIMIT 12`
   );
 
+  const activeOrdersPromise = db.query(
+    `SELECT
+       o.order_id AS orderId,
+       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+       dt.table_number AS tableNumber,
+       u.name AS employeeName,
+       o.total,
+       o.status,
+       o.created_at AS createdAt
+     FROM Orders o
+     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+     LEFT JOIN Users u ON u.user_id = o.created_by
+     WHERE o.status IN ('Open', 'Sent', 'Completed')
+     ORDER BY o.created_at DESC`
+  );
+
   const refundCountsPromise = db.query(
     `SELECT COUNT(*) AS refundCount
      FROM Payment
@@ -234,7 +277,7 @@ async function getBackOfficeData(range) {
      GROUP BY role`
   );
 
-  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, refundCountsRows, customerRows, userCountsRows] =
+  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
     await Promise.all([
       inventoryRowsPromise,
       inventoryUsagePromise,
@@ -243,6 +286,7 @@ async function getBackOfficeData(range) {
       menuItemsPromise,
       modifiersPromise,
       recentOrdersPromise,
+      activeOrdersPromise,
       refundCountsPromise,
       customerRowsPromise,
       userCountsPromise,
@@ -399,6 +443,15 @@ async function getBackOfficeData(range) {
         { title: "Void Orders", value: String(voidOrders) },
         { title: "Refunds", value: String(Number(refundCountsRows[0]?.refundCount ?? 0)) },
       ],
+      activeOrders: activeOrders.map((row) => ({
+        orderId: row.orderId,
+        receiptNumber: row.receiptNumber,
+        tableNumber: row.tableNumber ?? "—",
+        employeeName: row.employeeName ?? "Unknown",
+        total: Number(row.total ?? 0),
+        status: row.status,
+        createdAt: formatDateTime(row.createdAt),
+      })),
       recentOrders: recentOrders.map((row) => ({
         orderId: row.orderId,
         receiptNumber: row.receiptNumber,

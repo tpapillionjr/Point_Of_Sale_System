@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import FilterBar from "../reports/FilterBar";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
-import { fetchBackOfficeData } from "../../lib/api";
+import { cancelOrder, fetchBackOfficeData } from "../../lib/api";
+import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
   return (
@@ -48,7 +49,69 @@ function SummaryCards({ cards, isLoading, error, columns = "xl:grid-cols-4" }) {
   );
 }
 
-function useBackOfficeData(range = "7days") {
+function InventoryTypeTabs({ selectedType, onChange }) {
+  const tabs = [
+    { id: "menu", label: "Menu Items" },
+    { id: "utensils", label: "Utensils" },
+  ];
+
+  return (
+    <div className="mb-6 flex flex-wrap gap-3 rounded-2xl bg-white p-4 shadow-sm">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`rounded-lg px-4 py-2 font-medium transition ${
+            selectedType === tab.id
+              ? "bg-blue-600 text-white"
+              : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function buildInventorySummaries(stockRows, usageRows, lastActivityLabel) {
+  const lowStockCount = stockRows.filter((item) => item.status === "Low" || item.status === "Critical").length;
+  const unavailableCount = stockRows.filter((item) => item.status === "Unavailable").length;
+  const totalOnHandUnits = stockRows.reduce((sum, item) => sum + Number(item.amountAvailable || 0), 0);
+  const linkedCount = stockRows.filter((item) => item.linkedMenuItem && item.linkedMenuItem !== "Unlinked").length;
+  const totalUnitsUsed = usageRows.reduce((sum, item) => sum + Number(item.unitsUsed || 0), 0);
+  const totalRevenue = usageRows.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  const totalOrdersImpacted = usageRows.reduce((sum, item) => sum + Number(item.orderCount || 0), 0);
+  const topUsageItem =
+    [...usageRows].sort((a, b) => Number(b.unitsUsed || 0) - Number(a.unitsUsed || 0))[0]?.inventoryItemName ??
+    "No data";
+
+  return {
+    summaryCards: [
+      { title: "Inventory SKUs", value: String(stockRows.length) },
+      { title: "On Hand Units", value: String(totalOnHandUnits) },
+      { title: "Low Stock Alerts", value: String(lowStockCount) },
+      { title: "Unavailable Items", value: String(unavailableCount) },
+      { title: "Links Active", value: `${linkedCount}/${stockRows.length || 0}` },
+    ],
+    usageSummary: [
+      { title: "Tracked Items", value: String(usageRows.length) },
+      { title: "Units Used", value: String(totalUnitsUsed) },
+      { title: "Revenue Tied to Inventory", value: `$${totalRevenue.toFixed(2)}` },
+      { title: "Orders Impacted", value: String(totalOrdersImpacted) },
+      { title: "Top Usage Item", value: topUsageItem },
+    ],
+    countSummary: [
+      { title: "Items Tracked", value: String(stockRows.length) },
+      { title: "Variance Flags", value: String(lowStockCount + unavailableCount) },
+      { title: "Pending Recounts", value: String(unavailableCount) },
+      { title: "Last Inventory Activity", value: lastActivityLabel ?? "—" },
+    ],
+  };
+}
+
+function useBackOfficeData(range = "7days", refreshToken = 0) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -84,32 +147,63 @@ function useBackOfficeData(range = "7days") {
     return () => {
       isMounted = false;
     };
-  }, [range]);
+  }, [range, refreshToken]);
 
   return { data, isLoading, error };
 }
 
 export function InventorySection() {
   const [selectedRange, setSelectedRange] = useState("7days");
+  const [selectedType, setSelectedType] = useState("menu");
   const { data, isLoading, error } = useBackOfficeData(selectedRange);
   const inventory = data?.inventory;
+  const isUtensils = selectedType === "utensils";
+  const stockRows = (inventory?.stockRows ?? []).filter((item) =>
+    isUtensils ? item.category === "Utensils" : item.category !== "Utensils"
+  );
+  const reorderRows = (inventory?.reorderRows ?? []).filter((item) =>
+    isUtensils ? item.linkedMenuItem === "Utensil Stock" : item.linkedMenuItem !== "Utensil Stock"
+  );
+  const usageRows = (inventory?.usageRows ?? []).filter((item) =>
+    isUtensils
+      ? (inventory?.stockRows ?? []).some(
+          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category === "Utensils"
+        )
+      : (inventory?.stockRows ?? []).some(
+          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category !== "Utensils"
+        )
+  );
+  const menuCoverageRows = (inventory?.menuCoverageRows ?? []).filter((item) =>
+    isUtensils ? item.category === "Utensils" : item.category !== "Utensils"
+  );
+  const filteredSummaries = buildInventorySummaries(
+    stockRows,
+    usageRows,
+    inventory?.countSummary?.find((card) => card.title === "Last Inventory Activity")?.value
+  );
 
   return (
     <>
       <FilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
 
       <ReportSection title="Inventory Snapshot">
-        <SummaryCards cards={inventory?.summaryCards} isLoading={isLoading} error={error} columns="xl:grid-cols-5" />
+        <SummaryCards
+          cards={filteredSummaries.summaryCards}
+          isLoading={isLoading}
+          error={error}
+          columns="xl:grid-cols-5"
+        />
       </ReportSection>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ReportSection title="Reorder Watchlist">
           {error ? (
             <ErrorState message={error} />
-          ) : inventory?.reorderRows?.length ? (
+          ) : reorderRows.length ? (
             <SimpleTable
               headers={["Inventory Item", "Current On Hand", "Suggested Order", "Menu Impact", "Priority"]}
-              rows={inventory.reorderRows.slice(0, 8)}
+              rows={reorderRows.slice(0, 8)}
               renderRow={(item) => (
                 <tr key={item.inventoryItemName} className="border-b last:border-b-0">
                   <td className="py-3 pr-4 font-medium text-gray-800">{item.inventoryItemName}</td>
@@ -121,12 +215,23 @@ export function InventorySection() {
               )}
             />
           ) : (
-            <EmptyState message={isLoading ? "Loading inventory watchlist..." : "No reorder alerts are active."} />
+            <EmptyState
+              message={
+                isLoading
+                  ? "Loading inventory watchlist..."
+                  : `No reorder alerts are active for ${isUtensils ? "utensils" : "menu inventory"}.`
+              }
+            />
           )}
         </ReportSection>
 
         <ReportSection title="Usage Snapshot">
-          <SummaryCards cards={inventory?.usageSummary} isLoading={isLoading} error={error} columns="xl:grid-cols-2" />
+          <SummaryCards
+            cards={filteredSummaries.usageSummary}
+            isLoading={isLoading}
+            error={error}
+            columns="xl:grid-cols-3"
+          />
         </ReportSection>
       </div>
 
@@ -134,10 +239,10 @@ export function InventorySection() {
         <ReportSection title="Stock Watchlist">
           {error ? (
             <ErrorState message={error} />
-          ) : inventory?.stockRows?.length ? (
+          ) : stockRows.length ? (
             <SimpleTable
               headers={["Inventory Item", "Linked Menu Item", "Category", "Available", "Status"]}
-              rows={inventory.stockRows.slice(0, 10)}
+              rows={stockRows.slice(0, 10)}
               renderRow={(item) => (
                 <tr key={item.inventoryItemName} className="border-b last:border-b-0">
                   <td className="py-3 pr-4 font-medium text-gray-800">{item.inventoryItemName}</td>
@@ -149,17 +254,23 @@ export function InventorySection() {
               )}
             />
           ) : (
-            <EmptyState message={isLoading ? "Loading stock rows..." : "No inventory rows are available."} />
+            <EmptyState
+              message={
+                isLoading
+                  ? "Loading stock rows..."
+                  : `No ${isUtensils ? "utensil" : "menu"} inventory rows are available.`
+              }
+            />
           )}
         </ReportSection>
 
-        <ReportSection title="Menu Coverage">
+        <ReportSection title={isUtensils ? "Utensil Coverage" : "Menu Coverage"}>
           {error ? (
             <ErrorState message={error} />
-          ) : inventory?.menuCoverageRows?.length ? (
+          ) : menuCoverageRows.length ? (
             <SimpleTable
               headers={["Menu Item ID", "Menu Item", "Category", "Base Price", "Inventory Status"]}
-              rows={inventory.menuCoverageRows.slice(0, 10)}
+              rows={menuCoverageRows.slice(0, 10)}
               renderRow={(item) => (
                 <tr key={`${item.menuItemId}-${item.inventoryItemName}`} className="border-b last:border-b-0">
                   <td className="py-3 pr-4 font-medium text-gray-800">{item.menuItemId ?? "—"}</td>
@@ -171,18 +282,24 @@ export function InventorySection() {
               )}
             />
           ) : (
-            <EmptyState message={isLoading ? "Loading menu coverage..." : "No linked menu coverage is available."} />
+            <EmptyState
+              message={
+                isLoading
+                  ? "Loading coverage..."
+                  : `No linked ${isUtensils ? "utensil" : "menu"} coverage is available.`
+              }
+            />
           )}
         </ReportSection>
       </div>
 
-      <ReportSection title="High Usage Items">
+      <ReportSection title={isUtensils ? "Utensil Usage" : "High Usage Items"}>
         {error ? (
           <ErrorState message={error} />
-        ) : inventory?.usageRows?.length ? (
+        ) : usageRows.length ? (
           <SimpleTable
             headers={["Inventory Item", "Units Used", "Revenue", "Orders Impacted", "Risk"]}
-            rows={inventory.usageRows.slice(0, 10)}
+            rows={usageRows.slice(0, 10)}
             renderRow={(item) => (
               <tr key={item.inventoryItemName} className="border-b last:border-b-0">
                 <td className="py-3 pr-4 font-medium text-gray-800">{item.inventoryItemName}</td>
@@ -194,7 +311,13 @@ export function InventorySection() {
             )}
           />
         ) : (
-          <EmptyState message={isLoading ? "Loading usage data..." : "No usage data is available."} />
+          <EmptyState
+            message={
+              isLoading
+                ? "Loading usage data..."
+                : `No ${isUtensils ? "utensil" : "menu inventory"} usage data is available.`
+            }
+          />
         )}
       </ReportSection>
     </>
@@ -202,22 +325,42 @@ export function InventorySection() {
 }
 
 export function InventoryCountsSection() {
+  const [selectedType, setSelectedType] = useState("menu");
   const { data, isLoading, error } = useBackOfficeData("7days");
   const inventory = data?.inventory;
+  const stockRows = (inventory?.stockRows ?? []).filter((item) =>
+    selectedType === "utensils" ? item.category === "Utensils" : item.category !== "Utensils"
+  );
+  const usageRows = (inventory?.usageRows ?? []).filter((item) =>
+    selectedType === "utensils"
+      ? (inventory?.stockRows ?? []).some(
+          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category === "Utensils"
+        )
+      : (inventory?.stockRows ?? []).some(
+          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category !== "Utensils"
+        )
+  );
+  const filteredSummaries = buildInventorySummaries(
+    stockRows,
+    usageRows,
+    inventory?.countSummary?.find((card) => card.title === "Last Inventory Activity")?.value
+  );
 
   return (
     <>
+      <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
+
       <ReportSection title="Count Session Summary">
-        <SummaryCards cards={inventory?.countSummary} isLoading={isLoading} error={error} />
+        <SummaryCards cards={filteredSummaries.countSummary} isLoading={isLoading} error={error} />
       </ReportSection>
 
-      <ReportSection title="Tracked Inventory Counts">
+      <ReportSection title={selectedType === "utensils" ? "Tracked Utensil Counts" : "Tracked Inventory Counts"}>
         {error ? (
           <ErrorState message={error} />
-        ) : inventory?.stockRows?.length ? (
+        ) : stockRows.length ? (
           <SimpleTable
             headers={["Inventory Item", "Current Count", "Linked Menu Item", "Status"]}
-            rows={inventory.stockRows}
+            rows={stockRows}
             renderRow={(item) => (
               <tr key={item.inventoryItemName} className="border-b last:border-b-0">
                 <td className="py-3 pr-4 font-medium text-gray-800">{item.inventoryItemName}</td>
@@ -228,7 +371,13 @@ export function InventoryCountsSection() {
             )}
           />
         ) : (
-          <EmptyState message={isLoading ? "Loading inventory counts..." : "No inventory counts are available."} />
+          <EmptyState
+            message={
+              isLoading
+                ? "Loading inventory counts..."
+                : `No ${selectedType === "utensils" ? "utensil" : "menu"} counts are available.`
+            }
+          />
         )}
       </ReportSection>
     </>
@@ -372,8 +521,39 @@ export function MenuManagementSection() {
 
 export function OrderHistorySection() {
   const [selectedRange, setSelectedRange] = useState("7days");
-  const { data, isLoading, error } = useBackOfficeData(selectedRange);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [cancelMessage, setCancelMessage] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelingOrderId, setCancelingOrderId] = useState(null);
+  const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const orders = data?.orders;
+
+  async function handleManagerCancel(orderId) {
+    const employee = getStoredEmployee();
+    if (!employee?.userId || employee.role !== "manager") {
+      setCancelError("Only a logged-in manager can cancel an active order.");
+      return;
+    }
+
+    setCancelingOrderId(orderId);
+    setCancelError("");
+    setCancelMessage("");
+
+    try {
+      await cancelOrder({
+        orderId,
+        voidedBy: employee.userId,
+        voidReason: "Manager canceled active order from back office",
+      });
+
+      setCancelMessage(`Order #${orderId} was canceled successfully.`);
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setCancelError(actionError.message || "Failed to cancel the order.");
+    } finally {
+      setCancelingOrderId(null);
+    }
+  }
 
   return (
     <>
@@ -384,26 +564,69 @@ export function OrderHistorySection() {
       </ReportSection>
 
       <ReportSection title="Recent Orders">
+        {cancelMessage ? <p className="mb-4 text-sm text-green-700">{cancelMessage}</p> : null}
+        {cancelError ? <p className="mb-4 text-sm text-red-600">{cancelError}</p> : null}
         {error ? (
           <ErrorState message={error} />
-        ) : orders?.recentOrders?.length ? (
-          <SimpleTable
-            headers={["Order", "Receipt", "Table", "Employee", "Total", "Status", "Created"]}
-            rows={orders.recentOrders}
-            renderRow={(item) => (
-              <tr key={item.orderId} className="border-b last:border-b-0">
-                <td className="py-3 pr-4 font-medium text-gray-800">{item.orderId}</td>
-                <td className="py-3 pr-4">{item.receiptNumber}</td>
-                <td className="py-3 pr-4">{item.tableNumber}</td>
-                <td className="py-3 pr-4">{item.employeeName}</td>
-                <td className="py-3 pr-4">${item.total.toFixed(2)}</td>
-                <td className="py-3 pr-4">{item.status}</td>
-                <td className="py-3 pr-4">{item.createdAt}</td>
-              </tr>
-            )}
-          />
         ) : (
-          <EmptyState message={isLoading ? "Loading orders..." : "No orders were found for this range."} />
+          <>
+            {orders?.activeOrders?.length ? (
+              <div className="mb-6">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">
+                  Active Tickets
+                </h3>
+                <div className="space-y-3">
+                  {orders.activeOrders.map((item) => (
+                    <div
+                      key={`active-${item.orderId}`}
+                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-1 text-sm text-gray-700">
+                          <p className="font-semibold text-gray-900">
+                            {item.receiptNumber} · Table {item.tableNumber}
+                          </p>
+                          <p>
+                            Server: {item.employeeName} · Status: {item.status} · Total: $
+                            {item.total.toFixed(2)}
+                          </p>
+                          <p>Created: {item.createdAt}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleManagerCancel(item.orderId)}
+                          disabled={cancelingOrderId === item.orderId}
+                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                        >
+                          {cancelingOrderId === item.orderId ? "Canceling..." : "Manager Cancel"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {orders?.recentOrders?.length ? (
+              <SimpleTable
+                headers={["Order", "Receipt", "Table", "Employee", "Total", "Status", "Created"]}
+                rows={orders.recentOrders}
+                renderRow={(item) => (
+                  <tr key={item.orderId} className="border-b last:border-b-0">
+                    <td className="py-3 pr-4 font-medium text-gray-800">{item.orderId}</td>
+                    <td className="py-3 pr-4">{item.receiptNumber}</td>
+                    <td className="py-3 pr-4">{item.tableNumber}</td>
+                    <td className="py-3 pr-4">{item.employeeName}</td>
+                    <td className="py-3 pr-4">${item.total.toFixed(2)}</td>
+                    <td className="py-3 pr-4">{item.status}</td>
+                    <td className="py-3 pr-4">{item.createdAt}</td>
+                  </tr>
+                )}
+              />
+            ) : (
+              <EmptyState message={isLoading ? "Loading orders..." : "No orders were found for this range."} />
+            )}
+          </>
         )}
       </ReportSection>
     </>

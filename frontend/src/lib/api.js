@@ -1,13 +1,29 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000"
+).replace(/\/$/, "");
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-    ...options,
-  });
+  let token = null;
+
+  if (typeof window !== "undefined") {
+    token = window.localStorage.getItem("authToken");
+  }
+
+  let res;
+
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
 
   if (!res.ok) {
     let errorMessage = "Request failed";
@@ -109,16 +125,16 @@ export async function authenticateShift(pin) {
   });
 }
 
-export async function clockInShift(pin) {
+export async function clockInShift() {
   return request("/api/shifts/clock-in", {
     method: "POST",
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({}),
   });
 }
 
-export async function clockOutShift(pin, tipDeclaredAmount) {
+export async function clockOutShift(tipDeclaredAmount) {
   return request("/api/shifts/clock-out", {
     method: "POST",
-    body: JSON.stringify({ pin, tipDeclaredAmount }),
+    body: JSON.stringify({ tipDeclaredAmount }),
   });
 }
