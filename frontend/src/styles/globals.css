@@ -578,6 +578,24 @@ select {
   background: #e4edf5;
 }
 
+.ci-btn:disabled {
+  background: #f2f2f2;
+  border-color: #c7c7c7;
+  color: #8a8a8a;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.ci-btn:disabled:hover,
+.ci-btn:disabled:active {
+  background: #f2f2f2;
+  border-color: #c7c7c7;
+  color: #8a8a8a;
+  transform: none;
+}
+
 .ci-btn--ghost {
   background: transparent;
   border: 1.5px solid #c8d8e8;

@@ -35,18 +35,25 @@ export default function ClockinPage() {
     day: "numeric",
   });
 
+  const isPinLocked = Boolean(user);
+
   const pressNum = useCallback((num) => {
+    if (isPinLocked) return;
     if (pin.length >= 4) return;
     setPin(pin + num);
     setMessage(null);
-  }, [pin]);
+  }, [isPinLocked, pin]);
 
   const pressBackspace = useCallback(() => {
+    if (isPinLocked) return;
     setPin(pin.slice(0, -1));
     setMessage(null);
-  }, [pin]);
+  }, [isPinLocked, pin]);
 
   const pressEnter = useCallback(async () => {
+    if (isPinLocked) return;
+    if (pin.length !== 4) return;
+
     const enteredPin = pin;
     setPin("");
     setIsLoading(true);
@@ -91,7 +98,7 @@ export default function ClockinPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [pin]);
+  }, [isPinLocked, pin]);
 
   useEffect(() => {
     function handleKeyDown(e) {
@@ -187,7 +194,7 @@ export default function ClockinPage() {
   for (let n = 1; n <= 9; n++) {
     const label = String(n);
     numButtons.push(
-      <button key={label} className="ci-btn" onClick={() => pressNum(label)}>
+      <button key={label} className="ci-btn" onClick={() => pressNum(label)} disabled={isPinLocked}>
         {label}
       </button>
     );
@@ -253,9 +260,9 @@ export default function ClockinPage() {
 
         <div className="ci-grid">
           {numButtons}
-          <button className="ci-btn ci-btn--ghost" onClick={pressBackspace}>⌫</button>
-          <button className="ci-btn" onClick={() => pressNum("0")}>0</button>
-          <button className="ci-btn ci-btn--enter" onClick={pressEnter}>✓</button>
+          <button className="ci-btn ci-btn--ghost" onClick={pressBackspace} disabled={isPinLocked}>⌫</button>
+          <button className="ci-btn" onClick={() => pressNum("0")} disabled={isPinLocked}>0</button>
+          <button className="ci-btn ci-btn--enter" onClick={pressEnter} disabled={isPinLocked}>✓</button>
         </div>
 
         <div className="ci-clock">
@@ -275,3 +282,4 @@ export default function ClockinPage() {
     </div>
   );
 }
+
