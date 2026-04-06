@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000"
+).replace(/\/$/, "");
 
 async function request(path, options = {}) {
   let token = null;
@@ -7,14 +10,20 @@ async function request(path, options = {}) {
     token = window.localStorage.getItem("authToken");
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
+  let res;
+
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
 
   if (!res.ok) {
     let errorMessage = "Request failed";
