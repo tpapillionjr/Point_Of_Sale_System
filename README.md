@@ -3,6 +3,7 @@
 # Point_Of_Sale_System (POS)
 
 ## Tech Stack: 
+## Tech Stack: 
 - Frontend: Next.js, React, Tailwind CSS
 - Backend: Node.js, Express
 - Database: MySql
