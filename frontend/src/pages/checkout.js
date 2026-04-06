@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { cancelOrder, closeOrder, fetchActiveOrderByTable } from "../../lib/api";
+import { cancelOrder, closeOrder, fetchActiveOrderByTable } from "../lib/api";
 
 const TAX_RATE = 0.0825;
 
@@ -97,7 +97,6 @@ export default function CheckoutPage() {
   const handleCashDigit = (digit) => {
     setCashInput((prev) => {
       const next = prev + digit;
-      // Allow one decimal point, max 2 decimal places
       if (next.includes(".") && next.split(".")[1].length > 2) return prev;
       return next;
     });
@@ -121,17 +120,23 @@ export default function CheckoutPage() {
     try {
       setIsClosing(true);
       setMessage(null);
-      await closeOrder({
-        orderId: order.orderId,
-        servedBy: employee.userId,
-        paymentMethod,
-        splitCount,
-        subtotal,
-        tax,
-        tipAmount,
-        total,
-        cashTendered,
-      });
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out. Check that the backend is running.")), 10000)
+      );
+      await Promise.race([
+        closeOrder({
+          orderId: order.orderId,
+          servedBy: employee.userId,
+          paymentMethod,
+          splitCount,
+          subtotal,
+          tax,
+          tipAmount,
+          total,
+          cashTendered,
+        }),
+        timeout,
+      ]);
       localStorage.removeItem("currentOrder");
       setStage("complete");
     } catch (error) {
@@ -155,11 +160,17 @@ export default function CheckoutPage() {
     try {
       setIsCanceling(true);
       setMessage(null);
-      await cancelOrder({
-        orderId: order.orderId,
-        voidedBy: employee.userId,
-        voidReason: "Manager canceled order from checkout",
-      });
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out. Check that the backend is running.")), 10000)
+      );
+      await Promise.race([
+        cancelOrder({
+          orderId: order.orderId,
+          voidedBy: employee.userId,
+          voidReason: "Manager canceled order from checkout",
+        }),
+        timeout,
+      ]);
       localStorage.removeItem("currentOrder");
       router.push("/tables");
     } catch (error) {
@@ -247,7 +258,7 @@ export default function CheckoutPage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <button
-            onClick={() => router.push("/server-order")}
+            onClick={() => router.push(`/server-order?table=${order.tableNumber}`)}
             style={{
               padding: "8px 16px",
               borderRadius: "10px",
@@ -319,7 +330,6 @@ export default function CheckoutPage() {
             Check Summary
           </h2>
 
-          {/* Column headers */}
           <div
             style={{
               display: "grid",
@@ -341,7 +351,6 @@ export default function CheckoutPage() {
             <span style={{ textAlign: "right" }}>Total</span>
           </div>
 
-          {/* Items */}
           {order.cart.map((item) => (
             <div
               key={item.id}
@@ -365,7 +374,6 @@ export default function CheckoutPage() {
             </div>
           ))}
 
-          {/* Totals */}
           <div style={{ marginTop: "16px" }}>
             {[
               ["Subtotal", subtotal],
@@ -421,7 +429,6 @@ export default function CheckoutPage() {
         {/* Right — Payment panel */}
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
-          {/* Tip selector */}
           <div
             style={{
               backgroundColor: "white",
@@ -499,7 +506,6 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Payment method */}
           <div
             style={{
               backgroundColor: "white",
@@ -513,9 +519,9 @@ export default function CheckoutPage() {
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
               {[
-                { label: "CASH", color: "#16a34a", active: "#dcfce7", border: "#86efac", text: "#15803d" },
-                { label: "CREDIT", color: "#2563eb", active: "#eff6ff", border: "#93c5fd", text: "#1d4ed8" },
-                { label: "SPLIT", color: "#7c3aed", active: "#f5f3ff", border: "#c4b5fd", text: "#6d28d9" },
+                { label: "CASH", active: "#dcfce7", border: "#86efac", text: "#15803d" },
+                { label: "CREDIT", active: "#eff6ff", border: "#93c5fd", text: "#1d4ed8" },
+                { label: "SPLIT", active: "#f5f3ff", border: "#c4b5fd", text: "#6d28d9" },
               ].map(({ label, active, border, text }) => (
                 <button
                   key={label}
@@ -538,7 +544,6 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            {/* SPLIT controls */}
             {paymentMethod === "SPLIT" && (
               <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <span style={{ fontSize: "14px", color: "#374151", fontWeight: "500" }}>Split between:</span>
@@ -554,7 +559,6 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* CREDIT message */}
             {paymentMethod === "CREDIT" && (
               <div
                 style={{
@@ -573,10 +577,8 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* CASH numpad */}
             {paymentMethod === "CASH" && (
               <div style={{ marginTop: "12px" }}>
-                {/* Tendered display */}
                 <div
                   style={{
                     backgroundColor: "#f3f4f6",
@@ -593,7 +595,6 @@ export default function CheckoutPage() {
                   ${cashInput || "0.00"}
                 </div>
 
-                {/* Quick-tender buttons */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px", marginBottom: "8px" }}>
                   {[
                     Math.ceil(total),
@@ -623,7 +624,6 @@ export default function CheckoutPage() {
                     ))}
                 </div>
 
-                {/* Numpad */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" }}>
                   {["7","8","9","4","5","6","1","2","3"].map((d) => (
                     <button
@@ -642,52 +642,17 @@ export default function CheckoutPage() {
                       {d}
                     </button>
                   ))}
-                  <button
-                    onClick={handleCashClear}
-                    style={{
-                      padding: "14px",
-                      fontSize: "13px",
-                      fontWeight: "700",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      backgroundColor: "#fef2f2",
-                      color: "#dc2626",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={handleCashClear} style={{ padding: "14px", fontSize: "13px", fontWeight: "700", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "#fef2f2", color: "#dc2626", cursor: "pointer" }}>
                     CLR
                   </button>
-                  <button
-                    onClick={() => handleCashDigit("0")}
-                    style={{
-                      padding: "14px",
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      backgroundColor: "white",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={() => handleCashDigit("0")} style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}>
                     0
                   </button>
-                  <button
-                    onClick={() => handleCashDigit(".")}
-                    style={{
-                      padding: "14px",
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      backgroundColor: "white",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={() => handleCashDigit(".")} style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}>
                     .
                   </button>
                 </div>
 
-                {/* Change due */}
                 {cashTendered > 0 && (
                   <div
                     style={{
@@ -713,35 +678,20 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          {/* Close check button */}
           <button
             onClick={handleCloseCheck}
-            disabled={
-              isClosing ||
-              isCanceling ||
-              !paymentMethod ||
-              (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))
-            }
+            disabled={isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))}
             style={{
               width: "100%",
               padding: "16px",
               border: "none",
               borderRadius: "12px",
-              backgroundColor:
-                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
-                  ? "#d1d5db"
-                  : "#111827",
-              color:
-                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
-                  ? "#9ca3af"
-                  : "white",
+              backgroundColor: isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "#d1d5db" : "#111827",
+              color: isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "#9ca3af" : "white",
               fontWeight: "700",
               fontSize: "16px",
               letterSpacing: "0.05em",
-              cursor:
-                isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)
-                  ? "not-allowed"
-                  : "pointer",
+              cursor: isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "not-allowed" : "pointer",
             }}
           >
             {isClosing ? "CLOSING..." : `CLOSE CHECK — $${total.toFixed(2)}`}

@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
-import { createOrder, fetchTables } from "../lib/api";
+import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables } from "../lib/api";
 
 export default function ServerOrderPage() {
   const router = useRouter();
@@ -22,6 +22,10 @@ export default function ServerOrderPage() {
   const [message, setMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
+  const [pendingRemoveId, setPendingRemoveId] = useState(null);
+  const [managerPin, setManagerPin] = useState("");
+  const [approvalError, setApprovalError] = useState(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
   const supportedMenu = useMemo(() => menuData, []);
@@ -31,6 +35,8 @@ export default function ServerOrderPage() {
   );
 
   useEffect(() => {
+    if (!router.isReady) return;
+
     const storedEmployee = localStorage.getItem("currentEmployee");
     if (storedEmployee) {
       setEmployee(JSON.parse(storedEmployee));
@@ -40,8 +46,8 @@ export default function ServerOrderPage() {
       try {
         const rows = await fetchTables();
         setTables(rows);
-        if (rows.length > 0) {
-          setTableNumber(String(rows[0].tableNumber));
+        if (router.query.table) {
+          setTableNumber(String(router.query.table));
         }
       } catch (error) {
         setMessage({ type: "error", text: error.message });
@@ -49,34 +55,69 @@ export default function ServerOrderPage() {
     }
 
     loadTables();
-  }, []);
+  }, [router.isReady, router.query.table]);
+
+  useEffect(() => {
+    if (!tableNumber) return;
+
+    const selectedTable = tables.find((t) => String(t.tableNumber) === String(tableNumber));
+    if (!selectedTable || selectedTable.status !== "occupied") return;
+
+    let active = true;
+
+    fetchActiveOrderByTable(tableNumber)
+      .then((order) => {
+        if (!active) return;
+        const merged = [];
+        for (const item of order.items) {
+          const existing = merged.find((c) => c.id === item.menuItemId);
+          if (existing) {
+            existing.quantity += item.quantity;
+          } else {
+            merged.push({ id: item.menuItemId, name: item.name, price: Number(item.price), quantity: item.quantity });
+          }
+        }
+        setCart(merged);
+        setSentItemIds(merged.map((item) => item.id));
+        setSubmittedOrder({ orderId: order.orderId });
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, [tableNumber, tables]);
 
   const addToCart = (item) => {
     const qty = pendingQty;
+
+    // If this item was already sent, keep it as a separate pending entry
+    if (sentItemIds.includes(item.id)) {
+      const pendingId = `${item.id}_pending`;
+      setCart((prev) => {
+        const existing = prev.find((c) => c.id === pendingId);
+        if (existing) {
+          return prev.map((c) => c.id === pendingId ? { ...c, quantity: c.quantity + qty } : c);
+        }
+        return [...prev, { ...item, id: pendingId, menuItemId: item.id, quantity: qty }];
+      });
+      setPendingQty(1);
+      return;
+    }
+
+    // Normal merge for unsent items
     let found = false;
     const newCart = [];
-
     for (let i = 0; i < cart.length; i += 1) {
       const currentItem = cart[i];
-
       if (currentItem.id === item.id) {
-        newCart.push({
-          ...currentItem,
-          quantity: currentItem.quantity + qty,
-        });
+        newCart.push({ ...currentItem, quantity: currentItem.quantity + qty });
         found = true;
       } else {
         newCart.push(currentItem);
       }
     }
-
     if (!found) {
-      newCart.push({
-        ...item,
-        quantity: qty,
-      });
+      newCart.push({ ...item, quantity: qty });
     }
-
     setCart(newCart);
     setPendingQty(1);
   };
@@ -120,6 +161,33 @@ export default function ServerOrderPage() {
     setCart((current) => current.filter((item) => item.id !== id));
   };
 
+  const handleRemoveItem = (id) => {
+    if (sentItemIds.includes(id)) {
+      setPendingRemoveId(id);
+      setManagerPin("");
+      setApprovalError(null);
+    } else {
+      removeItem(id);
+    }
+  };
+
+  async function handleManagerApproval() {
+    if (managerPin.length !== 4) return;
+    try {
+      setIsVerifying(true);
+      setApprovalError(null);
+      await verifyManager(managerPin);
+      removeItem(pendingRemoveId);
+      setSentItemIds((prev) => prev.filter((sid) => sid !== pendingRemoveId));
+      setPendingRemoveId(null);
+      setManagerPin("");
+    } catch (err) {
+      setApprovalError(err.message);
+    } finally {
+      setIsVerifying(false);
+    }
+  }
+
   async function handleSubmitOrder(action) {
     if (!employee?.userId) {
       setMessage({ type: "error", text: "Clock in and log in before sending an order." });
@@ -155,26 +223,54 @@ export default function ServerOrderPage() {
       isSplitCheck: false,
     };
 
+    const newItems = cart.filter((item) => !sentItemIds.includes(item.id) || String(item.id).endsWith("_pending"));
+
     try {
       setIsSubmitting(true);
-      const order = await createOrder(payload);
-      const newSentIds = cart.map((item) => item.id);
-      setSentItemIds((prev) => [...new Set([...prev, ...newSentIds])]);
+
+      let order;
+
+      if (submittedOrder?.orderId) {
+        if (newItems.length === 0) {
+          setMessage({ type: "error", text: "No new items to send." });
+          return;
+        }
+        order = await addItemsToOrder(
+          submittedOrder.orderId,
+          newItems.map((item) => ({ menuItemId: item.menuItemId ?? item.id, quantity: item.quantity, price: Number(item.price) })),
+          employee.userId
+        );
+        order.orderId = submittedOrder.orderId;
+
+        // Merge pending entries into their sent counterparts and turn them green
+        setCart((prev) => {
+          const merged = prev.map((c) => {
+            if (!String(c.id).endsWith("_pending")) return c;
+            return null; // remove pending entry
+          });
+          return merged
+            .filter(Boolean)
+            .map((c) => {
+              const pendingEntry = prev.find((p) => p.menuItemId === c.id && String(p.id).endsWith("_pending"));
+              if (pendingEntry) return { ...c, quantity: c.quantity + pendingEntry.quantity };
+              return c;
+            });
+        });
+        setSentItemIds((prev) => [...new Set([...prev, ...newItems.map((i) => i.menuItemId ?? i.id)])]);
+      } else {
+        order = await createOrder(payload);
+        const newSentIds = cart.map((item) => item.id);
+        setSentItemIds((prev) => [...new Set([...prev, ...newSentIds])]);
+      }
+
       setSubmittedOrder(order);
       setMessage({
         type: "success",
-        text: `Order #${order.orderId} sent successfully for table ${selectedTable.tableNumber}.`,
+        text: `Items sent for table ${selectedTable.tableNumber}.`,
       });
       localStorage.setItem(
         "currentOrder",
-        JSON.stringify({
-          orderId: order.orderId,
-          tableNumber,
-          guestCount,
-          orderType,
-          orderNote,
-          cart,
-        })
+        JSON.stringify({ orderId: order.orderId, tableNumber, guestCount, orderType, orderNote, cart })
       );
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -225,10 +321,16 @@ export default function ServerOrderPage() {
         }}
       >
         <div>
-          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table Number</label>
+          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table</label>
           <select
             value={tableNumber}
-            onChange={(e) => setTableNumber(e.target.value)}
+            onChange={(e) => {
+              setTableNumber(e.target.value);
+              setCart([]);
+              setSentItemIds([]);
+              setSubmittedOrder(null);
+              setMessage(null);
+            }}
             style={{
               width: "100%",
               marginTop: "6px",
@@ -241,13 +343,15 @@ export default function ServerOrderPage() {
               boxSizing: "border-box",
             }}
           >
+            <option value="">— Select Table —</option>
             {tables
-              .filter((table) => table.status !== "occupied")
-              .map((table) => (
-              <option key={table.tableId} value={table.tableNumber}>
-                Table {table.tableNumber} ({table.status})
-              </option>
-            ))}
+              .filter((t) => t.status !== "inactive")
+              .sort((a, b) => a.tableNumber - b.tableNumber)
+              .map((t) => (
+                <option key={t.tableId} value={String(t.tableNumber)}>
+                  Table {t.tableNumber} ({t.status})
+                </option>
+              ))}
           </select>
         </div>
 
@@ -398,7 +502,7 @@ export default function ServerOrderPage() {
             sentItemIds={sentItemIds}
             increaseQuantity={increaseQuantity}
             decreaseQuantity={decreaseQuantity}
-            removeItem={removeItem}
+            removeItem={handleRemoveItem}
           />
 
           <button
@@ -552,6 +656,91 @@ export default function ServerOrderPage() {
           </button>
         </div>
       </div>
+
+      {pendingRemoveId !== null && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              padding: "28px",
+              width: "300px",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
+            }}
+          >
+            <p style={{ fontSize: "15px", fontWeight: "700", color: "#111827", marginBottom: "4px" }}>
+              Manager Approval Required
+            </p>
+            <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "16px" }}>
+              Enter a manager PIN to remove a sent item.
+            </p>
+
+            <div
+              style={{
+                backgroundColor: "#f3f4f6",
+                borderRadius: "8px",
+                padding: "12px",
+                textAlign: "center",
+                fontSize: "28px",
+                fontWeight: "700",
+                color: "#111827",
+                letterSpacing: "0.3em",
+                marginBottom: "12px",
+                minHeight: "54px",
+              }}
+            >
+              {"●".repeat(managerPin.length) || "—"}
+            </div>
+
+            {approvalError && (
+              <p style={{ color: "#b91c1c", fontSize: "13px", marginBottom: "10px", fontWeight: "600" }}>
+                {approvalError}
+              </p>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+              {["7","8","9","4","5","6","1","2","3"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setManagerPin((p) => (p.length < 4 ? p + d : p))}
+                  style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                onClick={() => { setPendingRemoveId(null); setManagerPin(""); setApprovalError(null); }}
+                style={{ padding: "14px", fontSize: "13px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "#fef2f2", color: "#dc2626", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setManagerPin((p) => (p.length < 4 ? p + "0" : p))}
+                style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}
+              >
+                0
+              </button>
+              <button
+                onClick={handleManagerApproval}
+                disabled={managerPin.length !== 4 || isVerifying}
+                style={{ padding: "14px", fontSize: "13px", fontWeight: "700", border: "none", borderRadius: "8px", backgroundColor: "#16a34a", color: "white", cursor: "pointer", opacity: managerPin.length !== 4 || isVerifying ? 0.5 : 1 }}
+              >
+                {isVerifying ? "..." : "OK"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showQtyPad && (
         <div
