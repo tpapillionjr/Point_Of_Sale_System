@@ -1,4 +1,4 @@
-import { cancelOrder, createOrder, findActiveOrderByTableNumber } from "../services/orders.service.js";
+import { cancelOrder, createOrder, addItemsToOrder, findActiveOrderByTableNumber } from "../services/orders.service.js";
 
 async function postOrder(req, res) {
   try {
@@ -45,4 +45,19 @@ async function getActiveOrderByTable(req, res) {
   }
 }
 
-export { postOrder, postCancelOrder, getActiveOrderByTable };
+async function postAddItems(req, res) {
+  try {
+    const { orderId } = req.params;
+    const { items, userId } = req.body;
+    const result = await addItemsToOrder(orderId, items, userId);
+    res.status(201).json(result);
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500;
+    res.status(statusCode).json({
+      error: error.message || "Failed to add items to order.",
+      details: error.details ?? [],
+    });
+  }
+}
+
+export { postOrder, postCancelOrder, postAddItems, getActiveOrderByTable };

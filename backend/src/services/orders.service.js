@@ -244,6 +244,93 @@ async function createOrder(payload) {
   });
 }
 
+async function addItemsToOrder(orderId, items, userId) {
+  if (!Number.isInteger(Number(orderId)) || Number(orderId) <= 0) {
+    throw createValidationError("orderId must be a positive integer.");
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw createValidationError("At least one item is required.");
+  }
+
+  return db.withTransaction(async (connection) => {
+    await ensureUserExists(connection, userId);
+
+    const [orderRows] = await connection.execute(
+      `SELECT order_id, table_id, status, subtotal, discount_amount, tax, service_charge, total
+       FROM Orders
+       WHERE order_id = ? LIMIT 1`,
+      [orderId]
+    );
+
+    if (orderRows.length === 0) {
+      throw createValidationError("Order not found.");
+    }
+
+    const order = orderRows[0];
+
+    if (!["Open", "Sent", "Completed"].includes(order.status)) {
+      throw createValidationError("Cannot add items to a closed or voided order.");
+    }
+
+    const itemIds = [...new Set(items.map((i) => i.menuItemId))];
+    const menuItems = await fetchMenuItems(connection, itemIds);
+    const inventoryRows = await fetchInventoryRows(connection, itemIds);
+    const issues = [];
+
+    for (const item of items) {
+      const menuItem = menuItems.get(item.menuItemId);
+      if (!menuItem) { issues.push(`Menu item ${item.menuItemId} does not exist.`); continue; }
+      if (!menuItem.is_active) { issues.push(`Menu item ${menuItem.name} is inactive.`); }
+      const inventory = inventoryRows.get(item.menuItemId);
+      if (!inventory) { issues.push(`Inventory not configured for ${menuItem.name}.`); continue; }
+      if (!inventory.availability_status) { issues.push(`${inventory.inventory_item_name} is unavailable.`); }
+      if (inventory.amount_available < item.quantity) {
+        issues.push(`Not enough inventory for ${menuItem.name}. Requested ${item.quantity}, available ${inventory.amount_available}.`);
+      }
+    }
+
+    if (issues.length > 0) {
+      throw createValidationError("Order validation failed.", issues);
+    }
+
+    let addedSubtotal = 0;
+
+    for (const item of items) {
+      await connection.execute(
+        `INSERT INTO Order_Item (order_id, menu_item_id, quantity, price) VALUES (?, ?, ?, ?)`,
+        [orderId, item.menuItemId, item.quantity, item.price]
+      );
+
+      await connection.execute(
+        `UPDATE Inventory
+         SET amount_available = amount_available - ?,
+             availability_status = CASE WHEN amount_available - ? > 0 THEN TRUE ELSE FALSE END
+         WHERE menu_item_id = ?`,
+        [item.quantity, item.quantity, item.menuItemId]
+      );
+
+      addedSubtotal += item.price * item.quantity;
+    }
+
+    const newSubtotal = Number(order.subtotal) + addedSubtotal;
+    const newTotal = newSubtotal - Number(order.discount_amount) + Number(order.tax) + Number(order.service_charge);
+
+    await connection.execute(
+      `UPDATE Orders SET subtotal = ?, total = ? WHERE order_id = ?`,
+      [newSubtotal.toFixed(2), newTotal.toFixed(2), orderId]
+    );
+
+    await connection.execute(
+      `INSERT INTO Kitchen_Ticket (order_id, table_id, status, created_at, updated_at)
+       VALUES (?, ?, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [orderId, order.table_id]
+    );
+
+    return { orderId: Number(orderId), addedItems: items.length, newTotal: newTotal.toFixed(2) };
+  });
+}
+
 async function cancelOrder(payload) {
   const orderId = Number.parseInt(payload?.orderId, 10);
   const voidedBy = Number.parseInt(payload?.voidedBy, 10);
@@ -360,7 +447,11 @@ async function findActiveOrderByTableNumber(tableNumber) {
       o.order_id AS orderId,
       o.table_id AS tableId,
       dt.table_number AS tableNumber,
-      o.status
+      o.status,
+      o.subtotal,
+      o.tax,
+      o.total,
+      o.created_at AS createdAt
      FROM Orders o
      JOIN Dining_Tables dt ON dt.table_id = o.table_id
      WHERE dt.table_number = ?
@@ -374,7 +465,23 @@ async function findActiveOrderByTableNumber(tableNumber) {
     throw createValidationError("No active backend order was found for that table.");
   }
 
-  return rows[0];
+  const order = rows[0];
+
+  const itemRows = await db.query(
+    `SELECT
+      oi.order_item_id AS orderItemId,
+      mi.menu_item_id AS menuItemId,
+      mi.name,
+      oi.quantity,
+      oi.price
+     FROM Order_Item oi
+     JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+     WHERE oi.order_id = ?
+     ORDER BY oi.order_item_id ASC`,
+    [order.orderId]
+  );
+
+  return { ...order, items: itemRows };
 }
 
-export { createOrder, cancelOrder, findActiveOrderByTableNumber };
+export { createOrder, addItemsToOrder, cancelOrder, findActiveOrderByTableNumber };
