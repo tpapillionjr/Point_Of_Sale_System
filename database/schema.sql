@@ -100,6 +100,7 @@ CREATE TABLE Orders (
 
     customer_num_id INT NULL,
     customer_status ENUM('placed','confirmed','preparing','ready') DEFAULT 'placed',
+    payment_preference ENUM('online','in_store') NOT NULL DEFAULT 'in_store',
 
     guest_count SMALLINT NOT NULL DEFAULT 1,
 
