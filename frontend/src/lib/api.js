@@ -161,3 +161,23 @@ export async function verifyManager(pin) {
     body: JSON.stringify({ pin }),
   });
 }
+
+// Customer-facing endpoints — no auth token attached
+export async function placeCustomerOrder(payload) {
+  const res = await fetch(`${API_URL}/api/customer/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to place order.");
+  }
+  return res.json();
+}
+
+export async function fetchCustomerOrderStatus(orderId) {
+  const res = await fetch(`${API_URL}/api/customer/orders/${orderId}/status`);
+  if (!res.ok) throw new Error("Failed to fetch order status.");
+  return res.json();
+}

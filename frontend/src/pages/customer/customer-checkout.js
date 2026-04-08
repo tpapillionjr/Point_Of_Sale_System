@@ -2,18 +2,19 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { placeCustomerOrder } from "../../lib/api";
 
 const TAX_RATE = 0.0825;
 
 export default function CustomerOrderPage() {
   const router = useRouter();
-  const [cart, setCart] = useState(() => {
+  const [cart] = useState(() => {
     if (typeof window === "undefined") return [];
     const stored = localStorage.getItem("customerCart");
     return stored ? JSON.parse(stored) : [];
   });
-  const [stage, setStage] = useState("checkout"); // "checkout" | "placed"
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState(null);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -24,7 +25,7 @@ export default function CustomerOrderPage() {
   });
   const [errors, setErrors] = useState({});
 
-  if (cart.length === 0 && stage !== "placed") {
+  if (cart.length === 0) {
     return (
       <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" }}>
         <div style={{ textAlign: "center" }}>
@@ -50,44 +51,28 @@ export default function CustomerOrderPage() {
     return errs;
   }
 
-  function handlePlaceOrder() {
+  async function handlePlaceOrder() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
+    setOrderError(null);
     setIsSubmitting(true);
 
-    // Mock — will connect to real API after schema changes
-    console.log("Customer order (mock):", { form, cart, total: total.toFixed(2) });
-    setTimeout(() => {
+    try {
+      const { orderId } = await placeCustomerOrder({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email,
+        phone: form.phone,
+        note: form.note,
+        cart,
+      });
       localStorage.removeItem("customerCart");
+      router.push(`/customer/order-tracking?orderId=${orderId}`);
+    } catch (err) {
+      setOrderError(err.message || "Something went wrong. Please try again.");
       setIsSubmitting(false);
-      setStage("placed");
-    }, 800);
-  }
-
-  if (stage === "placed") {
-    return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" }}>
-        <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "56px 48px", textAlign: "center", maxWidth: "420px", width: "100%", border: "1px solid rgba(148,163,184,0.2)", boxShadow: "0 8px 32px rgba(15,23,42,0.08)" }}>
-          <div style={{ fontSize: "56px", marginBottom: "16px" }}>✓</div>
-          <h2 style={{ fontSize: "26px", fontWeight: "800", color: "#1e3a5f", marginBottom: "10px" }}>Order Placed!</h2>
-          <p style={{ color: "#64748b", lineHeight: 1.6, marginBottom: "8px" }}>
-            Hi {form.firstName}, your order has been received.
-          </p>
-          <p style={{ color: "#64748b", lineHeight: 1.6, marginBottom: "28px" }}>
-            Our staff will confirm it shortly. You&apos;ll be notified when it&apos;s being prepared.
-          </p>
-          <div style={{ backgroundColor: "#f0f9ff", borderRadius: "12px", padding: "16px", marginBottom: "28px", border: "1px solid #bae6fd" }}>
-            <p style={{ fontSize: "14px", color: "#0369a1", fontWeight: "600", margin: 0 }}>
-              Order Total: <strong>${total.toFixed(2)}</strong> · Takeout
-            </p>
-          </div>
-          <Link href="/customer/menu" style={{ padding: "12px 28px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none", fontSize: "15px", boxShadow: "0 4px 14px rgba(59,130,246,0.3)" }}>
-            Order More
-          </Link>
-        </div>
-      </div>
-    );
+    }
   }
 
   const inputStyle = (field) => ({
@@ -190,6 +175,9 @@ export default function CustomerOrderPage() {
               </div>
             </div>
 
+            {orderError && (
+              <p style={{ fontSize: "13px", color: "#dc2626", textAlign: "center", margin: 0 }}>{orderError}</p>
+            )}
             <button
               onClick={handlePlaceOrder}
               disabled={isSubmitting}

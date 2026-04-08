@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { fetchCustomerOrderStatus } from "../../lib/api";
 
 const STEPS = [
   { id: 1, label: "Order Placed",  icon: "📋", message: "We've received your order!" },
@@ -12,12 +13,26 @@ const STEPS = [
 
 export default function OrderTrackingPage() {
   const router = useRouter();
-  const [currentStep, setCurrentStep] = useState(1); // will come from API later
+  const [currentStep, setCurrentStep] = useState(1);
 
-  // Mock polling — replace with real API call using orderId from router.query
   useEffect(() => {
-    // TODO: fetch order status from GET /api/customer/orders/:orderId
-    // and set currentStep based on order status
+    const orderId = router.query.orderId;
+    if (!orderId) return;
+
+    const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4 };
+
+    async function poll() {
+      try {
+        const { status } = await fetchCustomerOrderStatus(orderId);
+        setCurrentStep(STATUS_MAP[status] ?? 1);
+      } catch {
+        // silently ignore — keep showing last known step
+      }
+    }
+
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
   }, [router.query.orderId]);
 
   const active = STEPS.find((s) => s.id === currentStep) ?? STEPS[0];

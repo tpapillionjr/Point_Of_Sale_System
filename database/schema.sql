@@ -96,8 +96,11 @@ CREATE TABLE Orders (
     receipt_number VARCHAR(30) UNIQUE,
     order_note VARCHAR(255),
 
-    order_type ENUM('Dine_in', 'Takeout', 'Delivery') NOT NULL DEFAULT 'Dine_in',
-    order_channel ENUM('In_Store','Phone','Online') NOT NULL DEFAULT 'In_Store',
+    order_type ENUM('Dine_in', 'Takeout', 'Online') NOT NULL DEFAULT 'Dine_in',
+
+    customer_num_id INT NULL,
+    customer_status ENUM('placed','confirmed','preparing','ready') DEFAULT 'placed',
+
     guest_count SMALLINT NOT NULL DEFAULT 1,
 
     is_split_check BOOLEAN NOT NULL DEFAULT FALSE,
