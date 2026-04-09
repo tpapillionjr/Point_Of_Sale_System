@@ -13,7 +13,6 @@ export default function CustomerOrderPage() {
     const stored = localStorage.getItem("customerCart");
     return stored ? JSON.parse(stored) : [];
   });
-  const [paymentPreference, setPaymentPreference] = useState("in_store");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
 
@@ -67,7 +66,6 @@ export default function CustomerOrderPage() {
         phone: form.phone,
         note: form.note,
         cart,
-        paymentPreference,
       });
       localStorage.removeItem("customerCart");
       router.push(`/customer/order-tracking?orderId=${orderId}`);
@@ -145,24 +143,6 @@ export default function CustomerOrderPage() {
                   <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Special Instructions <span style={{ color: "#94a3b8", fontWeight: "400" }}>(optional)</span></label>
                   <textarea placeholder="Allergies, substitutions, etc." value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={3} style={{ width: "100%", padding: "11px 14px", borderRadius: "8px", border: "1px solid #d1d5db", fontSize: "14px", color: "#1e3a5f", backgroundColor: "white", resize: "none", boxSizing: "border-box", fontFamily: "inherit", outline: "none" }} />
                 </div>
-              </div>
-            </div>
-
-            {/* Payment preference */}
-            <div style={{ backgroundColor: "rgba(255,255,255,0.8)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)" }}>
-              <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "14px" }}>Payment Method</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {[["in_store", "💵", "Pay at Pickup", "Pay when you arrive"], ["online", "💳", "Pay Now", "Mock — no charge"]].map(([val, icon, label, sub]) => (
-                  <button
-                    key={val}
-                    onClick={() => setPaymentPreference(val)}
-                    style={{ padding: "14px", borderRadius: "10px", border: paymentPreference === val ? "2px solid #3b82f6" : "1px solid #d1d5db", backgroundColor: paymentPreference === val ? "#eff6ff" : "white", cursor: "pointer", textAlign: "left" }}
-                  >
-                    <div style={{ fontSize: "20px", marginBottom: "6px" }}>{icon}</div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: paymentPreference === val ? "#1d4ed8" : "#1e3a5f" }}>{label}</div>
-                    <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{sub}</div>
-                  </button>
-                ))}
               </div>
             </div>
           </div>
