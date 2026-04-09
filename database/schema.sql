@@ -217,9 +217,53 @@ CREATE TABLE Payment (
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
+CREATE TABLE Online_Orders (
+    online_order_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    -- Customer info (guest or logged-in)
+    customer_num_id INT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(250) NOT NULL,
+    phone VARCHAR(10) NOT NULL,
+    order_note VARCHAR(255) NULL,
+
+    -- Status tracking
+    customer_status ENUM('placed','confirmed','preparing','ready') NOT NULL DEFAULT 'placed',
+    payment_preference ENUM('online','in_store') NOT NULL DEFAULT 'in_store',
+
+    -- Financials
+    subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    tax DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_online_order_customer
+        FOREIGN KEY (customer_num_id) REFERENCES Customer(customer_num_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE Online_Order_Item (
+    online_order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    online_order_id INT NOT NULL,
+    menu_item_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price DECIMAL(10,2) NOT NULL,
+    CONSTRAINT chk_online_order_item_qty CHECK (quantity >= 1),
+    CONSTRAINT chk_online_order_item_price CHECK (price >= 0),
+    CONSTRAINT fk_online_order_item_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_online_order_item_menu
+        FOREIGN KEY (menu_item_id) REFERENCES Menu_Item(menu_item_id)
+        ON DELETE RESTRICT
+);
+
 CREATE TABLE Kitchen_Ticket (
     ticket_id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
+    order_id INT NULL,
+    online_order_id INT NULL,
     table_id INT NOT NULL,
     status ENUM('new','in_progress','done','canceled') NOT NULL DEFAULT 'new',
     completed_by INT NULL,
@@ -229,6 +273,9 @@ CREATE TABLE Kitchen_Ticket (
 
     CONSTRAINT fk_kitchen_order
         FOREIGN KEY (order_id) REFERENCES Orders(order_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_kitchen_online_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_kitchen_table
         FOREIGN KEY (table_id) REFERENCES Dining_Tables(table_id)
