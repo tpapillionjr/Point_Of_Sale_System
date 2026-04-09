@@ -54,9 +54,10 @@ async function updateTicketStatus(payload) {
     }
 
     const [ticketRows] = await connection.execute(
-      `SELECT ticket_id, order_id, table_id, status
-       FROM Kitchen_Ticket
-       WHERE ticket_id = ?
+      `SELECT kt.ticket_id, kt.order_id, kt.table_id, kt.status, o.order_type
+       FROM Kitchen_Ticket kt
+       JOIN Orders o ON o.order_id = kt.order_id
+       WHERE kt.ticket_id = ?
        LIMIT 1`,
       [ticketId]
     );
@@ -71,6 +72,17 @@ async function updateTicketStatus(payload) {
        WHERE ticket_id = ?`,
       [status, ticketId]
     );
+
+    if (ticketRows[0].order_type === "Online") {
+      const customerStatusMap = { in_progress: "preparing", done: "ready" };
+      const newCustomerStatus = customerStatusMap[status];
+      if (newCustomerStatus) {
+        await connection.execute(
+          `UPDATE Orders SET customer_status = ? WHERE order_id = ?`,
+          [newCustomerStatus, ticketRows[0].order_id]
+        );
+      }
+    }
 
     if (status === "done") {
       await connection.execute(

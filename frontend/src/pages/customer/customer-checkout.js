@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { placeCustomerOrder } from "../../lib/api";
+import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const TAX_RATE = 0.0825;
 
 export default function CustomerOrderPage() {
   const router = useRouter();
+  const { customer } = useCustomerSession();
   const [cart] = useState(() => {
     if (typeof window === "undefined") return [];
     const stored = localStorage.getItem("customerCart");
@@ -25,6 +27,16 @@ export default function CustomerOrderPage() {
     note: "",
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (!customer) return;
+    setForm((prev) => ({
+      ...prev,
+      firstName: customer.firstName ?? prev.firstName,
+      lastName: customer.lastName ?? prev.lastName,
+      email: customer.email ?? prev.email,
+    }));
+  }, [customer]);
 
   if (cart.length === 0) {
     return (

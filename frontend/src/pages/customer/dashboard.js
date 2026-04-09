@@ -1,19 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
-  const [customer] = useState(() => {
-    if (typeof window === "undefined") return null;
-    const stored = localStorage.getItem("customerInfo");
-    return stored ? JSON.parse(stored) : null;
-  });
+  const [customer, setCustomer] = useState(null);
 
   useEffect(() => {
-    if (!customer) router.replace("/customer/login");
-  }, [customer, router]);
+    const stored = localStorage.getItem("customerInfo");
+    if (!stored) {
+      router.replace("/customer/login");
+      return;
+    }
+    startTransition(() => setCustomer(JSON.parse(stored)));
+  }, [router]);
 
   function handleLogout() {
     localStorage.removeItem("customerAuthToken");
