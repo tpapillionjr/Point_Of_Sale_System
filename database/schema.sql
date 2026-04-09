@@ -79,10 +79,14 @@ CREATE TABLE Utensil_Inventory (
 );
 
 CREATE TABLE Customer (
-    customer_num_id INT PRIMARY KEY,
+    customer_num_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(250) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
     phone_number VARCHAR(10) NOT NULL UNIQUE,
     points_balance INT NOT NULL DEFAULT 0,
-    CONSTRAINT chk_customer_id_positive CHECK (customer_num_id > 0),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_customer_phone_digits CHECK (phone_number REGEXP '^[0-9]{10}$'),
     CONSTRAINT chk_points_nonneg CHECK (points_balance >= 0)
 );
