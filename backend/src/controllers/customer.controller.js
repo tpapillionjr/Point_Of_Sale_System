@@ -6,13 +6,11 @@ const TAX_RATE = 0.0825;
 
 async function createCustomerOrder(req, res) {
   try {
-    const { firstName, lastName, email, phone, note, cart, paymentPreference } = req.body;
+    const { firstName, lastName, email, phone, note, cart } = req.body;
 
     if (!firstName || !lastName || !email || !phone || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: "Missing required fields." });
     }
-
-    const payment = paymentPreference === "online" ? "online" : "in_store";
 
     const subtotal = cart.reduce((sum, item) => sum + Number(item.base_price) * item.quantity, 0);
     const tax = subtotal * TAX_RATE;
@@ -21,9 +19,9 @@ async function createCustomerOrder(req, res) {
 
     const result = await db.withTransaction(async (connection) => {
       const [orderResult] = await connection.execute(
-        `INSERT INTO Orders (table_id, created_by, order_note, order_type, guest_count, subtotal, tax, total, customer_status, payment_preference)
-         VALUES (?, ?, ?, 'Online', 1, ?, ?, ?, 'placed', ?)`,
-        [ONLINE_TABLE_ID, SYSTEM_USER_ID, orderNote, subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2), payment]
+        `INSERT INTO Orders (table_id, created_by, order_note, order_type, guest_count, subtotal, tax, total, customer_status)
+         VALUES (?, ?, ?, 'Online', 1, ?, ?, ?, 'placed')`,
+        [ONLINE_TABLE_ID, SYSTEM_USER_ID, orderNote, subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
       );
 
       const orderId = orderResult.insertId;
