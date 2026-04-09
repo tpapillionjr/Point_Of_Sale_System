@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, startTransition } from "react";
 import { fetchKitchenTickets, updateKitchenTicket } from "../lib/api";
 
 function getTicketState(ticket, now) {
@@ -29,7 +29,7 @@ export default function KitchenPage() {
   useEffect(() => {
     const storedEmployee = localStorage.getItem("currentEmployee");
     if (storedEmployee) {
-      setEmployee(JSON.parse(storedEmployee));
+      startTransition(() => setEmployee(JSON.parse(storedEmployee)));
     }
 
     async function loadTickets() {
@@ -72,7 +72,9 @@ export default function KitchenPage() {
         status,
       });
       setTickets((current) =>
-        current.filter((ticket) => !(ticket.ticketId === ticketId && status === "done"))
+        current
+          .filter((ticket) => !(ticket.ticketId === ticketId && status === "done"))
+          .map((ticket) => ticket.ticketId === ticketId ? { ...ticket, status } : ticket)
       );
       setMessage(null);
     } catch (error) {

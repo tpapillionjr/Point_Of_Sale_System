@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -10,11 +10,12 @@ const TAX_RATE = 0.0825;
 export default function CustomerOrderPage() {
   const router = useRouter();
   const { customer } = useCustomerSession();
-  const [cart] = useState(() => {
-    if (typeof window === "undefined") return [];
+  const [cart, setCart] = useState([]);
+
+  useEffect(() => {
     const stored = localStorage.getItem("customerCart");
-    return stored ? JSON.parse(stored) : [];
-  });
+    if (stored) startTransition(() => setCart(JSON.parse(stored)));
+  }, []);
   const [paymentPreference, setPaymentPreference] = useState("in_store");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
@@ -30,12 +31,12 @@ export default function CustomerOrderPage() {
 
   useEffect(() => {
     if (!customer) return;
-    setForm((prev) => ({
+    startTransition(() => setForm((prev) => ({
       ...prev,
       firstName: customer.firstName ?? prev.firstName,
       lastName: customer.lastName ?? prev.lastName,
       email: customer.email ?? prev.email,
-    }));
+    })));
   }, [customer]);
 
   if (cart.length === 0) {
@@ -82,6 +83,7 @@ export default function CustomerOrderPage() {
         paymentPreference,
       });
       localStorage.removeItem("customerCart");
+      localStorage.setItem("lastOrderId", orderId);
       router.push(`/customer/order-tracking?orderId=${orderId}`);
     } catch (err) {
       setOrderError(err.message || "Something went wrong. Please try again.");

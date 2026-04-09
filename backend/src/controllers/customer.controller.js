@@ -97,13 +97,11 @@ async function loginCustomer(req, res) {
   }
 }
 
-const ONLINE_TABLE_ID = 9999;
-const SYSTEM_USER_ID = 9999;
 const TAX_RATE = 0.0825;
 
 async function createCustomerOrder(req, res) {
   try {
-    const { firstName, lastName, email, phone, note, cart, paymentPreference } = req.body;
+    const { firstName, lastName, email, phone, note, cart, paymentPreference, customerId } = req.body;
 
     if (!firstName || !lastName || !email || !phone || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: "Missing required fields." });
@@ -114,31 +112,30 @@ async function createCustomerOrder(req, res) {
     const subtotal = cart.reduce((sum, item) => sum + Number(item.base_price) * item.quantity, 0);
     const tax = subtotal * TAX_RATE;
     const total = subtotal + tax;
-    const orderNote = `${firstName} ${lastName} | ${phone}${note ? " | " + note : ""}`;
 
     const result = await db.withTransaction(async (connection) => {
       const [orderResult] = await connection.execute(
-        `INSERT INTO Orders (table_id, created_by, order_note, order_type, guest_count, subtotal, tax, total, customer_status, payment_preference)
-         VALUES (?, ?, ?, 'Online', 1, ?, ?, ?, 'placed', ?)`,
-        [ONLINE_TABLE_ID, SYSTEM_USER_ID, orderNote, subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2), payment]
+        `INSERT INTO Online_Orders (customer_num_id, first_name, last_name, email, phone, order_note, customer_status, payment_preference, subtotal, tax, total)
+         VALUES (?, ?, ?, ?, ?, ?, 'placed', ?, ?, ?, ?)`,
+        [customerId ?? null, firstName.trim(), lastName.trim(), email.trim(), phone.trim(), note ?? null, payment, subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
       );
 
-      const orderId = orderResult.insertId;
+      const onlineOrderId = orderResult.insertId;
 
       for (const item of cart) {
         await connection.execute(
-          `INSERT INTO Order_Item (order_id, menu_item_id, quantity, price) VALUES (?, ?, ?, ?)`,
-          [orderId, item.menu_item_id, item.quantity, Number(item.base_price)]
+          `INSERT INTO Online_Order_Item (online_order_id, menu_item_id, quantity, price) VALUES (?, ?, ?, ?)`,
+          [onlineOrderId, item.menu_item_id, item.quantity, Number(item.base_price)]
         );
       }
 
       await connection.execute(
-        `INSERT INTO Kitchen_Ticket (order_id, table_id, status, created_at, updated_at)
-         VALUES (?, ?, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [orderId, ONLINE_TABLE_ID]
+        `INSERT INTO Kitchen_Ticket (order_id, online_order_id, table_id, status, created_at, updated_at)
+         VALUES (NULL, ?, 1, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [onlineOrderId]
       );
 
-      return orderId;
+      return onlineOrderId;
     });
 
     res.status(201).json({ orderId: result });
@@ -156,7 +153,7 @@ async function getCustomerOrderStatus(req, res) {
     }
 
     const rows = await db.query(
-      `SELECT customer_status FROM Orders WHERE order_id = ? LIMIT 1`,
+      `SELECT customer_status FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
       [orderId]
     );
 
@@ -195,23 +192,22 @@ async function getCustomerMenu(req, res) {
 async function getOnlineOrders(req, res) {
   try {
     const rows = await db.query(
-      `SELECT o.order_id, o.order_note, o.subtotal, o.tax, o.total,
-              o.customer_status, o.payment_preference, o.created_at
-       FROM Orders o
-       WHERE o.order_type = 'Online'
-         AND o.status NOT IN ('Void', 'Paid')
-       ORDER BY o.created_at DESC`
+      `SELECT online_order_id, first_name, last_name, phone, order_note,
+              subtotal, tax, total, customer_status, payment_preference, created_at
+       FROM Online_Orders
+       WHERE customer_status NOT IN ('ready')
+       ORDER BY created_at DESC`
     );
 
     const ordersWithItems = await Promise.all(rows.map(async (order) => {
       const items = await db.query(
         `SELECT mi.name, oi.quantity, oi.price
-         FROM Order_Item oi
+         FROM Online_Order_Item oi
          JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
-         WHERE oi.order_id = ?`,
-        [order.order_id]
+         WHERE oi.online_order_id = ?`,
+        [order.online_order_id]
       );
-      return { ...order, items };
+      return { ...order, order_id: order.online_order_id, items };
     }));
 
     res.json(ordersWithItems);
@@ -229,7 +225,7 @@ async function confirmOnlineOrder(req, res) {
     }
 
     await db.query(
-      `UPDATE Orders SET customer_status = 'confirmed' WHERE order_id = ? AND order_type = 'Online'`,
+      `UPDATE Online_Orders SET customer_status = 'confirmed' WHERE online_order_id = ?`,
       [orderId]
     );
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 export default function CustomerDashboardPage() {
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
+  const [lastOrderId, setLastOrderId] = useState(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");
@@ -13,7 +14,10 @@ export default function CustomerDashboardPage() {
       router.replace("/customer/login");
       return;
     }
-    startTransition(() => setCustomer(JSON.parse(stored)));
+    startTransition(() => {
+      setLastOrderId(localStorage.getItem("lastOrderId"));
+      setCustomer(JSON.parse(stored));
+    });
   }, [router]);
 
   function handleLogout() {
@@ -71,11 +75,21 @@ export default function CustomerDashboardPage() {
             </div>
           </Link>
 
-          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", textAlign: "center" }}>
-            <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
-            <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>Order History</p>
-            <p style={{ fontSize: "12px", color: "#94a3b8", margin: "4px 0 0" }}>Coming soon</p>
-          </div>
+          {lastOrderId ? (
+            <Link href={`/customer/order-tracking?orderId=${lastOrderId}`} style={{ textDecoration: "none" }}>
+              <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", cursor: "pointer", textAlign: "center" }}>
+                <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
+                <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>Track Order</p>
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "4px 0 0" }}>Order #{lastOrderId}</p>
+              </div>
+            </Link>
+          ) : (
+            <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", textAlign: "center", opacity: 0.6 }}>
+              <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
+              <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>Track Order</p>
+              <p style={{ fontSize: "12px", color: "#94a3b8", margin: "4px 0 0" }}>No recent orders</p>
+            </div>
+          )}
         </div>
 
         {/* Account info */}
