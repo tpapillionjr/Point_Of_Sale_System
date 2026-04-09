@@ -1,4 +1,101 @@
 import db from "../db/index.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+const CUSTOMER_JWT_SECRET = process.env.JWT_SECRET;
+const CUSTOMER_JWT_EXPIRES_IN = "7d";
+
+async function registerCustomer(req, res) {
+  try {
+    const { firstName, lastName, email, phone, password } = req.body;
+
+    if (!firstName || !lastName || !email || !phone || !password) {
+      return res.status(400).json({ error: "All fields are required." });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email required." });
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ error: "10-digit phone number required." });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters." });
+    }
+
+    const existing = await db.query(
+      `SELECT customer_num_id FROM Customer WHERE email = ? LIMIT 1`,
+      [email]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({ error: "An account with this email already exists." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const result = await db.query(
+      `INSERT INTO Customer (first_name, last_name, email, password_hash, phone_number)
+       VALUES (?, ?, ?, ?, ?)`,
+      [firstName.trim(), lastName.trim(), email.trim().toLowerCase(), passwordHash, phone]
+    );
+
+    const customerId = result.insertId;
+    const token = jwt.sign({ customerId, email }, CUSTOMER_JWT_SECRET, { expiresIn: CUSTOMER_JWT_EXPIRES_IN });
+
+    res.status(201).json({ token, customerId, firstName, lastName, email });
+  } catch (error) {
+    console.error("registerCustomer error:", error);
+    res.status(500).json({ error: "Failed to register." });
+  }
+}
+
+async function loginCustomer(req, res) {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    const rows = await db.query(
+      `SELECT customer_num_id, first_name, last_name, email, password_hash, points_balance
+       FROM Customer WHERE email = ? LIMIT 1`,
+      [email.trim().toLowerCase()]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const customer = rows[0];
+    const valid = await bcrypt.compare(password, customer.password_hash);
+
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const token = jwt.sign(
+      { customerId: customer.customer_num_id, email: customer.email },
+      CUSTOMER_JWT_SECRET,
+      { expiresIn: CUSTOMER_JWT_EXPIRES_IN }
+    );
+
+    res.json({
+      token,
+      customerId: customer.customer_num_id,
+      firstName: customer.first_name,
+      lastName: customer.last_name,
+      email: customer.email,
+      pointsBalance: customer.points_balance,
+    });
+  } catch (error) {
+    console.error("loginCustomer error:", error);
+    res.status(500).json({ error: "Failed to login." });
+  }
+}
 
 const ONLINE_TABLE_ID = 9999;
 const SYSTEM_USER_ID = 9999;
@@ -95,4 +192,51 @@ async function getCustomerMenu(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus };
+async function getOnlineOrders(req, res) {
+  try {
+    const rows = await db.query(
+      `SELECT o.order_id, o.order_note, o.subtotal, o.tax, o.total,
+              o.customer_status, o.payment_preference, o.created_at
+       FROM Orders o
+       WHERE o.order_type = 'Online'
+         AND o.status NOT IN ('Void', 'Paid')
+       ORDER BY o.created_at DESC`
+    );
+
+    const ordersWithItems = await Promise.all(rows.map(async (order) => {
+      const items = await db.query(
+        `SELECT mi.name, oi.quantity, oi.price
+         FROM Order_Item oi
+         JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+         WHERE oi.order_id = ?`,
+        [order.order_id]
+      );
+      return { ...order, items };
+    }));
+
+    res.json(ordersWithItems);
+  } catch (error) {
+    console.error("getOnlineOrders error:", error);
+    res.status(500).json({ error: "Failed to fetch online orders." });
+  }
+}
+
+async function confirmOnlineOrder(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    await db.query(
+      `UPDATE Orders SET customer_status = 'confirmed' WHERE order_id = ? AND order_type = 'Online'`,
+      [orderId]
+    );
+
+    res.json({ orderId, customer_status: "confirmed" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to confirm order." });
+  }
+}
+
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer };

@@ -162,6 +162,39 @@ export async function verifyManager(pin) {
   });
 }
 
+export async function fetchOnlineOrders() {
+  return request("/api/customer/online-orders");
+}
+
+export async function confirmOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/confirm`, {
+    method: "PATCH",
+  });
+}
+
+// Customer auth — no employee token attached
+export async function customerRegister(payload) {
+  const res = await fetch(`${API_URL}/api/customer/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to register.");
+  return data;
+}
+
+export async function customerLogin(payload) {
+  const res = await fetch(`${API_URL}/api/customer/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to login.");
+  return data;
+}
+
 // Customer-facing endpoints — no auth token attached
 export async function placeCustomerOrder(payload) {
   const res = await fetch(`${API_URL}/api/customer/orders`, {

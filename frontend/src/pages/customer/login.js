@@ -2,6 +2,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { customerLogin, customerRegister } from "../../lib/api";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function CustomerLoginPage() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const mode = router.query.mode === "signup" ? "signup" : "login";
 
@@ -31,54 +33,51 @@ export default function CustomerLoginPage() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
-  function handleLoginSubmit(e) {
+  async function handleLoginSubmit(e) {
     e.preventDefault();
     setError("");
     setMessage("");
 
-    if (!loginForm.email || !loginForm.password) {
-      setError("All fields are required.");
-      return;
-    }
-    if (!validateEmail(loginForm.email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
+    if (!loginForm.email || !loginForm.password) { setError("All fields are required."); return; }
+    if (!validateEmail(loginForm.email)) { setError("Please enter a valid email address."); return; }
 
-    console.log("Login form data:", loginForm);
-    setMessage("Login successful! (mock — no API connected yet)");
+    setIsSubmitting(true);
+    try {
+      const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
+      localStorage.setItem("customerAuthToken", data.token);
+      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
+      router.push("/customer/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleSignupSubmit(e) {
+  async function handleSignupSubmit(e) {
     e.preventDefault();
     setError("");
     setMessage("");
 
     const { firstName, lastName, email, phone, password, confirmPassword } = signupForm;
 
-    if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) {
-      setError("All fields are required.");
-      return;
-    }
-    if (!validateEmail(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (!/^\d{10}$/.test(phone)) {
-      setError("Phone number must be exactly 10 digits.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
+    if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) { setError("All fields are required."); return; }
+    if (!validateEmail(email)) { setError("Please enter a valid email address."); return; }
+    if (!/^\d{10}$/.test(phone)) { setError("Phone number must be exactly 10 digits."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    if (password !== confirmPassword) { setError("Passwords do not match."); return; }
 
-    console.log("Sign up form data:", signupForm);
-    setMessage("Account created! (mock — no API connected yet)");
+    setIsSubmitting(true);
+    try {
+      const data = await customerRegister({ firstName, lastName, email, phone, password });
+      localStorage.setItem("customerAuthToken", data.token);
+      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email }));
+      router.push("/customer/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const inputStyle = {
