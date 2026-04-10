@@ -248,6 +248,20 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
         ON DELETE RESTRICT
 );
 
+DELIMITER $$
+
+-- Automatically lock a user account when their failed PIN attempt count reaches the maximum.
+CREATE TRIGGER trg_lock_user_on_failed_attempts
+BEFORE UPDATE ON Users
+FOR EACH ROW
+BEGIN
+    IF NEW.failed_pin_attempts >= 5 THEN
+        SET NEW.is_pos_locked = TRUE;
+    END IF;
+END$$
+
+DELIMITER ;
+
 CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     shift_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,

@@ -51,7 +51,7 @@ function toSessionPayload(user, shift) {
 
 async function findUserByPin(connection, pin) {
   const [rows] = await connection.execute(
-    `SELECT user_id, name, role, is_active
+    `SELECT user_id, name, role, is_active, failed_pin_attempts, is_pos_locked
      FROM Users
      WHERE pin_code = ?
      LIMIT 1`,
@@ -62,11 +62,19 @@ async function findUserByPin(connection, pin) {
     throw createValidationError("Incorrect PIN. Try again.");
   }
 
-  if (!rows[0].is_active) {
+  const user = rows[0];
+
+  if (user.is_pos_locked) {
+    throw createValidationError(
+      "This account is locked due to too many login attempts. Contact a manager to unlock."
+    );
+  }
+
+  if (!user.is_active) {
     throw createValidationError("This employee account is inactive.");
   }
 
-  return rows[0];
+  return user;
 }
 
 async function findUserById(connection, userId) {
@@ -122,8 +130,20 @@ async function getClockSession(pin) {
   return db.withTransaction(async (connection) => {
     const user = await findUserByPin(connection, pin);
     const shift = await findCurrentShift(connection, user.user_id);
+    const session = toSessionPayload(user, shift);
 
-    return toSessionPayload(user, shift);
+    // Increment the login counter after the session is built so the user completes
+    // this login. The database trigger (trg_lock_user_on_failed_attempts) automatically
+    // sets is_pos_locked = TRUE once failed_pin_attempts reaches 5, blocking the next
+    // login attempt.
+    await connection.execute(
+      `UPDATE Users
+       SET failed_pin_attempts = LEAST(failed_pin_attempts + 1, 5)
+       WHERE user_id = ?`,
+      [user.user_id]
+    );
+
+    return session;
   });
 }
 
