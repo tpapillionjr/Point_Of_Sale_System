@@ -31,40 +31,83 @@ function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
 }
 
-function BackOfficeFilterBar({ selectedRange, onChange }) {
-  const options = [
-    { id: "today", label: "Today" },
-    { id: "7days", label: "Last 7 Days" },
-    { id: "30days", label: "Last 30 Days" },
-  ];
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function createDefaultDateRange() {
+  const endDate = new Date();
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 29);
+
+  return {
+    startDate: toDateInputValue(startDate),
+    endDate: toDateInputValue(endDate),
+  };
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path
+        d="M7 2v3M17 2v3M3 9h18M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm2 8h3v3H7Zm5 0h3v3h-3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function BackOfficeFilterBar({ filters, onChange, onApply }) {
+  const iconClass = "pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400";
 
   return (
     <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">Back Office Filters</p>
-          <p className="mt-2 text-sm text-gray-600">Choose the reporting window for this management view.</p>
+          <p className="mt-2 text-sm text-gray-600">Choose the date range for this management view.</p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          {options.map((option) => {
-            const isActive = selectedRange === option.id;
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Start Date</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(event) => onChange((current) => ({ ...current, startDate: event.target.value }))}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-11 text-sm text-gray-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <span className={iconClass}><CalendarIcon /></span>
+            </div>
+          </label>
 
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => onChange(option.id)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">End Date</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(event) => onChange((current) => ({ ...current, endDate: event.target.value }))}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-11 text-sm text-gray-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <span className={iconClass}><CalendarIcon /></span>
+            </div>
+          </label>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onApply}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            Apply Range
+          </button>
         </div>
       </div>
     </div>
@@ -150,7 +193,7 @@ function buildInventorySummaries(stockRows, usageRows, lastActivityLabel) {
   };
 }
 
-function useBackOfficeData(range = "7days", refreshToken = 0) {
+function useBackOfficeData(range = createDefaultDateRange(), refreshToken = 0) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -192,7 +235,8 @@ function useBackOfficeData(range = "7days", refreshToken = 0) {
 }
 
 export function InventorySection() {
-  const [selectedRange, setSelectedRange] = useState("7days");
+  const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
+  const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
   const [selectedType, setSelectedType] = useState("menu");
   const { data, isLoading, error } = useBackOfficeData(selectedRange);
   const inventory = data?.inventory;
@@ -223,7 +267,7 @@ export function InventorySection() {
 
   return (
     <>
-      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
       <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
 
       <ReportSection title="Inventory Snapshot">
@@ -424,13 +468,14 @@ export function InventoryCountsSection() {
 }
 
 export function PurchasingSection() {
-  const [selectedRange, setSelectedRange] = useState("7days");
+  const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
+  const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
   const { data, isLoading, error } = useBackOfficeData(selectedRange);
   const purchasing = data?.purchasing;
 
   return (
     <>
-      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
 
       <ReportSection title="Purchasing Summary">
         <SummaryCards cards={purchasing?.summaryCards} isLoading={isLoading} error={error} />
@@ -462,13 +507,14 @@ export function PurchasingSection() {
 }
 
 export function LaborSection() {
-  const [selectedRange, setSelectedRange] = useState("7days");
+  const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
+  const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
   const { data, isLoading, error } = useBackOfficeData(selectedRange);
   const labor = data?.labor;
 
   return (
     <>
-      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
 
       <ReportSection title="Labor Snapshot">
         <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} />
@@ -559,7 +605,8 @@ export function MenuManagementSection() {
 }
 
 export function OrderHistorySection() {
-  const [selectedRange, setSelectedRange] = useState("7days");
+  const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
+  const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
   const [refreshToken, setRefreshToken] = useState(0);
   const [cancelMessage, setCancelMessage] = useState("");
   const [cancelError, setCancelError] = useState("");
@@ -596,7 +643,7 @@ export function OrderHistorySection() {
 
   return (
     <>
-      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
 
       <ReportSection title="Order Review Snapshot">
         <SummaryCards cards={orders?.summaryCards} isLoading={isLoading} error={error} />
