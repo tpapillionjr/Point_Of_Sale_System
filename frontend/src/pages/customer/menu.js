@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 export default function CustomerMenuPage() {
   const router = useRouter();
+  const { customer } = useCustomerSession();
   const [menu, setMenu] = useState({});
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,15 @@ export default function CustomerMenuPage() {
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {customer ? (
+            <Link href="/customer/dashboard" style={{ fontSize: "14px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>
+              Hi, {customer.firstName}
+            </Link>
+          ) : (
+            <Link href="/customer/login" style={{ fontSize: "14px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>
+              Log In
+            </Link>
+          )}
           <button
             onClick={() => setShowCart(true)}
             style={{ padding: "8px 20px", borderRadius: "999px", border: "none", backgroundColor: cartCount > 0 ? "#3b82f6" : "#94a3b8", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer", boxShadow: cartCount > 0 ? "0 4px 14px rgba(59,130,246,0.3)" : "none" }}

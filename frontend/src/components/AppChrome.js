@@ -7,6 +7,7 @@ import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
 const NAV_ITEMS = [
   { href: "/tables", label: "Tables" },
   { href: "/server-order", label: "Server Order" },
+  { href: "/online-orders", label: "Online Orders" },
   { href: "/checkout", label: "Checkout" },
   { href: "/kitchen", label: "Kitchen" },
   { href: "/back-office", label: "Back Office" },

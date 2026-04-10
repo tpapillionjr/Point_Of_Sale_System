@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const FEATURED_ITEMS = [
   { id: 1, name: "All-Star Special", description: "Our signature breakfast platter with eggs, bacon, and toast.", price: 11.99, category: "Entrees" },
@@ -11,6 +12,8 @@ const FEATURED_ITEMS = [
 ];
 
 export default function CustomerHomePage() {
+  const { customer } = useCustomerSession();
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -37,30 +40,52 @@ export default function CustomerHomePage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Link href="/customer/login" style={{
-            padding: "8px 20px",
-            borderRadius: "999px",
-            border: "1px solid rgba(100,116,139,0.3)",
-            backgroundColor: "rgba(255,255,255,0.8)",
-            color: "#334e6e",
-            fontSize: "14px",
-            fontWeight: "600",
-            textDecoration: "none",
-          }}>
-            Log In
-          </Link>
-          <Link href="/customer/login?mode=signup" style={{
-            padding: "8px 20px",
-            borderRadius: "999px",
-            border: "none",
-            backgroundColor: "#3b82f6",
-            color: "white",
-            fontSize: "14px",
-            fontWeight: "600",
-            textDecoration: "none",
-          }}>
-            Sign Up
-          </Link>
+          {customer ? (
+            <>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>
+                Welcome back, {customer.firstName}
+              </span>
+              <Link href="/customer/dashboard" style={{
+                padding: "8px 20px",
+                borderRadius: "999px",
+                border: "none",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                fontSize: "14px",
+                fontWeight: "600",
+                textDecoration: "none",
+              }}>
+                My Account
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/customer/login" style={{
+                padding: "8px 20px",
+                borderRadius: "999px",
+                border: "1px solid rgba(100,116,139,0.3)",
+                backgroundColor: "rgba(255,255,255,0.8)",
+                color: "#334e6e",
+                fontSize: "14px",
+                fontWeight: "600",
+                textDecoration: "none",
+              }}>
+                Log In
+              </Link>
+              <Link href="/customer/login?mode=signup" style={{
+                padding: "8px 20px",
+                borderRadius: "999px",
+                border: "none",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                fontSize: "14px",
+                fontWeight: "600",
+                textDecoration: "none",
+              }}>
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 

@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000"
+).replace(/\/$/, "");
 
 async function request(path, options = {}) {
   let token = null;
@@ -7,14 +10,20 @@ async function request(path, options = {}) {
     token = window.localStorage.getItem("authToken");
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
+  let res;
+
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
 
   if (!res.ok) {
     let errorMessage = "Request failed";
@@ -37,6 +46,18 @@ async function request(path, options = {}) {
 
 export async function fetchItems() {
   return request("/api/items");
+}
+
+export async function createMenuItem(payload) {
+  return request("/api/items", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function updateMenuItem(id, payload) {
+  return request(`/api/items/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export async function toggleMenuItemActive(id, isActive) {
+  return request(`/api/items/${id}/active`, { method: "PATCH", body: JSON.stringify({ isActive }) });
 }
 
 export async function fetchBackOfficeDashboard() {
@@ -107,13 +128,49 @@ export async function getReportSummary() {
 }
 
 export async function getReportsOverview(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/overview${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/overview${query ? `?${query}` : ""}`);
 }
 
 export async function getReportsDashboard(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/dashboard${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/dashboard${query ? `?${query}` : ""}`);
 }
 
 export async function authenticateShift(pin) {
@@ -160,6 +217,39 @@ export async function verifyManager(pin) {
     method: "POST",
     body: JSON.stringify({ pin }),
   });
+}
+
+export async function fetchOnlineOrders() {
+  return request("/api/customer/online-orders");
+}
+
+export async function confirmOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/confirm`, {
+    method: "PATCH",
+  });
+}
+
+// Customer auth — no employee token attached
+export async function customerRegister(payload) {
+  const res = await fetch(`${API_URL}/api/customer/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to register.");
+  return data;
+}
+
+export async function customerLogin(payload) {
+  const res = await fetch(`${API_URL}/api/customer/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to login.");
+  return data;
 }
 
 // Customer-facing endpoints — no auth token attached

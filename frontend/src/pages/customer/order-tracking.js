@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -14,6 +14,7 @@ const STEPS = [
 export default function OrderTrackingPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
+  const currentStepRef = useRef(1);
 
   useEffect(() => {
     const orderId = router.query.orderId;
@@ -24,14 +25,22 @@ export default function OrderTrackingPage() {
     async function poll() {
       try {
         const { status } = await fetchCustomerOrderStatus(orderId);
-        setCurrentStep(STATUS_MAP[status] ?? 1);
+        const step = STATUS_MAP[status] ?? 1;
+        currentStepRef.current = step;
+        setCurrentStep(step);
       } catch {
         // silently ignore — keep showing last known step
       }
     }
 
     poll();
-    const interval = setInterval(poll, 5000);
+    const interval = setInterval(() => {
+      if (currentStepRef.current >= 4) {
+        clearInterval(interval);
+        return;
+      }
+      poll();
+    }, 5000);
     return () => clearInterval(interval);
   }, [router.query.orderId]);
 
@@ -136,21 +145,6 @@ export default function OrderTrackingPage() {
           </div>
         </div>
 
-        {/* Dev step controls — remove before production */}
-        <div style={{ backgroundColor: "rgba(255,255,255,0.6)", borderRadius: "12px", padding: "16px 20px", border: "1px dashed #cbd5e1", textAlign: "center" }}>
-          <p style={{ fontSize: "11px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 10px" }}>Dev Preview — Simulate Step</p>
-          <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-            {STEPS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setCurrentStep(s.id)}
-                style={{ padding: "6px 16px", borderRadius: "999px", border: "none", backgroundColor: currentStep === s.id ? "#3b82f6" : "#e2e8f0", color: currentStep === s.id ? "white" : "#475569", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}
-              >
-                {s.id}
-              </button>
-            ))}
-          </div>
-        </div>
 
       </div>
     </div>
