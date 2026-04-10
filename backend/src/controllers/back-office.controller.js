@@ -12,7 +12,7 @@ async function getDashboard(req, res) {
 
 async function getData(req, res) {
   try {
-    const data = await getBackOfficeData(req.query.range);
+    const data = await getBackOfficeData(req.query);
     res.json(data);
   } catch (error) {
     console.error("Failed to fetch back office data:", error.message);

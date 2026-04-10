@@ -1,16 +1,67 @@
 import db from "../db/index.js";
 
-const RANGE_DAYS = {
+const LEGACY_RANGE_DAYS = {
   today: 1,
   "7days": 7,
   "30days": 30,
 };
 
-function normalizeRange(range) {
-  return RANGE_DAYS[range] ? range : "7days";
+function isValidDateOnly(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || "");
 }
 
-function rangeFilter(days, column = "created_at") {
+function normalizeBackOfficeFilters(input) {
+  if (typeof input === "string") {
+    const numericDays = Number.parseInt(input, 10);
+
+    if (Number.isInteger(numericDays) && numericDays >= 1 && numericDays <= 365) {
+      return { mode: "days", days: numericDays, startDate: null, endDate: null };
+    }
+
+    if (LEGACY_RANGE_DAYS[input]) {
+      return { mode: "days", days: LEGACY_RANGE_DAYS[input], startDate: null, endDate: null };
+    }
+  }
+
+  const numericDays = Number.parseInt(input?.days, 10);
+  const startDate = isValidDateOnly(input?.startDate) ? input.startDate : null;
+  const endDate = isValidDateOnly(input?.endDate) ? input.endDate : null;
+
+  if (startDate || endDate) {
+    const normalizedStart = startDate && endDate && startDate > endDate ? endDate : startDate;
+    const normalizedEnd = startDate && endDate && startDate > endDate ? startDate : endDate;
+
+    return {
+      mode: "dates",
+      days: null,
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+    };
+  }
+
+  if (Number.isInteger(numericDays) && numericDays >= 1 && numericDays <= 365) {
+    return { mode: "days", days: numericDays, startDate: null, endDate: null };
+  }
+
+  return { mode: "days", days: 7, startDate: null, endDate: null };
+}
+
+function rangeFilter(filters, column = "created_at") {
+  if (filters.mode === "dates") {
+    if (filters.startDate && filters.endDate) {
+      return `DATE(${column}) BETWEEN '${filters.startDate}' AND '${filters.endDate}'`;
+    }
+
+    if (filters.startDate) {
+      return `DATE(${column}) >= '${filters.startDate}'`;
+    }
+
+    if (filters.endDate) {
+      return `DATE(${column}) <= '${filters.endDate}'`;
+    }
+  }
+
+  const days = filters.days ?? 7;
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
@@ -133,7 +184,7 @@ async function getBackOfficeDashboard() {
 }
 
 async function getBackOfficeData(range) {
-  const days = RANGE_DAYS[normalizeRange(range)];
+  const filters = normalizeBackOfficeFilters(range);
   const inventoryRowsPromise = db.query(
     `SELECT *
      FROM (
@@ -168,9 +219,9 @@ async function getBackOfficeData(range) {
      FROM (
        SELECT
          i.inventory_item_name AS inventoryItemName,
-         COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
-         ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
-         COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(days, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
+         COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
+         ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
+         COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
        FROM Inventory i
        LEFT JOIN Order_Item oi ON oi.menu_item_id = i.menu_item_id
        LEFT JOIN Orders o ON o.order_id = oi.order_id
@@ -205,7 +256,7 @@ async function getBackOfficeData(range) {
        es.tip_declared_amount AS tipDeclaredAmount
      FROM Employee_Shift es
      JOIN Users u ON u.user_id = es.user_id
-     WHERE ${rangeFilter(days, "es.scheduled_start")}
+     WHERE ${rangeFilter(filters, "es.scheduled_start")}
      ORDER BY es.scheduled_start DESC, u.name ASC`
   );
 
@@ -233,7 +284,7 @@ async function getBackOfficeData(range) {
      FROM Orders o
      LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
      LEFT JOIN Users u ON u.user_id = o.created_by
-     WHERE ${rangeFilter(days, "o.created_at")}
+     WHERE ${rangeFilter(filters, "o.created_at")}
      ORDER BY o.created_at DESC
      LIMIT 12`
   );
@@ -258,7 +309,7 @@ async function getBackOfficeData(range) {
     `SELECT COUNT(*) AS refundCount
      FROM Payment
      WHERE status = 'refunded'
-       AND ${rangeFilter(days, "paid_at")}`
+       AND ${rangeFilter(filters, "paid_at")}`
   );
 
   const customerRowsPromise = db.query(
