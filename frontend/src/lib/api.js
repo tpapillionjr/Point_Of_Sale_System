@@ -116,13 +116,49 @@ export async function getReportSummary() {
 }
 
 export async function getReportsOverview(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/overview${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/overview${query ? `?${query}` : ""}`);
 }
 
 export async function getReportsDashboard(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/dashboard${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/dashboard${query ? `?${query}` : ""}`);
 }
 
 export async function authenticateShift(pin) {
