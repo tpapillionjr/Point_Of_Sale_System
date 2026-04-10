@@ -7,7 +7,9 @@ export default function ReportsHomePage() {
       title="Reports Dashboard"
       description="View restaurant performance, sales, labor, inventory, operations, and customer trends."
     >
-      {(selectedRange) => <ReportsOverviewSection selectedRange={selectedRange} />}
+      {(selectedRange, _selectedView, searchTerm) => (
+        <ReportsOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />
+      )}
     </ReportsPageLayout>
   );
 }

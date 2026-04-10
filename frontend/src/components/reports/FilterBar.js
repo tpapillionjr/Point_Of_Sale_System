@@ -1,6 +1,24 @@
 const inputClass =
   "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200";
 
+const dateInputClass =
+  `${inputClass} appearance-none pr-12`;
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path
+        d="M7 2v3M17 2v3M3 9h18M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm2 8h3v3H7Zm5 0h3v3h-3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
 function FilterField({ label, children }) {
   return (
     <label className="block">
@@ -23,23 +41,22 @@ export default function FilterBar({
   onViewChange,
   filters,
   onFiltersChange,
+  searchTerm,
+  onSearchTermChange,
   onApply,
-  activeSummary,
+  onExport,
 }) {
   return (
     <div className="mb-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-3 border-b border-slate-100 pb-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">{title}</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Dynamic Report Builder</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Report Request</h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">{description}</p>
-        </div>
-        <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
-          <span className="font-semibold text-slate-950">Current filter:</span> {activeSummary}
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
         <FilterField label="Report Group">
           <select
             value={selectedSection}
@@ -68,55 +85,8 @@ export default function FilterBar({
           </select>
         </FilterField>
 
-        <FilterField label="Filter Type">
-          <select
-            value={filters.mode}
-            onChange={(event) =>
-              onFiltersChange((current) => ({
-                ...current,
-                mode: event.target.value,
-              }))
-            }
-            className={inputClass}
-          >
-            <option value="days">Custom Day Count</option>
-            <option value="dates">Date Range</option>
-          </select>
-        </FilterField>
-
-        {filters.mode === "days" ? (
-          <FilterField label="Days">
-            <input
-              type="number"
-              min="1"
-              max="365"
-              value={filters.days}
-              onChange={(event) =>
-                onFiltersChange((current) => ({
-                  ...current,
-                  days: event.target.value,
-                }))
-              }
-              placeholder="7"
-              className={inputClass}
-            />
-          </FilterField>
-        ) : (
-          <FilterField label="Apply Filters">
-            <button
-              type="button"
-              onClick={onApply}
-              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-            >
-              Refresh Report
-            </button>
-          </FilterField>
-        )}
-      </div>
-
-      {filters.mode === "dates" && (
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FilterField label="Start Date">
+        <FilterField label="Start Date">
+          <div className="relative">
             <input
               type="date"
               value={filters.startDate}
@@ -126,11 +96,16 @@ export default function FilterBar({
                   startDate: event.target.value,
                 }))
               }
-              className={inputClass}
+              className={dateInputClass}
             />
-          </FilterField>
+            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
+              <CalendarIcon />
+            </span>
+          </div>
+        </FilterField>
 
-          <FilterField label="End Date">
+        <FilterField label="End Date">
+          <div className="relative">
             <input
               type="date"
               value={filters.endDate}
@@ -140,39 +115,41 @@ export default function FilterBar({
                   endDate: event.target.value,
                 }))
               }
-              className={inputClass}
+              className={dateInputClass}
             />
-          </FilterField>
-        </div>
-      )}
+            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
+              <CalendarIcon />
+            </span>
+          </div>
+        </FilterField>
 
-      {filters.mode === "days" && (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          {["7", "14", "30", "90"].map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() =>
-                onFiltersChange((current) => ({
-                  ...current,
-                  days: value,
-                }))
-              }
-              className="rounded-full border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
-            >
-              {value} days
-            </button>
-          ))}
+        <FilterField label="Search">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => onSearchTermChange(event.target.value)}
+            placeholder="Search employees, items, orders..."
+            className={inputClass}
+          />
+        </FilterField>
+      </div>
 
-          <button
-            type="button"
-            onClick={onApply}
-            className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-          >
-            Refresh Report
-          </button>
-        </div>
-      )}
+      <div className="mt-5 flex flex-wrap justify-end gap-3">
+        <button
+          type="button"
+          onClick={onExport}
+          className="min-w-40 rounded-xl border border-blue-600 bg-white px-5 py-3 text-sm font-semibold text-blue-600 shadow-sm transition hover:bg-blue-50"
+        >
+          Save As / Export
+        </button>
+        <button
+          type="button"
+          onClick={onApply}
+          className="min-w-40 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+        >
+          Search
+        </button>
+      </div>
     </div>
   );
 }

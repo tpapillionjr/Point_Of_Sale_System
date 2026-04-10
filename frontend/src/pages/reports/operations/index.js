@@ -23,16 +23,16 @@ export default function OperationsReportsPage() {
       viewOptions={viewOptions}
       defaultView="overview"
     >
-      {(selectedRange, selectedView) => {
+      {(selectedRange, selectedView, searchTerm) => {
         switch (selectedView) {
           case "voids":
-            return <OperationsVoidsSection selectedRange={selectedRange} />;
+            return <OperationsVoidsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "discounts":
-            return <OperationsDiscountsSection selectedRange={selectedRange} />;
+            return <OperationsDiscountsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "refunds":
-            return <OperationsRefundsSection selectedRange={selectedRange} />;
+            return <OperationsRefundsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "payments":
-            return <OperationsPaymentsSection selectedRange={selectedRange} />;
+            return <OperationsPaymentsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           default:
             return <OperationsOverviewSection selectedRange={selectedRange} />;
         }
