@@ -21,16 +21,16 @@ export default function LaborReportsPage() {
       viewOptions={viewOptions}
       defaultView="overview"
     >
-      {(selectedRange, selectedView) => {
+      {(selectedRange, selectedView, searchTerm) => {
         switch (selectedView) {
           case "performance":
-            return <LaborPerformanceSection selectedRange={selectedRange} />;
+            return <LaborPerformanceSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "clock":
-            return <LaborClockSection selectedRange={selectedRange} />;
+            return <LaborClockSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "hours":
-            return <LaborHoursSection selectedRange={selectedRange} />;
+            return <LaborHoursSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           default:
-            return <LaborOverviewSection selectedRange={selectedRange} />;
+            return <LaborOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />;
         }
       }}
     </ReportsPageLayout>

@@ -23,18 +23,18 @@ export default function InventoryReportsPage() {
       viewOptions={viewOptions}
       defaultView="overview"
     >
-      {(selectedRange, selectedView) => {
+      {(selectedRange, selectedView, searchTerm) => {
         switch (selectedView) {
           case "stock":
-            return <InventoryStockSection selectedRange={selectedRange} />;
+            return <InventoryStockSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "usage":
-            return <InventoryUsageSection selectedRange={selectedRange} />;
+            return <InventoryUsageSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "top-items":
-            return <InventoryTopItemsSection selectedRange={selectedRange} />;
+            return <InventoryTopItemsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "waste":
             return <InventoryWasteSection selectedRange={selectedRange} />;
           default:
-            return <InventoryOverviewSection selectedRange={selectedRange} />;
+            return <InventoryOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />;
         }
       }}
     </ReportsPageLayout>

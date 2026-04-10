@@ -21,14 +21,14 @@ export default function CustomerReportsPage() {
       viewOptions={viewOptions}
       defaultView="overview"
     >
-      {(selectedRange, selectedView) => {
+      {(selectedRange, selectedView, searchTerm) => {
         switch (selectedView) {
           case "habits":
             return <CustomerHabitsSection selectedRange={selectedRange} />;
           case "loyalty":
             return <CustomerLoyaltySection selectedRange={selectedRange} />;
           case "repeat":
-            return <CustomerRepeatSection selectedRange={selectedRange} />;
+            return <CustomerRepeatSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           default:
             return <CustomerOverviewSection selectedRange={selectedRange} />;
         }

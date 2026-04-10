@@ -24,20 +24,20 @@ export default function SalesReportsPage() {
       viewOptions={viewOptions}
       defaultView="overview"
     >
-      {(selectedRange, selectedView) => {
+      {(selectedRange, selectedView, searchTerm) => {
         switch (selectedView) {
           case "trend":
-            return <SalesOverviewSection selectedRange={selectedRange} />;
+            return <SalesOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "items":
-            return <SalesItemsSection selectedRange={selectedRange} />;
+            return <SalesItemsSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "categories":
-            return <SalesCategoriesSection selectedRange={selectedRange} />;
+            return <SalesCategoriesSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "servers":
-            return <SalesServersSection selectedRange={selectedRange} />;
+            return <SalesServersSection selectedRange={selectedRange} searchTerm={searchTerm} />;
           case "tips":
             return <SalesTipsSection selectedRange={selectedRange} />;
           default:
-            return <SalesOverviewSection selectedRange={selectedRange} />;
+            return <SalesOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />;
         }
       }}
     </ReportsPageLayout>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import { getReportsDashboard } from "../../lib/api";
 import FilterBar from "./FilterBar";
 
 const sectionOptions = [
@@ -11,15 +12,19 @@ const sectionOptions = [
   { value: "/reports/customer", label: "Customer Behavior" },
 ];
 
-function buildActiveSummary(filters) {
-  if (filters.startDate || filters.endDate) {
-    const start = filters.startDate || "beginning";
-    const end = filters.endDate || "today";
-    return `${start} to ${end}`;
-  }
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10);
+}
 
-  const dayLabel = filters.days || "7";
-  return `Last ${dayLabel} day${dayLabel === "1" ? "" : "s"}`;
+function createDefaultDateFilters() {
+  const endDate = new Date();
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 29);
+
+  return {
+    startDate: toDateInputValue(startDate),
+    endDate: toDateInputValue(endDate),
+  };
 }
 
 export default function ReportsPageLayout({
@@ -32,31 +37,42 @@ export default function ReportsPageLayout({
   const router = useRouter();
   const fallbackView = defaultView ?? viewOptions[0]?.id ?? "";
   const [selectedView, setSelectedView] = useState(fallbackView);
-  const [draftFilters, setDraftFilters] = useState({
-    mode: "days",
-    days: "7",
-    startDate: "",
-    endDate: "",
-  });
-  const [appliedFilters, setAppliedFilters] = useState({
-    days: "7",
-  });
+  const [defaultFilters] = useState(createDefaultDateFilters);
+  const [draftFilters, setDraftFilters] = useState(defaultFilters);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
   const resolvedSelectedView = viewOptions.some((option) => option.id === selectedView)
     ? selectedView
     : fallbackView;
 
   function applyFilters() {
-    if (draftFilters.mode === "dates") {
-      setAppliedFilters({
-        startDate: draftFilters.startDate,
-        endDate: draftFilters.endDate,
-      });
-      return;
-    }
-
     setAppliedFilters({
-      days: draftFilters.days || "7",
+      startDate: draftFilters.startDate || defaultFilters.startDate,
+      endDate: draftFilters.endDate || defaultFilters.endDate,
     });
+  }
+
+  async function handleExport() {
+    const payload = await getReportsDashboard(appliedFilters);
+    const exportPayload = {
+      reportTitle: title,
+      route: router.pathname,
+      view: resolvedSelectedView,
+      filters: appliedFilters,
+      searchTerm,
+      exportedAt: new Date().toISOString(),
+      data: payload,
+    };
+
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
+      type: "application/json",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${router.pathname.split("/").filter(Boolean).join("-") || "reports"}-${resolvedSelectedView || "overview"}.json`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 
   return (
@@ -77,11 +93,13 @@ export default function ReportsPageLayout({
           onViewChange={setSelectedView}
           filters={draftFilters}
           onFiltersChange={setDraftFilters}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
           onApply={applyFilters}
-          activeSummary={buildActiveSummary(appliedFilters)}
+          onExport={handleExport}
         />
 
-        <div className="space-y-6">{children(appliedFilters, resolvedSelectedView)}</div>
+        <div className="space-y-6">{children(appliedFilters, resolvedSelectedView, searchTerm)}</div>
       </div>
     </div>
   );
