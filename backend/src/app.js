@@ -13,6 +13,9 @@ import customerRoutes from "./routes/customer.routes.js";
 
 const app = express();
 
+// Middleware to capture client IP address properly
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.use(express.json());
 
