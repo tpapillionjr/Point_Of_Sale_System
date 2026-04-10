@@ -1,17 +1,70 @@
 import db from "../db/index.js";
 
-const RANGE_DAYS = {
-  today: 1,
-  "7days": 7,
-  "30days": 30,
-};
-
-function normalizeRange(range) {
-  return RANGE_DAYS[range] ? range : "7days";
+function isValidDateOnly(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || "");
 }
 
-function getRangeDays(range) {
-  return RANGE_DAYS[normalizeRange(range)];
+function normalizeReportFilters(input) {
+  if (typeof input === "string") {
+    const numericDays = Number.parseInt(input, 10);
+
+    if (Number.isInteger(numericDays) && numericDays >= 1 && numericDays <= 365) {
+      return {
+        mode: "days",
+        days: numericDays,
+        startDate: null,
+        endDate: null,
+      };
+    }
+
+    if (isValidDateOnly(input)) {
+      return {
+        mode: "dates",
+        days: null,
+        startDate: input,
+        endDate: input,
+      };
+    }
+
+    return {
+      mode: "days",
+      days: 30,
+      startDate: null,
+      endDate: null,
+    };
+  }
+
+  const numericDays = Number.parseInt(input?.days, 10);
+  const startDate = isValidDateOnly(input?.startDate) ? input.startDate : null;
+  const endDate = isValidDateOnly(input?.endDate) ? input.endDate : null;
+
+  if (startDate || endDate) {
+    const normalizedStart = startDate && endDate && startDate > endDate ? endDate : startDate;
+    const normalizedEnd = startDate && endDate && startDate > endDate ? startDate : endDate;
+
+    return {
+      mode: "dates",
+      days: null,
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+    };
+  }
+
+  if (Number.isInteger(numericDays) && numericDays >= 1 && numericDays <= 365) {
+    return {
+      mode: "days",
+      days: numericDays,
+      startDate: null,
+      endDate: null,
+    };
+  }
+
+  return {
+    mode: "days",
+    days: 30,
+    startDate: null,
+    endDate: null,
+  };
 }
 
 function formatCurrency(value) {
@@ -26,7 +79,22 @@ function buildSummaryCards(prefix, revenue, orders, tips) {
   ];
 }
 
-function buildRangeFilter(days, column = "created_at") {
+function buildRangeFilter(filters, column = "created_at") {
+  if (filters.mode === "dates") {
+    if (filters.startDate && filters.endDate) {
+      return `DATE(${column}) BETWEEN '${filters.startDate}' AND '${filters.endDate}'`;
+    }
+
+    if (filters.startDate) {
+      return `DATE(${column}) >= '${filters.startDate}'`;
+    }
+
+    if (filters.endDate) {
+      return `DATE(${column}) <= '${filters.endDate}'`;
+    }
+  }
+
+  const days = filters.days ?? 7;
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
@@ -56,7 +124,7 @@ function bandHour(hour) {
   return `${format(startHour)} - ${format(endHour)}`;
 }
 
-async function getSummaryForDays(days) {
+async function getSummaryForFilters(filters) {
   const [orderRows, tipRows] = await Promise.all([
     db.query(
       `SELECT
@@ -64,13 +132,13 @@ async function getSummaryForDays(days) {
          COUNT(*) AS orders
        FROM Orders o
        WHERE o.status <> 'Void'
-         AND ${buildRangeFilter(days, "o.created_at")}`
+         AND ${buildRangeFilter(filters, "o.created_at")}`
     ),
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS tips
        FROM Payment
        WHERE status = 'approved'
-         AND ${buildRangeFilter(days, "paid_at")}`
+         AND ${buildRangeFilter(filters, "paid_at")}`
     ),
   ]);
 
@@ -81,20 +149,20 @@ async function getSummaryForDays(days) {
   };
 }
 
-async function getRevenueTrend(days) {
+async function getRevenueTrend(filters) {
   return db.query(
     `SELECT
        DATE_FORMAT(created_at, '%b %e') AS date,
        ROUND(COALESCE(SUM(total), 0), 2) AS revenue
      FROM Orders
      WHERE status <> 'Void'
-       AND ${buildRangeFilter(days)}
+       AND ${buildRangeFilter(filters)}
      GROUP BY DATE(created_at), DATE_FORMAT(created_at, '%b %e')
      ORDER BY DATE(created_at) ASC`
   );
 }
 
-async function getTopSellingItems(limit = 5, days = 30) {
+async function getTopSellingItems(limit = 5, filters) {
   return db.query(
     `SELECT
        mi.name AS name,
@@ -104,7 +172,7 @@ async function getTopSellingItems(limit = 5, days = 30) {
      JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
      JOIN Orders o ON o.order_id = oi.order_id
      WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(days, "o.created_at")}
+       AND ${buildRangeFilter(filters, "o.created_at")}
      GROUP BY mi.menu_item_id, mi.name
      ORDER BY sold DESC, revenue DESC, mi.name ASC
      LIMIT ${Number(limit)}`
@@ -128,7 +196,7 @@ async function getLowInventoryItems(limit = 5) {
   );
 }
 
-async function getSalesByCategory(days) {
+async function getSalesByCategory(filters) {
   return db.query(
     `SELECT
        COALESCE(mi.category, 'Uncategorized') AS category,
@@ -137,13 +205,13 @@ async function getSalesByCategory(days) {
      JOIN Orders o ON o.order_id = oi.order_id
      JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
      WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(days, "o.created_at")}
+       AND ${buildRangeFilter(filters, "o.created_at")}
      GROUP BY COALESCE(mi.category, 'Uncategorized')
      ORDER BY revenue DESC, category ASC`
   );
 }
 
-async function getSalesByServer(days) {
+async function getSalesByServer(filters) {
   return db.query(
     `SELECT
        u.name AS name,
@@ -152,25 +220,25 @@ async function getSalesByServer(days) {
      FROM Orders o
      JOIN Users u ON u.user_id = o.created_by
      WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(days, "o.created_at")}
+       AND ${buildRangeFilter(filters, "o.created_at")}
      GROUP BY u.user_id, u.name
      ORDER BY revenue DESC, u.name ASC`
   );
 }
 
-async function getTipSummary(days) {
+async function getTipSummary(filters) {
   const [totalRows, dailyRows] = await Promise.all([
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS totalTips
        FROM Payment
        WHERE status = 'approved'
-         AND ${buildRangeFilter(days, "paid_at")}`
+         AND ${buildRangeFilter(filters, "paid_at")}`
     ),
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS dailyTips
        FROM Payment
        WHERE status = 'approved'
-         AND ${buildRangeFilter(days, "paid_at")}
+         AND ${buildRangeFilter(filters, "paid_at")}
        GROUP BY DATE(paid_at)`
     ),
   ]);
@@ -184,7 +252,7 @@ async function getTipSummary(days) {
   return { totalTips, averageTips };
 }
 
-async function getLaborRows(days) {
+async function getLaborRows(filters) {
   return db.query(
     `SELECT
        u.name,
@@ -194,7 +262,7 @@ async function getLaborRows(days) {
        es.clock_out AS clockOut
      FROM Employee_Shift es
      JOIN Users u ON u.user_id = es.user_id
-     WHERE ${buildRangeFilter(days, "es.scheduled_start")}
+     WHERE ${buildRangeFilter(filters, "es.scheduled_start")}
      ORDER BY u.name ASC, es.scheduled_start DESC`
   );
 }
@@ -218,7 +286,7 @@ async function getLatestClockRows() {
   );
 }
 
-async function getVoidRows(days) {
+async function getVoidRows(filters) {
   return db.query(
     `SELECT
        COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS orderLabel,
@@ -228,13 +296,13 @@ async function getVoidRows(days) {
      FROM Orders o
      LEFT JOIN Users u ON u.user_id = o.voided_by
      WHERE o.status = 'Void'
-       AND ${buildRangeFilter(days, "o.created_at")}
+       AND ${buildRangeFilter(filters, "o.created_at")}
      ORDER BY o.created_at DESC
      LIMIT 10`
   );
 }
 
-async function getDiscountRows(days) {
+async function getDiscountRows(filters) {
   return db.query(
     `SELECT
        discount_type AS type,
@@ -242,13 +310,13 @@ async function getDiscountRows(days) {
        ROUND(COALESCE(SUM(discount_amount), 0), 2) AS amount
      FROM Orders
      WHERE discount_amount > 0
-       AND ${buildRangeFilter(days)}
+       AND ${buildRangeFilter(filters)}
      GROUP BY discount_type
      ORDER BY amount DESC, type ASC`
   );
 }
 
-async function getRefundRows(days) {
+async function getRefundRows(filters) {
   return db.query(
     `SELECT
        CONCAT('Order #', p.order_id) AS orderLabel,
@@ -257,13 +325,13 @@ async function getRefundRows(days) {
        p.status AS status
      FROM Payment p
      WHERE p.status = 'refunded'
-       AND ${buildRangeFilter(days, "p.paid_at")}
+       AND ${buildRangeFilter(filters, "p.paid_at")}
      ORDER BY p.paid_at DESC
      LIMIT 10`
   );
 }
 
-async function getPaymentMethodRows(days) {
+async function getPaymentMethodRows(filters) {
   return db.query(
     `SELECT
        CONCAT(UPPER(LEFT(payment_type, 1)), LOWER(SUBSTRING(payment_type, 2))) AS method,
@@ -271,13 +339,13 @@ async function getPaymentMethodRows(days) {
        ROUND(COALESCE(SUM(amount), 0), 2) AS amount
      FROM Payment
      WHERE status = 'approved'
-       AND ${buildRangeFilter(days, "paid_at")}
+       AND ${buildRangeFilter(filters, "paid_at")}
      GROUP BY payment_type
      ORDER BY amount DESC`
   );
 }
 
-async function getCustomerSummary(days) {
+async function getCustomerSummary(filters) {
   const [customerRows, favoriteRows, partyRows, timeRows] = await Promise.all([
     db.query(
       `SELECT
@@ -291,7 +359,7 @@ async function getCustomerSummary(days) {
        JOIN Orders o ON o.order_id = oi.order_id
        JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
        WHERE o.status <> 'Void'
-         AND ${buildRangeFilter(days, "o.created_at")}
+         AND ${buildRangeFilter(filters, "o.created_at")}
        GROUP BY mi.menu_item_id, mi.name
        ORDER BY SUM(oi.quantity) DESC, mi.name ASC
        LIMIT 1`
@@ -300,13 +368,13 @@ async function getCustomerSummary(days) {
       `SELECT ROUND(COALESCE(AVG(guest_count), 0), 1) AS averagePartySize
        FROM Orders
        WHERE status <> 'Void'
-         AND ${buildRangeFilter(days)}`
+         AND ${buildRangeFilter(filters)}`
     ),
     db.query(
       `SELECT HOUR(created_at) AS orderHour, COUNT(*) AS orderCount
        FROM Orders
        WHERE status <> 'Void'
-         AND ${buildRangeFilter(days)}
+         AND ${buildRangeFilter(filters)}
        GROUP BY HOUR(created_at)
        ORDER BY orderCount DESC, orderHour ASC
        LIMIT 1`
@@ -323,25 +391,23 @@ async function getCustomerSummary(days) {
 }
 
 async function getReportsDashboard(range) {
-  const days = getRangeDays(range);
-  const [today, weekly, monthly, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
+  const filters = normalizeReportFilters(range);
+  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
     await Promise.all([
-      getSummaryForDays(1),
-      getSummaryForDays(7),
-      getSummaryForDays(30),
-      getRevenueTrend(days),
-      getTopSellingItems(5, days),
+      getSummaryForFilters(filters),
+      getRevenueTrend(filters),
+      getTopSellingItems(5, filters),
       getLowInventoryItems(5),
-      getSalesByCategory(days),
-      getSalesByServer(days),
-      getTipSummary(days),
-      getLaborRows(days),
+      getSalesByCategory(filters),
+      getSalesByServer(filters),
+      getTipSummary(filters),
+      getLaborRows(filters),
       getLatestClockRows(),
-      getVoidRows(days),
-      getDiscountRows(days),
-      getRefundRows(days),
-      getPaymentMethodRows(days),
-      getCustomerSummary(days),
+      getVoidRows(filters),
+      getDiscountRows(filters),
+      getRefundRows(filters),
+      getPaymentMethodRows(filters),
+      getCustomerSummary(filters),
     ]);
 
   const laborByEmployee = new Map();
@@ -388,9 +454,12 @@ async function getReportsDashboard(range) {
   }));
 
   return {
-    todaySummary: buildSummaryCards("Today ", today.revenue, today.orders, today.tips),
-    weeklySummary: buildSummaryCards("Weekly ", weekly.revenue, weekly.orders, weekly.tips),
-    monthlySummary: buildSummaryCards("Monthly ", monthly.revenue, monthly.orders, monthly.tips),
+    customSummary: buildSummaryCards(
+      filters.mode === "dates" ? "Selected Range " : `${filters.days} Day `,
+      summary.revenue,
+      summary.orders,
+      summary.tips
+    ),
     revenueTrend: revenueTrend.map((row) => ({ date: row.date, revenue: Number(row.revenue || 0) })),
     topItems: topItems.map((row) => ({ name: row.name, sold: Number(row.sold || 0), revenue: Number(row.revenue || 0) })),
     lowInventory: lowInventory.map((row) => ({
@@ -474,9 +543,7 @@ async function getReportsOverview(range) {
   const dashboard = await getReportsDashboard(range);
 
   return {
-    todaySummary: dashboard.todaySummary,
-    weeklySummary: dashboard.weeklySummary,
-    monthlySummary: dashboard.monthlySummary,
+    customSummary: dashboard.customSummary,
     revenueTrend: dashboard.revenueTrend,
     topItems: dashboard.topItems,
     lowInventory: dashboard.lowInventory,

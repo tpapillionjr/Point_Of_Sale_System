@@ -1,18 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { placeCustomerOrder } from "../../lib/api";
+import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const TAX_RATE = 0.0825;
 
 export default function CustomerOrderPage() {
   const router = useRouter();
-  const [cart] = useState(() => {
-    if (typeof window === "undefined") return [];
+  const { customer } = useCustomerSession();
+  const [cart, setCart] = useState([]);
+
+  useEffect(() => {
     const stored = localStorage.getItem("customerCart");
+<<<<<<< HEAD
     return stored ? JSON.parse(stored) : [];
   });
+=======
+    if (stored) startTransition(() => setCart(JSON.parse(stored)));
+  }, []);
+  const [paymentPreference, setPaymentPreference] = useState("in_store");
+>>>>>>> 5f35e57b95df0fca3c2583821d2da049a890e269
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
 
@@ -24,6 +33,16 @@ export default function CustomerOrderPage() {
     note: "",
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (!customer) return;
+    startTransition(() => setForm((prev) => ({
+      ...prev,
+      firstName: customer.firstName ?? prev.firstName,
+      lastName: customer.lastName ?? prev.lastName,
+      email: customer.email ?? prev.email,
+    })));
+  }, [customer]);
 
   if (cart.length === 0) {
     return (
@@ -68,6 +87,7 @@ export default function CustomerOrderPage() {
         cart,
       });
       localStorage.removeItem("customerCart");
+      localStorage.setItem("lastOrderId", orderId);
       router.push(`/customer/order-tracking?orderId=${orderId}`);
     } catch (err) {
       setOrderError(err.message || "Something went wrong. Please try again.");

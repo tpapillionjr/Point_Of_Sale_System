@@ -1,7 +1,10 @@
-export default function ReportSection({ title, children }) {
+export default function ReportSection({ title, action, children }) {
   return (
     <div className="rounded-2xl bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold text-gray-900">{title}</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        {action && <div>{action}</div>}
+      </div>
       {children}
     </div>
   );

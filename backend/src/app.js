@@ -16,6 +16,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "POS backend is running.",
+    health: "/health",
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });

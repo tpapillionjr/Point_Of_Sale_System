@@ -34,6 +34,22 @@ function ErrorState({ message }) {
   return <p className="text-sm text-red-600">{message}</p>;
 }
 
+function matchesSearch(value, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  return String(value ?? "").toLowerCase().includes(searchTerm.toLowerCase());
+}
+
+function filterBySearch(rows, searchTerm, fields) {
+  if (!searchTerm) {
+    return rows;
+  }
+
+  return rows.filter((row) => fields.some((field) => matchesSearch(row[field], searchTerm)));
+}
+
 function LoadingCards() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -107,38 +123,13 @@ function RenderCardList({ cards, isLoading, error, emptyMessage }) {
   );
 }
 
-export function ReportsOverviewSection({ selectedRange }) {
+export function ReportsOverviewSection({ selectedRange, searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
+  const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
 
   return (
     <>
-      <ReportSection title="Today Summary">
-        <RenderCardList
-          cards={data?.todaySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No today summary is available yet."
-        />
-      </ReportSection>
-
-      <ReportSection title="Weekly Summary">
-        <RenderCardList
-          cards={data?.weeklySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No weekly summary is available yet."
-        />
-      </ReportSection>
-
-      <ReportSection title="Monthly Summary">
-        <RenderCardList
-          cards={data?.monthlySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No monthly summary is available yet."
-        />
-      </ReportSection>
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ReportSection title="Revenue Trend">
           {error ? (
@@ -153,8 +144,8 @@ export function ReportsOverviewSection({ selectedRange }) {
         <ReportSection title="Top Selling Items">
           {error ? (
             <ErrorState message={error} />
-          ) : data?.topItems?.length ? (
-            <TopItemsChart items={data.topItems} />
+          ) : filteredTopItems.length ? (
+            <TopItemsChart items={filteredTopItems} />
           ) : (
             <EmptyState message={isLoading ? "Loading top items..." : "No item sales data available."} />
           )}
@@ -165,8 +156,8 @@ export function ReportsOverviewSection({ selectedRange }) {
         <ReportSection title="Top Selling Items Table">
           {error ? (
             <ErrorState message={error} />
-          ) : data?.topItems?.length ? (
-            <TopItemsTable items={data.topItems} />
+          ) : filteredTopItems.length ? (
+            <TopItemsTable items={filteredTopItems} />
           ) : (
             <EmptyState message={isLoading ? "Loading top items..." : "No top-selling items are available."} />
           )}
@@ -175,8 +166,8 @@ export function ReportsOverviewSection({ selectedRange }) {
         <ReportSection title="Low Inventory">
           {error ? (
             <ErrorState message={error} />
-          ) : data?.lowInventory?.length ? (
-            <LowInventoryTable items={data.lowInventory} />
+          ) : filteredLowInventory.length ? (
+            <LowInventoryTable items={filteredLowInventory} />
           ) : (
             <EmptyState message={isLoading ? "Loading inventory..." : "No low inventory alerts are active."} />
           )}
@@ -186,23 +177,12 @@ export function ReportsOverviewSection({ selectedRange }) {
   );
 }
 
-export function SalesOverviewSection({ selectedRange }) {
+export function SalesOverviewSection({ selectedRange, searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
     <>
-      <ReportSection title="Sales Reports">
-        <RenderCardList
-          cards={[
-            ...(data?.todaySummary ?? []),
-            ...(data?.weeklySummary ?? []),
-          ].slice(0, 4)}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No sales summary is available."
-        />
-      </ReportSection>
-
       <ReportSection title="Revenue Trend">
         {error ? (
           <ErrorState message={error} />
@@ -210,6 +190,16 @@ export function SalesOverviewSection({ selectedRange }) {
           <RevenueChart data={data.revenueTrend} />
         ) : (
           <EmptyState message={isLoading ? "Loading revenue trend..." : "No revenue trend is available."} />
+        )}
+      </ReportSection>
+
+      <ReportSection title="Top Selling Items">
+        {error ? (
+          <ErrorState message={error} />
+        ) : filteredTopItems.length ? (
+          <TopItemsTable items={filteredTopItems} />
+        ) : (
+          <EmptyState message={isLoading ? "Loading top items..." : "No item sales data available."} />
         )}
       </ReportSection>
     </>
@@ -297,16 +287,17 @@ export function SalesMonthlySection() {
   );
 }
 
-export function SalesItemsSection({ selectedRange = "30days" }) {
+export function SalesItemsSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
     <>
       <ReportSection title="Sales by Item Chart">
         {error ? (
           <ErrorState message={error} />
-        ) : data?.topItems?.length ? (
-          <TopItemsChart items={data.topItems} />
+        ) : filteredTopItems.length ? (
+          <TopItemsChart items={filteredTopItems} />
         ) : (
           <EmptyState message={isLoading ? "Loading item sales..." : "No item sales data available."} />
         )}
@@ -314,8 +305,8 @@ export function SalesItemsSection({ selectedRange = "30days" }) {
       <ReportSection title="Sales by Item Table">
         {error ? (
           <ErrorState message={error} />
-        ) : data?.topItems?.length ? (
-          <TopItemsTable items={data.topItems} />
+        ) : filteredTopItems.length ? (
+          <TopItemsTable items={filteredTopItems} />
         ) : (
           <EmptyState message={isLoading ? "Loading item sales..." : "No item sales data available."} />
         )}
@@ -324,16 +315,17 @@ export function SalesItemsSection({ selectedRange = "30days" }) {
   );
 }
 
-export function SalesCategoriesSection({ selectedRange = "30days" }) {
+export function SalesCategoriesSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredCategories = filterBySearch(data?.salesCategories ?? [], searchTerm, ["category"]);
 
   return (
     <ReportSection title="Sales by Category">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.salesCategories?.length ? (
+      ) : filteredCategories.length ? (
         <div className="space-y-3 text-gray-700">
-          {data.salesCategories.map((item) => (
+          {filteredCategories.map((item) => (
             <p key={item.category}>
               {item.category}: ${item.revenue.toFixed(2)}
             </p>
@@ -346,16 +338,17 @@ export function SalesCategoriesSection({ selectedRange = "30days" }) {
   );
 }
 
-export function SalesServersSection({ selectedRange = "30days" }) {
+export function SalesServersSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredServers = filterBySearch(data?.salesServers ?? [], searchTerm, ["name"]);
 
   return (
     <ReportSection title="Sales by Server">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.salesServers?.length ? (
+      ) : filteredServers.length ? (
         <div className="space-y-3 text-gray-700">
-          {data.salesServers.map((item) => (
+          {filteredServers.map((item) => (
             <p key={item.name}>
               {item.name}: ${item.revenue.toFixed(2)} ({item.orders} orders)
             </p>
@@ -376,28 +369,38 @@ export function SalesTipsSection({ selectedRange }) {
       {error ? (
         <ErrorState message={error} />
       ) : isLoading ? (
-        <LoadingCards />
+        <EmptyState message="Loading tip data..." />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ReportCard title="Total Tips" value={`$${(data?.tipSummary?.totalTips ?? 0).toFixed(2)}`} />
-          <ReportCard title="Average Daily Tips" value={`$${(data?.tipSummary?.averageTips ?? 0).toFixed(2)}`} />
-        </div>
+        <SimpleTable
+          headers={["Metric", "Value"]}
+          rows={[
+            { label: "Total Tips", value: `$${(data?.tipSummary?.totalTips ?? 0).toFixed(2)}` },
+            { label: "Average Daily Tips", value: `$${(data?.tipSummary?.averageTips ?? 0).toFixed(2)}` },
+          ]}
+          renderRow={(item) => (
+            <tr key={item.label} className="border-b last:border-b-0">
+              <td className="py-3 pr-4 font-medium text-gray-800">{item.label}</td>
+              <td className="py-3 pr-4">{item.value}</td>
+            </tr>
+          )}
+        />
       )}
     </ReportSection>
   );
 }
 
-export function LaborOverviewSection({ selectedRange = "7days" }) {
+export function LaborOverviewSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredLabor = filterBySearch(data?.laborOverview ?? [], searchTerm, ["name", "performance"]);
 
   return (
     <ReportSection title="Labor Reports">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.laborOverview?.length ? (
+      ) : filteredLabor.length ? (
         <SimpleTable
           headers={["Employee", "Scheduled Hours", "Actual Hours", "Clock-Ins", "Performance"]}
-          rows={data.laborOverview}
+          rows={filteredLabor}
           renderRow={(employee) => (
             <tr key={employee.name} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
@@ -415,21 +418,22 @@ export function LaborOverviewSection({ selectedRange = "7days" }) {
   );
 }
 
-export function LaborPerformanceSection({ selectedRange = "7days" }) {
-  return <LaborOverviewSection selectedRange={selectedRange} />;
+export function LaborPerformanceSection({ selectedRange = "7days", searchTerm = "" }) {
+  return <LaborOverviewSection selectedRange={selectedRange} searchTerm={searchTerm} />;
 }
 
-export function LaborClockSection({ selectedRange = "7days" }) {
+export function LaborClockSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredClock = filterBySearch(data?.laborClock ?? [], searchTerm, ["name", "status"]);
 
   return (
     <ReportSection title="Clock In / Out">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.laborClock?.length ? (
+      ) : filteredClock.length ? (
         <SimpleTable
           headers={["Employee", "Last Clock In", "Last Clock Out", "Status"]}
-          rows={data.laborClock}
+          rows={filteredClock}
           renderRow={(employee) => (
             <tr key={employee.name} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
@@ -446,16 +450,17 @@ export function LaborClockSection({ selectedRange = "7days" }) {
   );
 }
 
-export function LaborHoursSection({ selectedRange = "7days" }) {
+export function LaborHoursSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredLabor = filterBySearch(data?.laborOverview ?? [], searchTerm, ["name", "performance"]);
 
   return (
     <ReportSection title="Scheduled vs Actual Hours">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.laborOverview?.length ? (
+      ) : filteredLabor.length ? (
         <div className="space-y-4">
-          {data.laborOverview.map((employee) => (
+          {filteredLabor.map((employee) => (
             <div key={employee.name} className="rounded-xl border border-gray-200 bg-white p-4">
               <p className="font-semibold text-gray-900">{employee.name}</p>
               <p className="text-gray-600">Scheduled: {employee.scheduled} hrs</p>
@@ -471,16 +476,18 @@ export function LaborHoursSection({ selectedRange = "7days" }) {
   );
 }
 
-export function InventoryOverviewSection({ selectedRange = "30days" }) {
+export function InventoryOverviewSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
     <>
       <ReportSection title="Inventory & Menu Reports">
         {error ? (
           <ErrorState message={error} />
-        ) : data?.lowInventory?.length ? (
-          <LowInventoryTable items={data.lowInventory} />
+        ) : filteredLowInventory.length ? (
+          <LowInventoryTable items={filteredLowInventory} />
         ) : (
           <EmptyState message={isLoading ? "Loading inventory..." : "No stock alerts are active."} />
         )}
@@ -488,8 +495,8 @@ export function InventoryOverviewSection({ selectedRange = "30days" }) {
       <ReportSection title="Top Selling Items">
         {error ? (
           <ErrorState message={error} />
-        ) : data?.topItems?.length ? (
-          <TopItemsTable items={data.topItems} />
+        ) : filteredTopItems.length ? (
+          <TopItemsTable items={filteredTopItems} />
         ) : (
           <EmptyState message={isLoading ? "Loading item demand..." : "No item demand data available."} />
         )}
@@ -498,15 +505,16 @@ export function InventoryOverviewSection({ selectedRange = "30days" }) {
   );
 }
 
-export function InventoryStockSection({ selectedRange = "30days" }) {
+export function InventoryStockSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
 
   return (
     <ReportSection title="Stock Levels">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.lowInventory?.length ? (
-        <LowInventoryTable items={data.lowInventory} />
+      ) : filteredLowInventory.length ? (
+        <LowInventoryTable items={filteredLowInventory} />
       ) : (
         <EmptyState message={isLoading ? "Loading stock levels..." : "No stock alerts are active."} />
       )}
@@ -514,16 +522,17 @@ export function InventoryStockSection({ selectedRange = "30days" }) {
   );
 }
 
-export function InventoryUsageSection({ selectedRange = "30days" }) {
+export function InventoryUsageSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredUsage = filterBySearch(data?.inventoryUsage ?? [], searchTerm, ["itemName"]);
 
   return (
     <ReportSection title="Ingredient Usage">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.inventoryUsage?.length ? (
+      ) : filteredUsage.length ? (
         <div className="space-y-3 text-gray-700">
-          {data.inventoryUsage.map((item) => (
+          {filteredUsage.map((item) => (
             <p key={item.itemName}>
               {item.itemName} used: {item.amountUsed}
             </p>
@@ -536,15 +545,16 @@ export function InventoryUsageSection({ selectedRange = "30days" }) {
   );
 }
 
-export function InventoryTopItemsSection({ selectedRange = "30days" }) {
+export function InventoryTopItemsSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
     <ReportSection title="Top Selling Items">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.topItems?.length ? (
-        <TopItemsTable items={data.topItems} />
+      ) : filteredTopItems.length ? (
+        <TopItemsTable items={filteredTopItems} />
       ) : (
         <EmptyState message={isLoading ? "Loading top items..." : "No top items data available."} />
       )}
@@ -587,17 +597,18 @@ export function OperationsOverviewSection({ selectedRange = "7days" }) {
   );
 }
 
-export function OperationsVoidsSection({ selectedRange = "7days" }) {
+export function OperationsVoidsSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredVoids = filterBySearch(data?.voids ?? [], searchTerm, ["order", "reason", "employee"]);
 
   return (
     <ReportSection title="Voids">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.voids?.length ? (
+      ) : filteredVoids.length ? (
         <SimpleTable
           headers={["Order", "Reason", "Employee", "Amount"]}
-          rows={data.voids}
+          rows={filteredVoids}
           renderRow={(item) => (
             <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
@@ -614,17 +625,18 @@ export function OperationsVoidsSection({ selectedRange = "7days" }) {
   );
 }
 
-export function OperationsDiscountsSection({ selectedRange = "7days" }) {
+export function OperationsDiscountsSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredDiscounts = filterBySearch(data?.discounts ?? [], searchTerm, ["type"]);
 
   return (
     <ReportSection title="Discounts">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.discounts?.length ? (
+      ) : filteredDiscounts.length ? (
         <SimpleTable
           headers={["Type", "Count", "Amount"]}
-          rows={data.discounts}
+          rows={filteredDiscounts}
           renderRow={(item) => (
             <tr key={item.type} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{item.type}</td>
@@ -640,17 +652,18 @@ export function OperationsDiscountsSection({ selectedRange = "7days" }) {
   );
 }
 
-export function OperationsRefundsSection({ selectedRange = "7days" }) {
+export function OperationsRefundsSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredRefunds = filterBySearch(data?.refunds ?? [], searchTerm, ["order", "reason", "status"]);
 
   return (
     <ReportSection title="Refunds">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.refunds?.length ? (
+      ) : filteredRefunds.length ? (
         <SimpleTable
           headers={["Order", "Reason", "Amount", "Status"]}
-          rows={data.refunds}
+          rows={filteredRefunds}
           renderRow={(item) => (
             <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
@@ -667,16 +680,17 @@ export function OperationsRefundsSection({ selectedRange = "7days" }) {
   );
 }
 
-export function OperationsPaymentsSection({ selectedRange = "7days" }) {
+export function OperationsPaymentsSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredPayments = filterBySearch(data?.paymentMethods ?? [], searchTerm, ["method"]);
 
   return (
     <ReportSection title="Payment Methods">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.paymentMethods?.length ? (
+      ) : filteredPayments.length ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {data.paymentMethods.map((item) => (
+          {filteredPayments.map((item) => (
             <div key={item.method} className="rounded-xl border border-gray-200 bg-white p-4">
               <p className="font-semibold text-gray-900">{item.method}</p>
               <p className="text-gray-600">Transactions: {item.count}</p>
@@ -736,17 +750,18 @@ export function CustomerLoyaltySection({ selectedRange = "30days" }) {
   );
 }
 
-export function CustomerRepeatSection({ selectedRange = "30days" }) {
+export function CustomerRepeatSection({ selectedRange = "30days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
+  const filteredCustomers = filterBySearch(data?.repeatCustomers ?? [], searchTerm, ["name", "favorite"]);
 
   return (
     <ReportSection title="Repeat Customers">
       {error ? (
         <ErrorState message={error} />
-      ) : data?.repeatCustomers?.length ? (
+      ) : filteredCustomers.length ? (
         <SimpleTable
           headers={["Customer", "Visits", "Favorite Item"]}
-          rows={data.repeatCustomers}
+          rows={filteredCustomers}
           renderRow={(customer) => (
             <tr key={customer.name} className="border-b last:border-b-0">
               <td className="py-3 pr-4 font-medium text-gray-800">{customer.name}</td>

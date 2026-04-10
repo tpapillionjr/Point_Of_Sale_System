@@ -33,3 +33,24 @@ export function requireKitchenOrManager(req, res, next) {
 
   next();
 }
+
+export function requireCustomerAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Customer login required." });
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded.customerId) {
+      return res.status(401).json({ error: "Invalid customer token." });
+    }
+    req.customer = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired customer token." });
+  }
+}
