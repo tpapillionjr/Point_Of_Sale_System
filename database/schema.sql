@@ -250,7 +250,7 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
 
 DELIMITER $$
 
--- Automatically lock a user account when their failed PIN attempt count reaches the maximum.
+-- Automatically lock a user account when their login count reaches 5.
 CREATE TRIGGER trg_lock_user_on_failed_attempts
 BEFORE UPDATE ON Users
 FOR EACH ROW

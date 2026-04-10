@@ -132,10 +132,11 @@ async function getClockSession(pin) {
     const shift = await findCurrentShift(connection, user.user_id);
     const session = toSessionPayload(user, shift);
 
-    // Increment the login counter after the session is built so the user completes
-    // this login. The database trigger (trg_lock_user_on_failed_attempts) automatically
-    // sets is_pos_locked = TRUE once failed_pin_attempts reaches 5, blocking the next
-    // login attempt.
+    // Track each successful login using the existing failed_pin_attempts counter.
+    // The database trigger (trg_lock_user_on_failed_attempts) automatically sets
+    // is_pos_locked = TRUE once the counter reaches 5, blocking any further logins.
+    // The counter is incremented after the session payload is built so this login
+    // completes successfully; the lock takes effect on the next attempt.
     await connection.execute(
       `UPDATE Users
        SET failed_pin_attempts = LEAST(failed_pin_attempts + 1, 5)
