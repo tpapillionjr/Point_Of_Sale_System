@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import FilterBar from "../reports/FilterBar";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
 import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
@@ -30,6 +29,46 @@ function ErrorState({ message }) {
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
+}
+
+function BackOfficeFilterBar({ selectedRange, onChange }) {
+  const options = [
+    { id: "today", label: "Today" },
+    { id: "7days", label: "Last 7 Days" },
+    { id: "30days", label: "Last 30 Days" },
+  ];
+
+  return (
+    <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">Back Office Filters</p>
+          <p className="mt-2 text-sm text-gray-600">Choose the reporting window for this management view.</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {options.map((option) => {
+            const isActive = selectedRange === option.id;
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onChange(option.id)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SummaryCards({ cards, isLoading, error, columns = "xl:grid-cols-4" }) {
@@ -184,7 +223,7 @@ export function InventorySection() {
 
   return (
     <>
-      <FilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
       <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
 
       <ReportSection title="Inventory Snapshot">
@@ -391,7 +430,7 @@ export function PurchasingSection() {
 
   return (
     <>
-      <FilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
 
       <ReportSection title="Purchasing Summary">
         <SummaryCards cards={purchasing?.summaryCards} isLoading={isLoading} error={error} />
@@ -429,7 +468,7 @@ export function LaborSection() {
 
   return (
     <>
-      <FilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
 
       <ReportSection title="Labor Snapshot">
         <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} />
@@ -742,7 +781,7 @@ export function OrderHistorySection() {
 
   return (
     <>
-      <FilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
+      <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
 
       <ReportSection title="Order Review Snapshot">
         <SummaryCards cards={orders?.summaryCards} isLoading={isLoading} error={error} />
