@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://point-of-sale-system-group4.vercel.app/";
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:4000"
+).replace(/\/$/, "");
 
 async function request(path, options = {}) {
   let token = null;
@@ -7,14 +10,20 @@ async function request(path, options = {}) {
     token = window.localStorage.getItem("authToken");
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...options,
-  });
+  let res;
+
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...options,
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
 
   if (!res.ok) {
     let errorMessage = "Request failed";
@@ -119,13 +128,49 @@ export async function getReportSummary() {
 }
 
 export async function getReportsOverview(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/overview${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/overview${query ? `?${query}` : ""}`);
 }
 
 export async function getReportsDashboard(range) {
-  const query = range ? `?range=${encodeURIComponent(range)}` : "";
-  return request(`/api/reports/dashboard${query}`);
+  const params = new URLSearchParams();
+
+  if (typeof range === "string" && range) {
+    params.set("range", range);
+  } else if (range && typeof range === "object") {
+    if (range.days) {
+      params.set("days", String(range.days));
+    }
+
+    if (range.startDate) {
+      params.set("startDate", range.startDate);
+    }
+
+    if (range.endDate) {
+      params.set("endDate", range.endDate);
+    }
+  }
+
+  const query = params.toString();
+  return request(`/api/reports/dashboard${query ? `?${query}` : ""}`);
 }
 
 export async function authenticateShift(pin) {
