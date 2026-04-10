@@ -1,31 +1,40 @@
 import db from "../db/index.js";
 
-const RANGE_DAYS = {
-  today: 1,
-  "7days": 7,
-  "30days": 30,
-};
-
-function normalizeRange(range) {
-  return RANGE_DAYS[range] ? range : "7days";
-}
-
 function isValidDateOnly(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value || "");
 }
 
 function normalizeReportFilters(input) {
   if (typeof input === "string") {
+    const numericDays = Number.parseInt(input, 10);
+
+    if (Number.isInteger(numericDays) && numericDays >= 1 && numericDays <= 365) {
+      return {
+        mode: "days",
+        days: numericDays,
+        startDate: null,
+        endDate: null,
+      };
+    }
+
+    if (isValidDateOnly(input)) {
+      return {
+        mode: "dates",
+        days: null,
+        startDate: input,
+        endDate: input,
+      };
+    }
+
     return {
       mode: "days",
-      days: RANGE_DAYS[normalizeRange(input)],
+      days: 30,
       startDate: null,
       endDate: null,
     };
   }
 
   const numericDays = Number.parseInt(input?.days, 10);
-  const presetDays = input?.range ? RANGE_DAYS[normalizeRange(input.range)] : null;
   const startDate = isValidDateOnly(input?.startDate) ? input.startDate : null;
   const endDate = isValidDateOnly(input?.endDate) ? input.endDate : null;
 
@@ -52,7 +61,7 @@ function normalizeReportFilters(input) {
 
   return {
     mode: "days",
-    days: presetDays ?? 7,
+    days: 30,
     startDate: null,
     endDate: null,
   };
@@ -115,8 +124,7 @@ function bandHour(hour) {
   return `${format(startHour)} - ${format(endHour)}`;
 }
 
-async function getSummaryForDays(days) {
-  const filters = { mode: "days", days };
+async function getSummaryForFilters(filters) {
   const [orderRows, tipRows] = await Promise.all([
     db.query(
       `SELECT
@@ -384,11 +392,9 @@ async function getCustomerSummary(filters) {
 
 async function getReportsDashboard(range) {
   const filters = normalizeReportFilters(range);
-  const [today, weekly, monthly, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
+  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
     await Promise.all([
-      getSummaryForDays(1),
-      getSummaryForDays(7),
-      getSummaryForDays(30),
+      getSummaryForFilters(filters),
       getRevenueTrend(filters),
       getTopSellingItems(5, filters),
       getLowInventoryItems(5),
@@ -448,9 +454,12 @@ async function getReportsDashboard(range) {
   }));
 
   return {
-    todaySummary: buildSummaryCards("Today ", today.revenue, today.orders, today.tips),
-    weeklySummary: buildSummaryCards("Weekly ", weekly.revenue, weekly.orders, weekly.tips),
-    monthlySummary: buildSummaryCards("Monthly ", monthly.revenue, monthly.orders, monthly.tips),
+    customSummary: buildSummaryCards(
+      filters.mode === "dates" ? "Selected Range " : `${filters.days} Day `,
+      summary.revenue,
+      summary.orders,
+      summary.tips
+    ),
     revenueTrend: revenueTrend.map((row) => ({ date: row.date, revenue: Number(row.revenue || 0) })),
     topItems: topItems.map((row) => ({ name: row.name, sold: Number(row.sold || 0), revenue: Number(row.revenue || 0) })),
     lowInventory: lowInventory.map((row) => ({
@@ -534,9 +543,7 @@ async function getReportsOverview(range) {
   const dashboard = await getReportsDashboard(range);
 
   return {
-    todaySummary: dashboard.todaySummary,
-    weeklySummary: dashboard.weeklySummary,
-    monthlySummary: dashboard.monthlySummary,
+    customSummary: dashboard.customSummary,
     revenueTrend: dashboard.revenueTrend,
     topItems: dashboard.topItems,
     lowInventory: dashboard.lowInventory,
