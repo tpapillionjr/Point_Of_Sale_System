@@ -111,28 +111,36 @@ async function deactivateUser(userId, requestingUserId) {
   });
 }
 
-async function verifyManager(pin) {
-  if (!pin || !/^\d{4}$/.test(pin)) {
-    throw createValidationError("PIN must be exactly 4 digits.");
+async function verifyManager(email, password) {
+  if (!email || !password) {
+    throw createValidationError("Email and password are required.");
   }
 
   const rows = await db.query(
-    `SELECT user_id, name, role
+    `SELECT user_id, name, role, password_hash
      FROM Users
-     WHERE pin_code = ? AND is_active = true
+     WHERE email = ? AND is_active = true
      LIMIT 1`,
-    [pin]
+    [email.trim().toLowerCase()]
   );
 
   if (rows.length === 0) {
-    throw createValidationError("Incorrect PIN.");
+    throw createValidationError("Incorrect email or password.");
   }
 
-  if (rows[0].role !== "manager") {
-    throw createValidationError("That PIN does not belong to a manager.");
+  const user = rows[0];
+
+  // Verify password matches
+  const passwordValid = password === user.password_hash;
+  if (!passwordValid) {
+    throw createValidationError("Incorrect email or password.");
   }
 
-  return { approved: true, name: rows[0].name };
+  if (user.role !== "manager") {
+    throw createValidationError("That account does not belong to a manager.");
+  }
+
+  return { approved: true, name: user.name };
 }
 
 export { getUsers, createUser, deactivateUser, verifyManager };

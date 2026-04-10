@@ -248,6 +248,46 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
         ON DELETE RESTRICT
 );
 
+CREATE TABLE Login_Audit (
+    login_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    attempt_type ENUM('success', 'failed') NOT NULL,
+    attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(45) NULL,
+    
+    CONSTRAINT fk_login_audit_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+DELIMITER $$
+
+CREATE TRIGGER trg_increment_failed_login
+BEFORE INSERT ON Login_Audit
+FOR EACH ROW
+BEGIN
+    -- If this is a failed attempt, increment the counter
+    IF NEW.attempt_type = 'failed' THEN
+        UPDATE Users 
+        SET failed_pin_attempts = failed_pin_attempts + 1
+        WHERE user_id = NEW.user_id;
+    END IF;
+END$$
+
+CREATE TRIGGER trg_lock_user_after_5_failures
+AFTER UPDATE ON Users
+FOR EACH ROW
+BEGIN
+    -- Lock user if they reach 5 failed attempts
+    IF NEW.failed_pin_attempts >= 5 AND OLD.failed_pin_attempts < 5 THEN
+        UPDATE Users
+        SET is_pos_locked = TRUE
+        WHERE user_id = NEW.user_id;
+    END IF;
+END$$
+
+DELIMITER ;
+
 CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     shift_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -274,4 +314,84 @@ CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
     CONSTRAINT fk_shift_scheduled_by
         FOREIGN KEY (scheduled_by) REFERENCES Users(user_id)
         ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- Security and brute force detection tables
+CREATE TABLE IP_Address_Tracking (
+    tracking_id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    user_id INT NULL,
+    attempt_count INT NOT NULL DEFAULT 1,
+    last_attempt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+    blocked_until DATETIME NULL,
+    CONSTRAINT chk_attempt_count_nonneg CHECK (attempt_count >= 0),
+    CONSTRAINT chk_ip_tracking_time CHECK (blocked_until IS NULL OR blocked_until >= last_attempt),
+    CONSTRAINT fk_ip_tracking_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_ip_address (ip_address),
+    INDEX idx_user_id (user_id),
+    INDEX idx_last_attempt (last_attempt)
+);
+
+CREATE TABLE Brute_Force_Alert (
+    alert_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    alert_type ENUM('multiple_ips_single_user', 'multiple_failures_single_ip', 'rapid_failures') NOT NULL,
+    attempt_count INT NOT NULL,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_alert_resolved_time CHECK (resolved_at IS NULL OR resolved_at >= created_at),
+    CONSTRAINT fk_brute_force_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_user_alert (user_id, is_resolved),
+    INDEX idx_created_at (created_at)
+);
+
+CREATE TABLE Manager_Alert (
+    alert_id INT AUTO_INCREMENT PRIMARY KEY,
+    manager_id INT NOT NULL,
+    alert_type ENUM('user_locked', 'brute_force', 'ip_blocked', 'suspicious_activity') NOT NULL,
+    related_user_id INT NULL,
+    ip_address VARCHAR(45) NULL,
+    message VARCHAR(255) NOT NULL,
+    is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+    acknowledged_at DATETIME NULL,
+    acknowledged_by INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_alert_acknowledged_time CHECK (acknowledged_at IS NULL OR acknowledged_at >= created_at),
+    CONSTRAINT fk_manager_alert_manager
+        FOREIGN KEY (manager_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_manager_alert_related_user
+        FOREIGN KEY (related_user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_manager_alert_acknowledged_by
+        FOREIGN KEY (acknowledged_by) REFERENCES Users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_manager_id (manager_id),
+    INDEX idx_is_acknowledged (is_acknowledged)
+);
+
+CREATE TABLE CAPTCHA_Validation (
+    validation_id INT AUTO_INCREMENT PRIMARY KEY,
+    session_token VARCHAR(255) NOT NULL UNIQUE,
+    user_id INT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    is_validated BOOLEAN NOT NULL DEFAULT FALSE,
+    validated_at DATETIME NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_captcha_validated_time CHECK (validated_at IS NULL OR validated_at >= created_at),
+    CONSTRAINT chk_captcha_expiry_time CHECK (expires_at > created_at),
+    CONSTRAINT fk_captcha_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_session_token (session_token),
+    INDEX idx_user_id (user_id),
+    INDEX idx_expires_at (expires_at)
 );
