@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import FilterBar from "../reports/FilterBar";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
-import { cancelOrder, fetchBackOfficeData } from "../../lib/api";
+import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
@@ -461,9 +461,96 @@ export function LaborSection() {
   );
 }
 
+const EMPTY_FORM = { name: "", category: "", basePrice: "" };
+
 export function MenuManagementSection() {
   const { data, isLoading, error } = useBackOfficeData("30days");
   const menu = data?.menu;
+
+  const [items, setItems] = useState(null);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState(null);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [actionMessage, setActionMessage] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      setItemsLoading(true);
+      try {
+        const rows = await fetchItems();
+        setItems(rows);
+        setItemsError(null);
+      } catch (err) {
+        setItemsError(err.message);
+      } finally {
+        setItemsLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  function openAdd() {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function openEdit(item) {
+    setEditTarget(item);
+    setForm({ name: item.name, category: item.category === "Uncategorized" ? "" : item.category, basePrice: String(item.basePrice) });
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setFormError(null);
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) { setFormError("Name is required."); return; }
+    const price = Number(form.basePrice);
+    if (isNaN(price) || price < 0) { setFormError("Base price must be a valid non-negative number."); return; }
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      const payload = { name: form.name.trim(), category: form.category.trim() || "Uncategorized", basePrice: price };
+      if (editTarget) {
+        const updated = await updateMenuItem(editTarget.menuItemId, payload);
+        setItems((prev) => prev.map((it) => it.menuItemId === editTarget.menuItemId ? { ...it, ...updated, basePrice: Number(updated.basePrice) } : it));
+        setActionMessage(`"${payload.name}" updated.`);
+      } else {
+        const created = await createMenuItem(payload);
+        setItems((prev) => [...prev, { ...created, basePrice: Number(created.basePrice) }]);
+        setActionMessage(`"${payload.name}" added.`);
+      }
+      closeForm();
+    } catch (err) {
+      setFormError(err.message || "Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggle(item) {
+    const next = !item.isActive;
+    try {
+      await toggleMenuItemActive(item.menuItemId, next);
+      setItems((prev) => prev.map((it) => it.menuItemId === item.menuItemId ? { ...it, isActive: next } : it));
+      setActionMessage(`"${item.name}" ${next ? "activated" : "deactivated"}.`);
+    } catch (err) {
+      setActionMessage(`Error: ${err.message}`);
+    }
+  }
 
   return (
     <>
@@ -471,29 +558,63 @@ export function MenuManagementSection() {
         <SummaryCards cards={menu?.summaryCards} isLoading={isLoading} error={error} />
       </ReportSection>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ReportSection title="Menu Items">
-          {error ? (
-            <ErrorState message={error} />
-          ) : menu?.items?.length ? (
-            <SimpleTable
-              headers={["ID", "Name", "Category", "Base Price", "Status"]}
-              rows={menu.items.slice(0, 16)}
-              renderRow={(item) => (
-                <tr key={item.menuItemId} className="border-b last:border-b-0">
-                  <td className="py-3 pr-4 font-medium text-gray-800">{item.menuItemId}</td>
-                  <td className="py-3 pr-4">{item.name}</td>
-                  <td className="py-3 pr-4">{item.category}</td>
-                  <td className="py-3 pr-4">${item.basePrice.toFixed(2)}</td>
-                  <td className="py-3 pr-4">{item.status}</td>
-                </tr>
-              )}
-            />
-          ) : (
-            <EmptyState message={isLoading ? "Loading menu items..." : "No menu items are available."} />
-          )}
-        </ReportSection>
+      {actionMessage && (
+        <p className="mb-4 rounded bg-green-50 px-4 py-2 text-sm font-medium text-green-700">{actionMessage}</p>
+      )}
 
+      <ReportSection
+        title="Menu Items"
+        action={
+          <button
+            onClick={openAdd}
+            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            + Add Item
+          </button>
+        }
+      >
+        {itemsError ? (
+          <ErrorState message={itemsError} />
+        ) : itemsLoading ? (
+          <EmptyState message="Loading menu items..." />
+        ) : items?.length ? (
+          <SimpleTable
+            headers={["ID", "Name", "Category", "Base Price", "Status", "Actions"]}
+            rows={items}
+            renderRow={(item) => (
+              <tr key={item.menuItemId} className="border-b last:border-b-0">
+                <td className="py-3 pr-4 font-medium text-gray-800">{item.menuItemId}</td>
+                <td className="py-3 pr-4">{item.name}</td>
+                <td className="py-3 pr-4">{item.category}</td>
+                <td className="py-3 pr-4">${Number(item.basePrice).toFixed(2)}</td>
+                <td className="py-3 pr-4">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    {item.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="py-3 pr-2 flex gap-2">
+                  <button
+                    onClick={() => openEdit(item)}
+                    className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleToggle(item)}
+                    className={`rounded px-2 py-1 text-xs font-semibold ${item.isActive ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
+                  >
+                    {item.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
+        ) : (
+          <EmptyState message="No menu items yet." />
+        )}
+      </ReportSection>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ReportSection title="Modifiers">
           {error ? (
             <ErrorState message={error} />
@@ -515,6 +636,70 @@ export function MenuManagementSection() {
           )}
         </ReportSection>
       </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+            <h3 className="mb-6 text-lg font-bold text-gray-900">{editTarget ? "Edit Menu Item" : "Add Menu Item"}</h3>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Grilled Salmon"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Select category —</option>
+                  {[...new Set((items ?? []).map((i) => i.category).filter(Boolean))].sort().map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Base Price *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.basePrice}
+                  onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            {formError && <p className="mt-3 text-sm text-red-600">{formError}</p>}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Item"}
+              </button>
+              <button
+                onClick={closeForm}
+                className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

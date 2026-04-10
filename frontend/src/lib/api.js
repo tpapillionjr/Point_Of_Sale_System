@@ -39,6 +39,18 @@ export async function fetchItems() {
   return request("/api/items");
 }
 
+export async function createMenuItem(payload) {
+  return request("/api/items", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function updateMenuItem(id, payload) {
+  return request(`/api/items/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export async function toggleMenuItemActive(id, isActive) {
+  return request(`/api/items/${id}/active`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
 export async function fetchBackOfficeDashboard() {
   return request("/api/back-office/dashboard");
 }

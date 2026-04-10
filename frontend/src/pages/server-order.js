@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
-import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables } from "../lib/api";
+import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables, fetchItems } from "../lib/api";
 
 export default function ServerOrderPage() {
   const router = useRouter();
@@ -13,7 +12,7 @@ export default function ServerOrderPage() {
   const [guestCount, setGuestCount] = useState(1);
   const [orderType, setOrderType] = useState("Dine In");
   const [orderNote, setOrderNote] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Entrees");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [pendingQty, setPendingQty] = useState(1);
   const [showQtyPad, setShowQtyPad] = useState(false);
   const [qtyInput, setQtyInput] = useState("");
@@ -27,11 +26,18 @@ export default function ServerOrderPage() {
   const [approvalError, setApprovalError] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
-  const supportedMenu = useMemo(() => menuData, []);
+  const [menuItems, setMenuItems] = useState([]);
+
+  const categories = useMemo(() => [...new Set(menuItems.map((i) => i.category))], [menuItems]);
+
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
   const filteredMenu = useMemo(
-    () => supportedMenu.filter((item) => item.category === selectedCategory),
-    [selectedCategory, supportedMenu]
+    () => menuItems.filter((item) => item.category === selectedCategory),
+    [selectedCategory, menuItems]
   );
 
   useEffect(() => {
@@ -54,7 +60,17 @@ export default function ServerOrderPage() {
       }
     }
 
+    async function loadMenu() {
+      try {
+        const rows = await fetchItems();
+        setMenuItems(rows.map((item) => ({ id: item.menuItemId, name: item.name, category: item.category, price: Number(item.basePrice) })));
+      } catch {
+        // non-fatal — menu stays empty
+      }
+    }
+
     loadTables();
+    loadMenu();
   }, [router.isReady, router.query.table]);
 
   useEffect(() => {
