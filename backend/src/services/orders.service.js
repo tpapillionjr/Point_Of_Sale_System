@@ -170,7 +170,7 @@ async function createOrder(payload) {
         tax,
         service_charge,
         total
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         order.tableId,
         order.createdBy,
