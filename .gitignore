@@ -76,3 +76,6 @@ backend/SSL.crt.pem
 *.out
 *.exe
 .vercel
+
+# Uploaded menu photos
+backend/uploads/

@@ -9,6 +9,9 @@ mysql -u root -p pos_db < schema.sql
 ## Seed data
 mysql -u root -p pos_db < seed.sql
 
+## Update existing DB for menu item details
+mysql -u root -p pos_db < add_menu_item_details.sql
+
 ## Reset (drops and rebuilds)
 cd database
 mysql -u root -p < reset.sql

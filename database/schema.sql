@@ -29,6 +29,9 @@ CREATE TABLE Menu_Item (
     name VARCHAR(50) NOT NULL,
     category VARCHAR(50) NULL,
     base_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    description TEXT NULL,
+    photo_url VARCHAR(2048) NULL,
+    common_allergens VARCHAR(255) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT chk_menu_item_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
     CONSTRAINT chk_menu_item_price_nonneg CHECK (base_price >= 0)

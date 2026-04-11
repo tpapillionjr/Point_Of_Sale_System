@@ -50,10 +50,10 @@ INSERT INTO Employee_Shift (
 -- =========================
 -- MENU + MODIFIERS
 -- =========================
-INSERT INTO Menu_Item (menu_item_id, name, category, base_price, is_active) VALUES
-(1, 'Cheeseburger', 'Entree', 12.99, TRUE),
-(2, 'Fries', 'Sides', 3.99, TRUE),
-(3, 'Iced Tea', 'Drinks', 2.49, TRUE);
+INSERT INTO Menu_Item (menu_item_id, name, category, base_price, description, photo_url, common_allergens, is_active) VALUES
+(1, 'Cheeseburger', 'Entree', 12.99, 'A grilled beef patty with cheddar, lettuce, tomato, and house sauce on a toasted bun.', NULL, 'Milk, Wheat, Sesame', TRUE),
+(2, 'Fries', 'Sides', 3.99, 'Crispy golden fries served hot with a side of ketchup.', NULL, '', TRUE),
+(3, 'Iced Tea', 'Drinks', 2.49, 'Fresh brewed black tea served over ice.', NULL, '', TRUE);
 
 INSERT INTO Modifier (modifier_id, name, price, is_active) VALUES
 (1, 'Extra Cheese', 1.25, TRUE),

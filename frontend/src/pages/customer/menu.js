@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -5,6 +6,14 @@ import { useRouter } from "next/router";
 import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+function resolveImageSrc(src) {
+  if (!src) {
+    return "";
+  }
+
+  return src.startsWith("/") ? `${API_BASE.replace(/\/$/, "")}${src}` : src;
+}
 
 export default function CustomerMenuPage() {
   const router = useRouter();
@@ -131,10 +140,23 @@ export default function CustomerMenuPage() {
               const inCart = cart.find((c) => c.menu_item_id === item.menu_item_id);
               return (
                 <div key={item.menu_item_id} style={{ backgroundColor: "rgba(255,255,255,0.75)", borderRadius: "14px", padding: "20px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 2px 8px rgba(15,23,42,0.05)", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {item.photo_url ? (
+                    <img
+                      src={resolveImageSrc(item.photo_url)}
+                      alt={item.name}
+                      style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: "10px", backgroundColor: "#f1f5f9" }}
+                    />
+                  ) : null}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>{item.name}</h3>
                     <span style={{ fontSize: "15px", fontWeight: "700", color: "#3b82f6", whiteSpace: "nowrap", marginLeft: "8px" }}>${Number(item.base_price).toFixed(2)}</span>
                   </div>
+                  {item.description ? (
+                    <p style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5, margin: 0 }}>{item.description}</p>
+                  ) : null}
+                  {item.common_allergens ? (
+                    <p style={{ fontSize: "12px", color: "#92400e", fontWeight: "700", margin: 0 }}>Allergens: {item.common_allergens}</p>
+                  ) : null}
 
                   {inCart ? (
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

@@ -287,7 +287,9 @@ async function getBackOfficeData(range) {
   );
 
   const menuItemsPromise = db.query(
-    `SELECT menu_item_id AS menuItemId, name, COALESCE(category, 'Uncategorized') AS category, base_price AS basePrice, is_active AS isActive
+    `SELECT menu_item_id AS menuItemId, name, COALESCE(category, 'Uncategorized') AS category,
+            base_price AS basePrice, description, photo_url AS photoUrl,
+            common_allergens AS commonAllergens, is_active AS isActive
      FROM Menu_Item
      ORDER BY is_active DESC, name ASC`
   );
@@ -531,6 +533,9 @@ async function getBackOfficeData(range) {
         name: row.name,
         category: row.category,
         basePrice: Number(row.basePrice ?? 0),
+        description: row.description ?? "",
+        photoUrl: row.photoUrl ?? "",
+        commonAllergens: row.commonAllergens ?? "",
         status: row.isActive ? "Active" : "Inactive",
       })),
       modifiers: modifiers.map((row) => ({

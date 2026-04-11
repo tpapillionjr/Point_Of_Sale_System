@@ -1,8 +1,11 @@
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
 import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/$/, "");
 
 function SimpleTable({ headers, rows, renderRow }) {
   return (
@@ -29,6 +32,23 @@ function ErrorState({ message }) {
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
+}
+
+function resolveImageSrc(src) {
+  if (!src) {
+    return "";
+  }
+
+  return src.startsWith("/") ? `${API_BASE}${src}` : src;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the selected photo."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function toDateInputValue(date) {
@@ -575,7 +595,16 @@ export function LaborSection() {
   );
 }
 
-const EMPTY_FORM = { name: "", category: "", basePrice: "" };
+const EMPTY_FORM = {
+  name: "",
+  category: "",
+  basePrice: "",
+  description: "",
+  photoUrl: "",
+  photoDataUrl: "",
+  photoFileName: "",
+  commonAllergens: "",
+};
 
 export function MenuManagementSection() {
   const { data, isLoading, error } = useBackOfficeData("30days");
@@ -591,6 +620,13 @@ export function MenuManagementSection() {
   const [formError, setFormError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
+
+  const categoryOptions = [...new Set((items ?? []).map((item) => item.category || "Uncategorized"))].sort();
+  const filteredItems =
+    selectedCategoryFilter === "All"
+      ? items ?? []
+      : (items ?? []).filter((item) => (item.category || "Uncategorized") === selectedCategoryFilter);
 
   useEffect(() => {
     async function load() {
@@ -617,7 +653,16 @@ export function MenuManagementSection() {
 
   function openEdit(item) {
     setEditTarget(item);
-    setForm({ name: item.name, category: item.category === "Uncategorized" ? "" : item.category, basePrice: String(item.basePrice) });
+    setForm({
+      name: item.name,
+      category: item.category === "Uncategorized" ? "" : item.category,
+      basePrice: String(item.basePrice),
+      description: item.description ?? "",
+      photoUrl: item.photoUrl ?? "",
+      photoDataUrl: "",
+      photoFileName: "",
+      commonAllergens: item.commonAllergens ?? "",
+    });
     setFormError(null);
     setShowForm(true);
   }
@@ -637,7 +682,15 @@ export function MenuManagementSection() {
     setSaving(true);
     setFormError(null);
     try {
-      const payload = { name: form.name.trim(), category: form.category.trim() || "Uncategorized", basePrice: price };
+      const payload = {
+        name: form.name.trim(),
+        category: form.category.trim() || "Uncategorized",
+        basePrice: price,
+        description: form.description.trim(),
+        photoUrl: form.photoUrl.trim(),
+        photoDataUrl: form.photoDataUrl,
+        commonAllergens: form.commonAllergens.trim(),
+      };
       if (editTarget) {
         const updated = await updateMenuItem(editTarget.menuItemId, payload);
         setItems((prev) => prev.map((it) => it.menuItemId === editTarget.menuItemId ? { ...it, ...updated, basePrice: Number(updated.basePrice) } : it));
@@ -692,37 +745,93 @@ export function MenuManagementSection() {
         ) : itemsLoading ? (
           <EmptyState message="Loading menu items..." />
         ) : items?.length ? (
-          <SimpleTable
-            headers={["ID", "Name", "Category", "Base Price", "Status", "Actions"]}
-            rows={items}
-            renderRow={(item) => (
-              <tr key={item.menuItemId} className="border-b last:border-b-0">
-                <td className="py-3 pr-4 font-medium text-gray-800">{item.menuItemId}</td>
-                <td className="py-3 pr-4">{item.name}</td>
-                <td className="py-3 pr-4">{item.category}</td>
-                <td className="py-3 pr-4">${Number(item.basePrice).toFixed(2)}</td>
-                <td className="py-3 pr-4">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                    {item.isActive ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td className="py-3 pr-2 flex gap-2">
+          <>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryFilter("All")}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                  selectedCategoryFilter === "All"
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                All ({items.length})
+              </button>
+              {categoryOptions.map((category) => {
+                const count = items.filter((item) => (item.category || "Uncategorized") === category).length;
+                return (
                   <button
-                    onClick={() => openEdit(item)}
-                    className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                    type="button"
+                    key={category}
+                    onClick={() => setSelectedCategoryFilter(category)}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                      selectedCategoryFilter === category
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
                   >
-                    Edit
+                    {category} ({count})
                   </button>
-                  <button
-                    onClick={() => handleToggle(item)}
-                    className={`rounded px-2 py-1 text-xs font-semibold ${item.isActive ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
-                  >
-                    {item.isActive ? "Deactivate" : "Activate"}
-                  </button>
-                </td>
-              </tr>
+                );
+              })}
+            </div>
+
+            {filteredItems.length ? (
+              <SimpleTable
+                headers={["ID", "Photo", "Name", "Category", "Base Price", "Status", "Actions"]}
+                rows={filteredItems}
+                renderRow={(item) => (
+                  <tr key={item.menuItemId} className="border-b last:border-b-0">
+                    <td className="py-3 pr-4 font-medium text-gray-800">{item.menuItemId}</td>
+                    <td className="py-3 pr-4">
+                      {item.photoUrl ? (
+                        <img
+                          src={resolveImageSrc(item.photoUrl)}
+                          alt={item.name}
+                          className="h-14 w-14 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="inline-flex h-14 w-14 items-center justify-center rounded-lg bg-gray-100 text-xs font-semibold text-gray-400">
+                          No photo
+                        </span>
+                      )}
+                    </td>
+                    <td className="max-w-sm py-3 pr-4">
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      {item.description ? <p className="mt-1 text-xs text-gray-500">{item.description}</p> : null}
+                      {item.commonAllergens ? (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">Allergens: {item.commonAllergens}</p>
+                      ) : null}
+                    </td>
+                    <td className="py-3 pr-4">{item.category}</td>
+                    <td className="py-3 pr-4">${Number(item.basePrice).toFixed(2)}</td>
+                    <td className="py-3 pr-4">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                        {item.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-2 flex gap-2">
+                      <button
+                        onClick={() => openEdit(item)}
+                        className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleToggle(item)}
+                        className={`rounded px-2 py-1 text-xs font-semibold ${item.isActive ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
+                      >
+                        {item.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              />
+            ) : (
+              <EmptyState message={`No ${selectedCategoryFilter} items yet.`} />
             )}
-          />
+          </>
         ) : (
           <EmptyState message="No menu items yet." />
         )}
@@ -753,7 +862,7 @@ export function MenuManagementSection() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-8 shadow-2xl">
             <h3 className="mb-6 text-lg font-bold text-gray-900">{editTarget ? "Edit Menu Item" : "Add Menu Item"}</h3>
 
             <div className="flex flex-col gap-4">
@@ -790,6 +899,66 @@ export function MenuManagementSection() {
                   onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Photo</label>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) {
+                      setForm({ ...form, photoDataUrl: "", photoFileName: "" });
+                      return;
+                    }
+
+                    if (file.size > 5 * 1024 * 1024) {
+                      setFormError("Photo must be 5 MB or smaller.");
+                      e.target.value = "";
+                      return;
+                    }
+
+                    try {
+                      const photoDataUrl = await readFileAsDataUrl(file);
+                      setForm({ ...form, photoDataUrl, photoFileName: file.name });
+                      setFormError(null);
+                    } catch (err) {
+                      setFormError(err.message);
+                    }
+                  }}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {form.photoFileName ? (
+                  <p className="mt-2 text-xs font-medium text-gray-500">Selected: {form.photoFileName}</p>
+                ) : form.photoUrl ? (
+                  <p className="mt-2 text-xs font-medium text-gray-500">Current photo saved.</p>
+                ) : null}
+                {form.photoDataUrl || form.photoUrl ? (
+                  <img
+                    src={form.photoDataUrl || resolveImageSrc(form.photoUrl)}
+                    alt="Menu item preview"
+                    className="mt-3 h-32 w-full rounded-lg object-cover"
+                  />
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="A short description customers can read on the menu."
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Common Allergens</label>
+                <input
+                  type="text"
+                  value={form.commonAllergens}
+                  onChange={(e) => setForm({ ...form, commonAllergens: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Milk, Eggs, Wheat, Soy"
                 />
               </div>
             </div>
