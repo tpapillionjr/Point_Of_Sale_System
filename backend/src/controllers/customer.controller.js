@@ -170,7 +170,8 @@ async function getCustomerOrderStatus(req, res) {
 async function getCustomerMenu(req, res) {
   try {
     const rows = await db.query(
-      `SELECT menu_item_id, name, category, base_price
+      `SELECT menu_item_id, name, category, base_price, description,
+              photo_url, common_allergens
        FROM Menu_Item
        WHERE is_active = true
        ORDER BY category ASC, name ASC`

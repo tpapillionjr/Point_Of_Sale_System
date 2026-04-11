@@ -5,7 +5,7 @@ export default function MenuManagementPage() {
   return (
     <BackOfficeShell
       title="Menu Management"
-      description="Review live menu items, pricing, categories, and modifier availability."
+      description="Review live menu items, pricing, photos, descriptions, allergens, and modifier availability."
     >
       <MenuManagementSection />
     </BackOfficeShell>
