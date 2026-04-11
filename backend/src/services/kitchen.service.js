@@ -6,18 +6,25 @@ async function getActiveTickets() {
     `SELECT
       kt.ticket_id AS ticketId,
       kt.order_id AS orderId,
-      dt.table_number AS tableNumber,
+      kt.online_order_id AS onlineOrderId,
+      CASE WHEN kt.online_order_id IS NOT NULL THEN 'Online' ELSE dt.table_number END AS tableNumber,
       kt.status,
       kt.created_at AS createdAt,
       kt.updated_at AS updatedAt,
-      GROUP_CONCAT(CONCAT(mi.name, ' x', oi.quantity) ORDER BY oi.order_item_id SEPARATOR '||') AS items
+      CASE
+        WHEN kt.online_order_id IS NOT NULL THEN
+          GROUP_CONCAT(CONCAT(mi.name, ' x', ooi.quantity) ORDER BY ooi.online_order_item_id SEPARATOR '||')
+        ELSE
+          GROUP_CONCAT(CONCAT(mi.name, ' x', oi.quantity) ORDER BY oi.order_item_id SEPARATOR '||')
+      END AS items
      FROM Kitchen_Ticket kt
-     JOIN Orders o ON o.order_id = kt.order_id
-     JOIN Dining_Tables dt ON dt.table_id = kt.table_id
-     LEFT JOIN Order_Item oi ON oi.order_id = o.order_id
-     LEFT JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+     LEFT JOIN Orders o ON o.order_id = kt.order_id
+     LEFT JOIN Dining_Tables dt ON dt.table_id = kt.table_id
+     LEFT JOIN Order_Item oi ON oi.order_id = o.order_id AND kt.online_order_id IS NULL
+     LEFT JOIN Online_Order_Item ooi ON ooi.online_order_id = kt.online_order_id AND kt.online_order_id IS NOT NULL
+     LEFT JOIN Menu_Item mi ON mi.menu_item_id = COALESCE(oi.menu_item_id, ooi.menu_item_id)
      WHERE kt.status IN ('new', 'in_progress')
-     GROUP BY kt.ticket_id, kt.order_id, dt.table_number, kt.status, kt.created_at, kt.updated_at
+     GROUP BY kt.ticket_id, kt.order_id, kt.online_order_id, tableNumber, kt.status, kt.created_at, kt.updated_at
      ORDER BY kt.created_at ASC`
   );
 }
@@ -54,7 +61,7 @@ async function updateTicketStatus(payload) {
     }
 
     const [ticketRows] = await connection.execute(
-      `SELECT ticket_id, order_id, table_id, status
+      `SELECT ticket_id, order_id, online_order_id, table_id, status
        FROM Kitchen_Ticket
        WHERE ticket_id = ?
        LIMIT 1`,
@@ -71,6 +78,17 @@ async function updateTicketStatus(payload) {
        WHERE ticket_id = ?`,
       [status, ticketId]
     );
+
+    if (ticketRows[0].online_order_id) {
+      const customerStatusMap = { in_progress: "preparing", done: "ready" };
+      const newCustomerStatus = customerStatusMap[status];
+      if (newCustomerStatus) {
+        await connection.execute(
+          `UPDATE Online_Orders SET customer_status = ? WHERE online_order_id = ?`,
+          [newCustomerStatus, ticketRows[0].online_order_id]
+        );
+      }
+    }
 
     if (status === "done") {
       await connection.execute(

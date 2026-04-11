@@ -48,6 +48,18 @@ export async function fetchItems() {
   return request("/api/items");
 }
 
+export async function createMenuItem(payload) {
+  return request("/api/items", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function updateMenuItem(id, payload) {
+  return request(`/api/items/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+
+export async function toggleMenuItemActive(id, isActive) {
+  return request(`/api/items/${id}/active`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+}
+
 export async function fetchBackOfficeDashboard() {
   return request("/api/back-office/dashboard");
 }
@@ -223,4 +235,57 @@ export async function verifyManager(pin) {
     method: "POST",
     body: JSON.stringify({ pin }),
   });
+}
+
+export async function fetchOnlineOrders() {
+  return request("/api/customer/online-orders");
+}
+
+export async function confirmOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/confirm`, {
+    method: "PATCH",
+  });
+}
+
+// Customer auth — no employee token attached
+export async function customerRegister(payload) {
+  const res = await fetch(`${API_URL}/api/customer/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to register.");
+  return data;
+}
+
+export async function customerLogin(payload) {
+  const res = await fetch(`${API_URL}/api/customer/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to login.");
+  return data;
+}
+
+// Customer-facing endpoints — no auth token attached
+export async function placeCustomerOrder(payload) {
+  const res = await fetch(`${API_URL}/api/customer/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to place order.");
+  }
+  return res.json();
+}
+
+export async function fetchCustomerOrderStatus(orderId) {
+  const res = await fetch(`${API_URL}/api/customer/orders/${orderId}/status`);
+  if (!res.ok) throw new Error("Failed to fetch order status.");
+  return res.json();
 }

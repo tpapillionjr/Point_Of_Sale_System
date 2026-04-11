@@ -163,7 +163,6 @@ async function createOrder(payload) {
         receipt_number,
         order_note,
         order_type,
-        order_channel,
         guest_count,
         is_split_check,
         subtotal,
@@ -171,14 +170,13 @@ async function createOrder(payload) {
         tax,
         service_charge,
         total
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         order.tableId,
         order.createdBy,
         order.receiptNumber,
         order.orderNote,
         order.orderType,
-        order.orderChannel,
         order.guestCount,
         order.isSplitCheck,
         order.subtotal,
