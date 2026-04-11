@@ -471,7 +471,7 @@ export function LaborSection() {
       <BackOfficeFilterBar selectedRange={selectedRange} onChange={setSelectedRange} />
 
       <ReportSection title="Labor Snapshot">
-        <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} />
+        <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} columns="xl:grid-cols-5" />
       </ReportSection>
 
       <ReportSection title="Team Scheduling and Attendance">
@@ -479,7 +479,15 @@ export function LaborSection() {
           <ErrorState message={error} />
         ) : labor?.employees?.length ? (
           <SimpleTable
-            headers={["Employee", "Role", "Shifts Scheduled", "Shifts Clocked", "Clocked In Now", "Tips Declared"]}
+            headers={[
+              "Employee",
+              "Role",
+              "Shifts Scheduled",
+              "Shifts Clocked",
+              "Hours This Week",
+              "Clocked In Now",
+              "Tips Declared",
+            ]}
             rows={labor.employees}
             renderRow={(item) => (
               <tr key={item.userId} className="border-b last:border-b-0">
@@ -487,6 +495,7 @@ export function LaborSection() {
                 <td className="py-3 pr-4">{item.role}</td>
                 <td className="py-3 pr-4">{item.shiftsScheduled}</td>
                 <td className="py-3 pr-4">{item.shiftsClocked}</td>
+                <td className="py-3 pr-4">{item.hoursWorkedThisWeek ?? 0}</td>
                 <td className="py-3 pr-4">{item.currentlyClockedIn ? "Yes" : "No"}</td>
                 <td className="py-3 pr-4">${item.tipsDeclared.toFixed(2)}</td>
               </tr>
@@ -494,6 +503,26 @@ export function LaborSection() {
           />
         ) : (
           <EmptyState message={isLoading ? "Loading labor data..." : "No labor data is available."} />
+        )}
+      </ReportSection>
+
+      <ReportSection title="Hours Worked This Week">
+        {error ? (
+          <ErrorState message={error} />
+        ) : labor?.weeklyHours?.length ? (
+          <SimpleTable
+            headers={["Employee", "Role", "Hours This Week"]}
+            rows={labor.weeklyHours}
+            renderRow={(item) => (
+              <tr key={item.userId} className="border-b last:border-b-0">
+                <td className="py-3 pr-4 font-medium text-gray-800">{item.name}</td>
+                <td className="py-3 pr-4">{item.role}</td>
+                <td className="py-3 pr-4">{item.hoursWorkedThisWeek}</td>
+              </tr>
+            )}
+          />
+        ) : (
+          <EmptyState message={isLoading ? "Loading weekly hours..." : "No employee hours are logged for this week."} />
         )}
       </ReportSection>
     </>

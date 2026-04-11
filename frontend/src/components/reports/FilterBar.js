@@ -43,6 +43,8 @@ export default function FilterBar({
   onFiltersChange,
   searchTerm,
   onSearchTermChange,
+  exportFormat,
+  onExportFormatChange,
   onApply,
   onExport,
 }) {
@@ -131,6 +133,17 @@ export default function FilterBar({
             placeholder="Search employees, items, orders..."
             className={inputClass}
           />
+        </FilterField>
+
+        <FilterField label="Export Type">
+          <select
+            value={exportFormat}
+            onChange={(event) => onExportFormatChange(event.target.value)}
+            className={inputClass}
+          >
+            <option value="csv">Excel CSV</option>
+            <option value="pdf">PDF</option>
+          </select>
         </FilterField>
       </div>
 

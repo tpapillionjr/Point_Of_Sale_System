@@ -14,6 +14,11 @@ function rangeFilter(days, column = "created_at") {
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
+function currentWeekFilter(column = "created_at") {
+  return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY)
+    AND DATE(${column}) < DATE_ADD(DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY), INTERVAL 7 DAY)`;
+}
+
 function createAction({ title, description, priority }) {
   return { title, description, priority };
 }
@@ -49,6 +54,14 @@ function formatDateTime(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function hoursBetween(start, end) {
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Math.max((new Date(end).getTime() - new Date(start).getTime()) / 3600000, 0);
 }
 
 async function getBackOfficeDashboard() {
@@ -209,6 +222,19 @@ async function getBackOfficeData(range) {
      ORDER BY es.scheduled_start DESC, u.name ASC`
   );
 
+  const weeklyLaborRowsPromise = db.query(
+    `SELECT
+       u.user_id AS userId,
+       u.name,
+       u.role,
+       es.clock_in AS clockIn,
+       es.clock_out AS clockOut
+     FROM Employee_Shift es
+     JOIN Users u ON u.user_id = es.user_id
+     WHERE ${currentWeekFilter("es.scheduled_start")}
+     ORDER BY u.name ASC, es.scheduled_start DESC`
+  );
+
   const menuItemsPromise = db.query(
     `SELECT menu_item_id AS menuItemId, name, COALESCE(category, 'Uncategorized') AS category, base_price AS basePrice, is_active AS isActive
      FROM Menu_Item
@@ -277,12 +303,13 @@ async function getBackOfficeData(range) {
      GROUP BY role`
   );
 
-  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
+  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, weeklyLaborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
     await Promise.all([
       inventoryRowsPromise,
       inventoryUsagePromise,
       inventoryUpdateStatsPromise,
       laborRowsPromise,
+      weeklyLaborRowsPromise,
       menuItemsPromise,
       modifiersPromise,
       recentOrdersPromise,
@@ -330,6 +357,26 @@ async function getBackOfficeData(range) {
     }))
     .sort((a, b) => a.currentOnHand - b.currentOnHand);
 
+  const weeklyHoursByEmployee = new Map();
+  for (const row of weeklyLaborRows) {
+    const existing = weeklyHoursByEmployee.get(row.userId) ?? {
+      userId: row.userId,
+      name: row.name,
+      role: row.role,
+      hoursWorkedThisWeek: 0,
+    };
+    const workedHours = row.clockIn ? hoursBetween(row.clockIn, row.clockOut ?? new Date().toISOString()) : 0;
+    existing.hoursWorkedThisWeek += workedHours;
+    weeklyHoursByEmployee.set(row.userId, existing);
+  }
+
+  const weeklyHourRows = [...weeklyHoursByEmployee.values()]
+    .map((row) => ({
+      ...row,
+      hoursWorkedThisWeek: Number(row.hoursWorkedThisWeek.toFixed(1)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const laborByEmployee = new Map();
   for (const row of laborRows) {
     const existing = laborByEmployee.get(row.userId) ?? {
@@ -340,6 +387,9 @@ async function getBackOfficeData(range) {
       shiftsClocked: 0,
       currentlyClockedIn: false,
       tipsDeclared: 0,
+      hoursWorkedThisWeek: weeklyHoursByEmployee.get(row.userId)?.hoursWorkedThisWeek
+        ? Number(weeklyHoursByEmployee.get(row.userId).hoursWorkedThisWeek.toFixed(1))
+        : 0,
     };
 
     existing.shiftsScheduled += 1;
@@ -353,6 +403,7 @@ async function getBackOfficeData(range) {
 
   const laborEmployees = [...laborByEmployee.values()].sort((a, b) => a.name.localeCompare(b.name));
   const activeStaff = laborEmployees.filter((row) => row.currentlyClockedIn).length;
+  const hoursWorkedThisWeek = weeklyHourRows.reduce((sum, row) => sum + row.hoursWorkedThisWeek, 0);
   const scheduledToday = laborRows.filter((row) => {
     const scheduled = new Date(row.scheduledStart);
     const now = new Date();
@@ -411,9 +462,11 @@ async function getBackOfficeData(range) {
         { title: "Scheduled This Range", value: String(laborRows.length) },
         { title: "Active Staff", value: String(activeStaff) },
         { title: "Scheduled Today", value: String(scheduledToday) },
+        { title: "Hours This Week", value: hoursWorkedThisWeek.toFixed(1) },
         { title: "Tips Pending", value: String(tipsPending) },
       ],
       employees: laborEmployees,
+      weeklyHours: weeklyHourRows,
     },
     menu: {
       summaryCards: [
