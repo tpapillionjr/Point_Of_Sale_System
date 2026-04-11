@@ -14,11 +14,9 @@ export default function CustomerOrderPage() {
 
   useEffect(() => {
     const stored = localStorage.getItem("customerCart");
-
     if (stored) startTransition(() => setCart(JSON.parse(stored)));
   }, []);
   const [paymentPreference, setPaymentPreference] = useState("in_store");
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
 
