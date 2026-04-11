@@ -123,6 +123,178 @@ function RenderCardList({ cards, isLoading, error, emptyMessage }) {
   );
 }
 
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function DataPointTable({ title, headers, rows, renderRow, emptyMessage }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
+      {rows?.length ? (
+        <SimpleTable headers={headers} rows={rows} renderRow={renderRow} />
+      ) : (
+        <EmptyState message={emptyMessage} />
+      )}
+    </div>
+  );
+}
+
+function ReportSourceData({ data, searchTerm = "", includeInventory = true }) {
+  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
+  const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
+
+  return (
+    <div className="mt-6 space-y-6">
+      <DataPointTable
+        title="Revenue Data Points"
+        headers={["Date", "Revenue"]}
+        rows={data?.revenueTrend ?? []}
+        emptyMessage="No revenue data points are available."
+        renderRow={(item) => (
+          <tr key={item.date} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.date}</td>
+            <td className="py-3 pr-4 text-gray-700">{formatMoney(item.revenue)}</td>
+          </tr>
+        )}
+      />
+
+      <DataPointTable
+        title="Item Sales Data Points"
+        headers={["Item", "Sold", "Revenue"]}
+        rows={filteredTopItems}
+        emptyMessage="No item sales data points are available."
+        renderRow={(item) => (
+          <tr key={item.name} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.name}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.sold}</td>
+            <td className="py-3 pr-4 text-gray-700">{formatMoney(item.revenue)}</td>
+          </tr>
+        )}
+      />
+
+      {includeInventory && (
+        <DataPointTable
+          title="Inventory Alert Data Points"
+          headers={["Item", "Available", "Status"]}
+          rows={filteredLowInventory}
+          emptyMessage="No inventory alert data points are available."
+          renderRow={(item) => (
+            <tr key={item.itemName} className="border-b last:border-b-0">
+              <td className="py-3 pr-4 font-medium text-gray-800">{item.itemName}</td>
+              <td className="py-3 pr-4 text-gray-700">{item.amountAvailable}</td>
+              <td className="py-3 pr-4 text-gray-700">{item.status}</td>
+            </tr>
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+function SummaryWithSourceData({
+  title,
+  cards,
+  data,
+  isLoading,
+  error,
+  emptyMessage,
+  searchTerm = "",
+  includeInventory = true,
+}) {
+  return (
+    <ReportSection title={title}>
+      <RenderCardList cards={cards} isLoading={isLoading} error={error} emptyMessage={emptyMessage} />
+      {!error && !isLoading && (
+        <ReportSourceData data={data} searchTerm={searchTerm} includeInventory={includeInventory} />
+      )}
+    </ReportSection>
+  );
+}
+
+function MetricDataPoints({ title, rows, emptyMessage }) {
+  return (
+    <div className="mt-6">
+      <DataPointTable
+        title={title}
+        headers={["Metric", "Value"]}
+        rows={rows ?? []}
+        emptyMessage={emptyMessage}
+        renderRow={(item) => (
+          <tr key={item.title ?? item.label} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.title ?? item.label}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.value}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
+function OperationsSourceData({ data }) {
+  return (
+    <div className="mt-6 space-y-6">
+      <DataPointTable
+        title="Void Data Points"
+        headers={["Order", "Reason", "Employee", "Amount"]}
+        rows={data?.voids ?? []}
+        emptyMessage="No void data points are available."
+        renderRow={(item) => (
+          <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.reason}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.employee}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
+          </tr>
+        )}
+      />
+
+      <DataPointTable
+        title="Discount Data Points"
+        headers={["Type", "Count", "Amount"]}
+        rows={data?.discounts ?? []}
+        emptyMessage="No discount data points are available."
+        renderRow={(item) => (
+          <tr key={item.type} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.type}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.count}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
+          </tr>
+        )}
+      />
+
+      <DataPointTable
+        title="Refund Data Points"
+        headers={["Order", "Reason", "Amount", "Status"]}
+        rows={data?.refunds ?? []}
+        emptyMessage="No refund data points are available."
+        renderRow={(item) => (
+          <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.reason}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.status}</td>
+          </tr>
+        )}
+      />
+
+      <DataPointTable
+        title="Payment Data Points"
+        headers={["Method", "Transactions", "Amount"]}
+        rows={data?.paymentMethods ?? []}
+        emptyMessage="No payment data points are available."
+        renderRow={(item) => (
+          <tr key={item.method} className="border-b last:border-b-0">
+            <td className="py-3 pr-4 font-medium text-gray-800">{item.method}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.count}</td>
+            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
+          </tr>
+        )}
+      />
+    </div>
+  );
+}
+
 export function ReportsOverviewSection({ selectedRange, searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
   const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
@@ -130,6 +302,16 @@ export function ReportsOverviewSection({ selectedRange, searchTerm = "" }) {
 
   return (
     <>
+      <SummaryWithSourceData
+        title="Report Summary"
+        cards={data?.customSummary}
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage="No report summary is available."
+        searchTerm={searchTerm}
+      />
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ReportSection title="Revenue Trend">
           {error ? (
@@ -183,6 +365,17 @@ export function SalesOverviewSection({ selectedRange, searchTerm = "" }) {
 
   return (
     <>
+      <SummaryWithSourceData
+        title="Sales Summary"
+        cards={data?.customSummary}
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage="No sales summary is available."
+        searchTerm={searchTerm}
+        includeInventory={false}
+      />
+
       <ReportSection title="Revenue Trend">
         {error ? (
           <ErrorState message={error} />
@@ -211,6 +404,16 @@ export function SalesDailySection() {
 
   return (
     <>
+      <SummaryWithSourceData
+        title="Daily Summary"
+        cards={data?.customSummary}
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage="No daily summary is available."
+        includeInventory={false}
+      />
+
       <ReportSection title="Daily Revenue">
         {error ? (
           <ErrorState message={error} />
@@ -219,15 +422,6 @@ export function SalesDailySection() {
         ) : (
           <EmptyState message={isLoading ? "Loading daily revenue..." : "No daily revenue data available."} />
         )}
-      </ReportSection>
-
-      <ReportSection title="Daily Summary">
-        <RenderCardList
-          cards={data?.todaySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No daily summary is available."
-        />
       </ReportSection>
     </>
   );
@@ -238,6 +432,16 @@ export function SalesWeeklySection() {
 
   return (
     <>
+      <SummaryWithSourceData
+        title="Weekly Summary"
+        cards={data?.customSummary}
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage="No weekly summary is available."
+        includeInventory={false}
+      />
+
       <ReportSection title="Weekly Revenue">
         {error ? (
           <ErrorState message={error} />
@@ -246,15 +450,6 @@ export function SalesWeeklySection() {
         ) : (
           <EmptyState message={isLoading ? "Loading weekly revenue..." : "No weekly revenue data available."} />
         )}
-      </ReportSection>
-
-      <ReportSection title="Weekly Summary">
-        <RenderCardList
-          cards={data?.weeklySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No weekly summary is available."
-        />
       </ReportSection>
     </>
   );
@@ -265,6 +460,16 @@ export function SalesMonthlySection() {
 
   return (
     <>
+      <SummaryWithSourceData
+        title="Monthly Summary"
+        cards={data?.customSummary}
+        data={data}
+        isLoading={isLoading}
+        error={error}
+        emptyMessage="No monthly summary is available."
+        includeInventory={false}
+      />
+
       <ReportSection title="Monthly Revenue">
         {error ? (
           <ErrorState message={error} />
@@ -273,15 +478,6 @@ export function SalesMonthlySection() {
         ) : (
           <EmptyState message={isLoading ? "Loading monthly revenue..." : "No monthly revenue data available."} />
         )}
-      </ReportSection>
-
-      <ReportSection title="Monthly Summary">
-        <RenderCardList
-          cards={data?.monthlySummary}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage="No monthly summary is available."
-        />
       </ReportSection>
     </>
   );
@@ -593,6 +789,7 @@ export function OperationsOverviewSection({ selectedRange = "7days" }) {
         error={error}
         emptyMessage="No operational summary is available."
       />
+      {!error && !isLoading && <OperationsSourceData data={data} />}
     </ReportSection>
   );
 }
@@ -716,6 +913,13 @@ export function CustomerOverviewSection({ selectedRange = "30days" }) {
         error={error}
         emptyMessage="No customer overview is available."
       />
+      {!error && !isLoading && (
+        <MetricDataPoints
+          title="Customer Data Points"
+          rows={data?.customerOverview}
+          emptyMessage="No customer data points are available."
+        />
+      )}
     </ReportSection>
   );
 }
@@ -731,6 +935,13 @@ export function CustomerHabitsSection({ selectedRange = "30days" }) {
         error={error}
         emptyMessage="No customer habit data is available."
       />
+      {!error && !isLoading && (
+        <MetricDataPoints
+          title="Ordering Data Points"
+          rows={data?.customerHabits}
+          emptyMessage="No ordering data points are available."
+        />
+      )}
     </ReportSection>
   );
 }
@@ -746,6 +957,13 @@ export function CustomerLoyaltySection({ selectedRange = "30days" }) {
         error={error}
         emptyMessage="No loyalty data is available."
       />
+      {!error && !isLoading && (
+        <MetricDataPoints
+          title="Loyalty Data Points"
+          rows={data?.customerLoyalty}
+          emptyMessage="No loyalty data points are available."
+        />
+      )}
     </ReportSection>
   );
 }
