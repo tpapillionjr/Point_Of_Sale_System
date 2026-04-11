@@ -588,29 +588,52 @@ export function SalesTipsSection({ selectedRange }) {
 export function LaborOverviewSection({ selectedRange = "7days", searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
   const filteredLabor = filterBySearch(data?.laborOverview ?? [], searchTerm, ["name", "performance"]);
+  const filteredWeeklyHours = filterBySearch(data?.laborWeeklyHours ?? [], searchTerm, ["name"]);
 
   return (
-    <ReportSection title="Labor Reports">
-      {error ? (
-        <ErrorState message={error} />
-      ) : filteredLabor.length ? (
-        <SimpleTable
-          headers={["Employee", "Scheduled Hours", "Actual Hours", "Clock-Ins", "Performance"]}
-          rows={filteredLabor}
-          renderRow={(employee) => (
-            <tr key={employee.name} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
-              <td className="py-3 pr-4">{employee.scheduled}</td>
-              <td className="py-3 pr-4">{employee.worked}</td>
-              <td className="py-3 pr-4">{employee.clockIns}</td>
-              <td className="py-3 pr-4">{employee.performance}</td>
-            </tr>
-          )}
-        />
-      ) : (
-        <EmptyState message={isLoading ? "Loading labor data..." : "No labor data available."} />
-      )}
-    </ReportSection>
+    <>
+      <ReportSection title="Labor Reports">
+        {error ? (
+          <ErrorState message={error} />
+        ) : filteredLabor.length ? (
+          <SimpleTable
+            headers={["Employee", "Scheduled Hours", "Actual Hours", "Hours This Week", "Clock-Ins", "Performance"]}
+            rows={filteredLabor}
+            renderRow={(employee) => (
+              <tr key={employee.name} className="border-b last:border-b-0">
+                <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
+                <td className="py-3 pr-4">{employee.scheduled}</td>
+                <td className="py-3 pr-4">{employee.worked}</td>
+                <td className="py-3 pr-4">{employee.hoursWorkedThisWeek ?? 0}</td>
+                <td className="py-3 pr-4">{employee.clockIns}</td>
+                <td className="py-3 pr-4">{employee.performance}</td>
+              </tr>
+            )}
+          />
+        ) : (
+          <EmptyState message={isLoading ? "Loading labor data..." : "No labor data available."} />
+        )}
+      </ReportSection>
+
+      <ReportSection title="Hours Worked This Week">
+        {error ? (
+          <ErrorState message={error} />
+        ) : filteredWeeklyHours.length ? (
+          <SimpleTable
+            headers={["Employee", "Hours This Week"]}
+            rows={filteredWeeklyHours}
+            renderRow={(employee) => (
+              <tr key={employee.name} className="border-b last:border-b-0">
+                <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
+                <td className="py-3 pr-4">{employee.hoursWorkedThisWeek}</td>
+              </tr>
+            )}
+          />
+        ) : (
+          <EmptyState message={isLoading ? "Loading weekly hours..." : "No employee hours are logged for this week."} />
+        )}
+      </ReportSection>
+    </>
   );
 }
 
@@ -661,6 +684,7 @@ export function LaborHoursSection({ selectedRange = "7days", searchTerm = "" }) 
               <p className="font-semibold text-gray-900">{employee.name}</p>
               <p className="text-gray-600">Scheduled: {employee.scheduled} hrs</p>
               <p className="text-gray-600">Worked: {employee.worked} hrs</p>
+              <p className="text-gray-600">Worked this week: {employee.hoursWorkedThisWeek ?? 0} hrs</p>
               <p className="text-gray-600">Difference: {(employee.worked - employee.scheduled).toFixed(1)} hrs</p>
             </div>
           ))}
