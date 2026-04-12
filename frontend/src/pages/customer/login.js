@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { customerLogin, customerRegister, staffLogin } from "../../lib/api";
+import { saveStaffSession } from "../../lib/session";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
@@ -65,14 +66,12 @@ export default function CustomerLoginPage() {
         router.push("/customer/dashboard");
       } catch (customerError) {
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
-        localStorage.setItem("authToken", staffData.token);
-        localStorage.setItem("currentEmployee", JSON.stringify({
+        saveStaffSession(staffData.token, {
           userId: staffData.user.userId,
           name: staffData.user.name,
           role: staffData.user.role,
           displayRole: staffData.user.role,
-        }));
-        window.dispatchEvent(new Event("pos-session-change"));
+        });
         routeStaffUser(staffData.user);
       }
     } catch {

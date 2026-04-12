@@ -4,7 +4,7 @@ CREATE TABLE Dining_Tables (
     table_number SMALLINT NOT NULL UNIQUE,
     capacity SMALLINT NULL,
     status ENUM('available','occupied','reserved','inactive') NOT NULL DEFAULT 'available',
-    CONSTRAINT chk_table_number_positive CHECK (table_number >= 1),
+    CONSTRAINT chk_table_number_range CHECK (table_number >= 1 AND table_number <= 99),
     CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 8))
 );
 

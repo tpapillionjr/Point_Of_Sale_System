@@ -46,20 +46,29 @@ function parseSession(snapshot) {
   }
 }
 
+function subscribeToClientReady() {
+  return () => {};
+}
+
 export default function App({ Component, pageProps }) {
   const router = useRouter();
   const pathname = router.pathname;
   const isPublic = isPublicRoute(pathname);
   const showChrome = !isPublic;
+  const isClientReady = useSyncExternalStore(subscribeToClientReady, () => true, () => false);
   const sessionSnapshot = useSyncExternalStore(subscribeToSession, getSessionSnapshot, () => EMPTY_SESSION_SNAPSHOT);
   const session = useMemo(() => parseSession(sessionSnapshot), [sessionSnapshot]);
 
   const hasStaffSession = Boolean(session.token && session.employee);
   const isAuthorized =
     isPublic ||
-    (hasStaffSession && (!isManagerRoute(pathname) || canAccessManagerRoutes(session.employee)));
+    (isClientReady && hasStaffSession && (!isManagerRoute(pathname) || canAccessManagerRoutes(session.employee)));
 
   useEffect(() => {
+    if (!isClientReady) {
+      return;
+    }
+
     if (isPublic) {
       return;
     }
@@ -72,7 +81,7 @@ export default function App({ Component, pageProps }) {
     if (isManagerRoute(pathname) && !canAccessManagerRoutes(session.employee)) {
       router.replace("/tables");
     }
-  }, [hasStaffSession, isPublic, pathname, router, session.employee]);
+  }, [hasStaffSession, isClientReady, isPublic, pathname, router, session.employee]);
 
   if (!showChrome) {
     return <Component {...pageProps} />;

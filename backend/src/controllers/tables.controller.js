@@ -1,6 +1,11 @@
 import db from "../db/index.js";
 import { createValidationError } from "../validation/business-rules.js";
 
+const DINING_TABLE_FILTER = `
+  table_number BETWEEN 1 AND 99
+  AND (capacity IS NULL OR capacity BETWEEN 1 AND 8)
+`;
+
 async function getTables(_req, res) {
   try {
     const rows = await db.query(
@@ -10,7 +15,7 @@ async function getTables(_req, res) {
         capacity,
         status
        FROM Dining_Tables
-       WHERE table_number >= 1
+       WHERE ${DINING_TABLE_FILTER}
        ORDER BY table_number ASC`
     );
 
@@ -41,7 +46,7 @@ async function updateTableStatus(req, res) {
         `SELECT table_id AS tableId, table_number AS tableNumber, capacity, status
          FROM Dining_Tables
          WHERE table_id = ?
-           AND table_number >= 1
+           AND ${DINING_TABLE_FILTER}
          LIMIT 1`,
         [tableId]
       );
@@ -76,7 +81,7 @@ async function updateTableStatus(req, res) {
         `SELECT table_id AS tableId, table_number AS tableNumber, capacity, status
          FROM Dining_Tables
          WHERE table_id = ?
-           AND table_number >= 1
+           AND ${DINING_TABLE_FILTER}
          LIMIT 1`,
         [tableId]
       );
