@@ -12,10 +12,6 @@ export default function EmployeeLoginPage() {
   const [captchaToken, setCaptchaToken] = useState("");
   const [captchaSessionToken, setCaptchaSessionToken] = useState("");
 
-  function validateEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
   async function handleLoginSubmit(e) {
     e.preventDefault();
     setError("");
@@ -23,13 +19,7 @@ export default function EmployeeLoginPage() {
     setLoading(true);
 
     if (!loginForm.email || !loginForm.password) {
-      setError("Email and password are required.");
-      setLoading(false);
-      return;
-    }
-
-    if (!validateEmail(loginForm.email)) {
-      setError("Please enter a valid email address.");
+      setError("Username/email and password are required.");
       setLoading(false);
       return;
     }
@@ -39,7 +29,7 @@ export default function EmployeeLoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: loginForm.email,
+          identifier: loginForm.email,
           password: loginForm.password,
           captchaToken: needsCaptcha ? captchaSessionToken : undefined,
         }),
@@ -108,7 +98,7 @@ export default function EmployeeLoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: loginForm.email,
+          identifier: loginForm.email,
           password: loginForm.password,
           captchaToken: captchaSessionToken,
         }),
@@ -258,10 +248,10 @@ export default function EmployeeLoginPage() {
           {!needsCaptcha ? (
             <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={labelStyle}>Email</label>
+                <label style={labelStyle}>Username or Email</label>
                 <input
-                  type="email"
-                  placeholder="employee@restaurant.com"
+                  type="text"
+                  placeholder="Name or employee@restaurant.com"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                   style={inputStyle}

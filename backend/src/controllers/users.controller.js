@@ -79,13 +79,14 @@ async function postVerifyManager(req, res) {
  */
 async function postLogin(req, res) {
   try {
-    const { email, password, captchaToken } = req.body;
+    const { email, username, identifier, password, captchaToken } = req.body;
+    const loginIdentifier = identifier || username || email;
     const ipAddress = req.ip || req.connection.remoteAddress;
 
     // Validate input
-    if (!email || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
-        error: "Email and password are required.",
+        error: "Username/email and password are required.",
       });
     }
 
@@ -100,12 +101,12 @@ async function postLogin(req, res) {
 
     // 2. Find user by email
     const db = (await import("../db/index.js")).default;
-    const [users] = await db.query(
+    const users = await db.query(
       `SELECT user_id, name, email, password_hash, role, is_active, is_pos_locked, failed_pin_attempts
        FROM Users
-       WHERE email = ? AND is_active = true
+       WHERE (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)) AND is_active = true
        LIMIT 1`,
-      [email.trim().toLowerCase()]
+      [loginIdentifier.trim(), loginIdentifier.trim()]
     );
 
     // 3. Handle failed login (invalid email or password)
@@ -255,12 +256,13 @@ async function postLogin(req, res) {
  */
 async function postValidateCaptcha(req, res) {
   try {
-    const { captchaToken, email, password } = req.body;
+    const { captchaToken, email, username, identifier, password } = req.body;
+    const loginIdentifier = identifier || username || email;
     const ipAddress = req.ip || req.connection.remoteAddress;
 
-    if (!captchaToken || !email || !password) {
+    if (!captchaToken || !loginIdentifier || !password) {
       return res.status(400).json({
-        error: "CAPTCHA token, email, and password are required.",
+        error: "CAPTCHA token, username/email, and password are required.",
       });
     }
 
@@ -269,12 +271,12 @@ async function postValidateCaptcha(req, res) {
 
     // Now attempt login with CAPTCHA validated
     const db = (await import("../db/index.js")).default;
-    const [users] = await db.query(
+    const users = await db.query(
       `SELECT user_id, name, email, password_hash, role, is_active, is_pos_locked
        FROM Users
-       WHERE email = ? AND is_active = true
+       WHERE (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)) AND is_active = true
        LIMIT 1`,
-      [email.trim().toLowerCase()]
+      [loginIdentifier.trim(), loginIdentifier.trim()]
     );
 
     if (users.length === 0) {

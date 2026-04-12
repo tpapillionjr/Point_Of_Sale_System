@@ -12,8 +12,8 @@ function validateUserPayload(payload) {
     issues.push("a valid email is required.");
   }
 
-  if (!payload?.pin_code || !/^\d{4}$/.test(payload.pin_code)) {
-    issues.push("pin_code must be exactly 4 digits.");
+  if (!payload?.password || typeof payload.password !== "string" || payload.password.length < 6) {
+    issues.push("password must be at least 6 characters.");
   }
 
   const allowedRoles = new Set(["employee", "manager", "kitchen"]);
@@ -24,6 +24,22 @@ function validateUserPayload(payload) {
   if (issues.length > 0) {
     throw createValidationError("User validation failed.", issues);
   }
+}
+
+async function generateUniquePin(connection) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const [rows] = await connection.execute(
+      `SELECT user_id FROM Users WHERE pin_code = ? LIMIT 1`,
+      [pin]
+    );
+
+    if (rows.length === 0) {
+      return pin;
+    }
+  }
+
+  throw createValidationError("Could not generate a unique internal PIN. Try again.");
 }
 
 async function getUsers() {
@@ -63,22 +79,12 @@ async function createUser(payload, requestingUserId) {
       throw createValidationError("An account with that email already exists.");
     }
 
-    // Check for duplicate PIN
-    const [pinRows] = await connection.execute(
-      `SELECT user_id 
-      FROM Users 
-      WHERE pin_code = ? LIMIT 1`,
-      [payload.pin_code]
-    );
-
-    if (pinRows.length > 0) {
-      throw createValidationError("That PIN is already in use.");
-    }
+    const pinCode = await generateUniquePin(connection);
 
     const [result] = await connection.execute(
       `INSERT INTO Users (name, email, pin_code, password_hash, role)
-       VALUES (?, ?, ?, '', ?)`,
-      [payload.name.trim(), payload.email.trim(), payload.pin_code, payload.role]
+       VALUES (?, ?, ?, ?, ?)`,
+      [payload.name.trim(), payload.email.trim().toLowerCase(), pinCode, payload.password, payload.role]
     );
 
     return { userId: result.insertId, name: payload.name.trim(), role: payload.role };

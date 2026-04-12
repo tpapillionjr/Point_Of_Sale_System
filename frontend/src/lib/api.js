@@ -87,6 +87,26 @@ export async function fetchBackOfficeData(range) {
   return request(`/api/back-office/data${query ? `?${query}` : ""}`);
 }
 
+export async function createInventoryItem(payload) {
+  return request("/api/back-office/inventory", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInventoryItem(type, inventoryItemName) {
+  return request(`/api/back-office/inventory/${type}/${encodeURIComponent(inventoryItemName)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function updateInventoryItemAmount(type, inventoryItemName, amountAvailable) {
+  return request(`/api/back-office/inventory/${type}/${encodeURIComponent(inventoryItemName)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ amountAvailable }),
+  });
+}
+
 export async function fetchTables() {
   return request("/api/tables");
 }
@@ -191,10 +211,10 @@ export async function getReportsDashboard(range) {
   return request(`/api/reports/dashboard${query ? `?${query}` : ""}`);
 }
 
-export async function authenticateShift(pin) {
+export async function authenticateShift(credentials) {
   return request("/api/shifts/auth", {
     method: "POST",
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify(credentials),
   });
 }
 

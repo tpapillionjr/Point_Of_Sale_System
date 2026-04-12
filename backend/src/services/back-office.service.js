@@ -196,6 +196,163 @@ async function getBackOfficeDashboard() {
   return { summary, managerActions };
 }
 
+function normalizeInventoryType(type) {
+  return type === "utensils" ? "utensils" : "menu";
+}
+
+function normalizeInventoryName(value, label = "inventoryItemName") {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) {
+    const error = new Error(`${label} is required.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return name;
+}
+
+function normalizeNonNegativeInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    const error = new Error(`${label} must be a non-negative integer.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return number;
+}
+
+async function createInventoryItem(payload = {}) {
+  const type = normalizeInventoryType(payload.type);
+  const amountAvailable = normalizeNonNegativeInteger(payload.amountAvailable, "amountAvailable");
+  const availabilityStatus = typeof payload.availabilityStatus === "boolean" ? payload.availabilityStatus : true;
+
+  if (type === "utensils") {
+    const utensilName = normalizeInventoryName(payload.inventoryItemName, "utensilName");
+    const reorderThreshold = normalizeNonNegativeInteger(payload.reorderThreshold ?? 10, "reorderThreshold");
+
+    await db.pool.execute(
+      `INSERT INTO Utensil_Inventory (utensil_name, amount_available, reorder_threshold, availability_status)
+       VALUES (?, ?, ?, ?)`,
+      [utensilName, amountAvailable, reorderThreshold, availabilityStatus]
+    );
+
+    return {
+      type,
+      inventoryItemName: utensilName,
+      amountAvailable,
+      reorderThreshold,
+      availabilityStatus,
+    };
+  }
+
+  const inventoryItemName = normalizeInventoryName(payload.inventoryItemName);
+  const menuItemId = Number(payload.menuItemId);
+  if (!Number.isInteger(menuItemId) || menuItemId <= 0) {
+    const error = new Error("menuItemId must be a positive integer.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const menuRows = await db.query(
+    `SELECT menu_item_id FROM Menu_Item WHERE menu_item_id = ? LIMIT 1`,
+    [menuItemId]
+  );
+  if (menuRows.length === 0) {
+    const error = new Error("Linked menu item was not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await db.pool.execute(
+    `INSERT INTO Inventory (inventory_item_name, amount_available, menu_item_id, availability_status)
+     VALUES (?, ?, ?, ?)`,
+    [inventoryItemName, amountAvailable, menuItemId, availabilityStatus]
+  );
+
+  return {
+    type,
+    inventoryItemName,
+    amountAvailable,
+    menuItemId,
+    availabilityStatus,
+  };
+}
+
+async function deleteInventoryItem(typeInput, inventoryItemNameInput) {
+  const type = normalizeInventoryType(typeInput);
+  const inventoryItemName = normalizeInventoryName(inventoryItemNameInput);
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `DELETE FROM Utensil_Inventory WHERE utensil_name = ?`,
+      [inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return { type, inventoryItemName };
+  }
+
+  await db.withTransaction(async (connection) => {
+    await connection.execute(
+      `DELETE FROM Manager_Notification WHERE inventory_item_name = ?`,
+      [inventoryItemName]
+    );
+
+    const [result] = await connection.execute(
+      `DELETE FROM Inventory WHERE inventory_item_name = ?`,
+      [inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  });
+
+  return { type, inventoryItemName };
+}
+
+async function updateInventoryItemAmount(typeInput, inventoryItemNameInput, amountAvailableInput) {
+  const type = normalizeInventoryType(typeInput);
+  const inventoryItemName = normalizeInventoryName(inventoryItemNameInput);
+  const amountAvailable = normalizeNonNegativeInteger(amountAvailableInput, "amountAvailable");
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `UPDATE Utensil_Inventory SET amount_available = ? WHERE utensil_name = ?`,
+      [amountAvailable, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return { type, inventoryItemName, amountAvailable };
+  }
+
+  const [result] = await db.pool.execute(
+    `UPDATE Inventory SET amount_available = ? WHERE inventory_item_name = ?`,
+    [amountAvailable, inventoryItemName]
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error("Inventory item not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return { type, inventoryItemName, amountAvailable };
+}
+
 async function getBackOfficeData(range) {
   const filters = normalizeBackOfficeFilters(range);
   const inventoryRowsPromise = db.query(
@@ -601,4 +758,10 @@ async function getBackOfficeData(range) {
   };
 }
 
-export { getBackOfficeDashboard, getBackOfficeData };
+export {
+  createInventoryItem,
+  deleteInventoryItem,
+  getBackOfficeDashboard,
+  getBackOfficeData,
+  updateInventoryItemAmount,
+};
