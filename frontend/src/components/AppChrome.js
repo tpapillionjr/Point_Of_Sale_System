@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
+import { canAccessManagerRoutes, clearStaffSession, getStoredEmployee } from "../lib/session";
 
 const NAV_ITEMS = [
   { href: "/clock-in", label: "Clock In" },
@@ -33,7 +33,11 @@ function subscribeToStorage(listener) {
   }
 
   window.addEventListener("storage", listener);
-  return () => window.removeEventListener("storage", listener);
+  window.addEventListener("pos-session-change", listener);
+  return () => {
+    window.removeEventListener("storage", listener);
+    window.removeEventListener("pos-session-change", listener);
+  };
 }
 
 function getEmployeeSnapshot() {
@@ -68,12 +72,7 @@ export default function AppChrome({ children }) {
   });
 
   function handleLogout() {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("currentEmployee");
-      window.localStorage.removeItem("currentOrder");
-      window.localStorage.removeItem("authToken");
-    }
-
+    clearStaffSession();
     router.push("/clock-in");
   }
 

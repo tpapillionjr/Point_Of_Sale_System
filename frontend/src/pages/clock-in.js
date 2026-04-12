@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { authenticateShift, clockInShift, clockOutShift } from "../lib/api";
+import { notifyStaffSessionChange, saveStaffSession } from "../lib/session";
 
 export default function ClockinPage() {
   const router = useRouter();
@@ -53,6 +54,7 @@ export default function ClockinPage() {
       });
       setAuthToken(session.token);
       localStorage.setItem("authToken", session.token);
+      notifyStaffSessionChange();
       setUser({
         userId: session.userId,
         name: session.name,
@@ -88,6 +90,7 @@ export default function ClockinPage() {
       setScheduledHours(0);
       setAuthToken(null);
       localStorage.removeItem("authToken");
+      notifyStaffSessionChange();
       setMessage({ type: "error", text: error.message });
     } finally {
       setIsLoading(false);
@@ -123,6 +126,7 @@ export default function ClockinPage() {
         setScheduledHours(0);
         setAuthToken(null);
         localStorage.removeItem("authToken");
+        notifyStaffSessionChange();
 
       }
     } catch (error) {
@@ -142,18 +146,15 @@ export default function ClockinPage() {
       text: user.name + " logged in as " + role + " at " + timeNow,
     });
 
-    localStorage.setItem("authToken", authToken);
-
-    localStorage.setItem(
-      "currentEmployee",
-      JSON.stringify({
+    saveStaffSession(
+      authToken,
+      {
         userId: user.userId,
         name: user.name,
         role: user.role,
         displayRole: role,
-      })
+      }
     );
-    window.dispatchEvent(new Event("pos-session-change"));
 
     if (user.role === "kitchen") {
       router.push("/expo");

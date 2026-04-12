@@ -1,6 +1,8 @@
 import db from "../db/index.js";
 import { createValidationError, validateOrderPayload } from "../validation/business-rules.js";
 
+const MAX_DINING_TABLE_NUMBER = 99;
+
 async function ensureUserExists(connection, userId) {
   const [rows] = await connection.execute(
     "SELECT user_id, role, is_active FROM Users WHERE user_id = ? LIMIT 1",
@@ -20,8 +22,13 @@ async function ensureUserExists(connection, userId) {
 
 async function ensureTableAvailable(connection, tableId) {
   const [rows] = await connection.execute(
-    "SELECT table_id, status FROM Dining_Tables WHERE table_id = ? LIMIT 1",
-    [tableId]
+    `SELECT table_id, status
+     FROM Dining_Tables
+     WHERE table_id = ?
+       AND table_number BETWEEN 1 AND ?
+       AND (capacity IS NULL OR capacity BETWEEN 1 AND 8)
+     LIMIT 1`,
+    [tableId, MAX_DINING_TABLE_NUMBER]
   );
 
   if (rows.length === 0) {
@@ -436,8 +443,12 @@ async function cancelOrder(payload) {
 async function findActiveOrderByTableNumber(tableNumber) {
   const parsedTableNumber = Number.parseInt(tableNumber, 10);
 
-  if (!Number.isInteger(parsedTableNumber) || parsedTableNumber <= 0) {
-    throw createValidationError("tableNumber must be a positive integer.");
+  if (
+    !Number.isInteger(parsedTableNumber) ||
+    parsedTableNumber <= 0 ||
+    parsedTableNumber > MAX_DINING_TABLE_NUMBER
+  ) {
+    throw createValidationError(`tableNumber must be between 1 and ${MAX_DINING_TABLE_NUMBER}.`);
   }
 
   const rows = await db.query(
