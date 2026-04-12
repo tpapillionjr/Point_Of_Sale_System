@@ -98,6 +98,11 @@ function buildRangeFilter(filters, column = "created_at") {
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
+function buildCurrentWeekFilter(column = "created_at") {
+  return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY)
+    AND DATE(${column}) < DATE_ADD(DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY), INTERVAL 7 DAY)`;
+}
+
 function hoursBetween(start, end) {
   if (!start || !end) {
     return 0;
@@ -267,6 +272,19 @@ async function getLaborRows(filters) {
   );
 }
 
+async function getCurrentWeekLaborRows() {
+  return db.query(
+    `SELECT
+       u.name,
+       es.clock_in AS clockIn,
+       es.clock_out AS clockOut
+     FROM Employee_Shift es
+     JOIN Users u ON u.user_id = es.user_id
+     WHERE ${buildCurrentWeekFilter("es.scheduled_start")}
+     ORDER BY u.name ASC, es.scheduled_start DESC`
+  );
+}
+
 async function getLatestClockRows() {
   return db.query(
     `SELECT
@@ -392,7 +410,7 @@ async function getCustomerSummary(filters) {
 
 async function getReportsDashboard(range) {
   const filters = normalizeReportFilters(range);
-  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
+  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, currentWeekLaborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
     await Promise.all([
       getSummaryForFilters(filters),
       getRevenueTrend(filters),
@@ -402,6 +420,7 @@ async function getReportsDashboard(range) {
       getSalesByServer(filters),
       getTipSummary(filters),
       getLaborRows(filters),
+      getCurrentWeekLaborRows(),
       getLatestClockRows(),
       getVoidRows(filters),
       getDiscountRows(filters),
@@ -410,12 +429,31 @@ async function getReportsDashboard(range) {
       getCustomerSummary(filters),
     ]);
 
+  const weeklyHoursByEmployee = new Map();
+  for (const row of currentWeekLaborRows) {
+    const existing = weeklyHoursByEmployee.get(row.name) ?? {
+      name: row.name,
+      hoursWorkedThisWeek: 0,
+    };
+    const workedHours = row.clockIn ? hoursBetween(row.clockIn, row.clockOut ?? new Date().toISOString()) : 0;
+    existing.hoursWorkedThisWeek += workedHours;
+    weeklyHoursByEmployee.set(row.name, existing);
+  }
+
+  const laborWeeklyHours = [...weeklyHoursByEmployee.values()]
+    .map((row) => ({
+      ...row,
+      hoursWorkedThisWeek: Number(row.hoursWorkedThisWeek.toFixed(1)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const laborByEmployee = new Map();
   for (const row of laborRows) {
     const existing = laborByEmployee.get(row.name) ?? {
       name: row.name,
       scheduled: 0,
       worked: 0,
+      hoursWorkedThisWeek: 0,
       clockIns: 0,
       performance: "Average",
     };
@@ -441,6 +479,9 @@ async function getReportsDashboard(range) {
         ...row,
         scheduled: roundedScheduled,
         worked: roundedWorked,
+        hoursWorkedThisWeek: weeklyHoursByEmployee.get(row.name)?.hoursWorkedThisWeek
+          ? Number(weeklyHoursByEmployee.get(row.name).hoursWorkedThisWeek.toFixed(1))
+          : 0,
         performance,
       };
     })
@@ -481,6 +522,7 @@ async function getReportsDashboard(range) {
       averageTips: Number(tipSummary.averageTips || 0),
     },
     laborOverview,
+    laborWeeklyHours,
     laborClock,
     inventoryUsage: topItems.map((row) => ({
       itemName: row.name,

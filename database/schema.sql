@@ -331,6 +331,24 @@ CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
+CREATE TABLE Manager_Notification (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    inventory_item_name VARCHAR(100) NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    message VARCHAR(255) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_manager_notification_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    CONSTRAINT fk_manager_notification_inventory
+        FOREIGN KEY (inventory_item_name) REFERENCES Inventory(inventory_item_name)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE Loyalty_Rewards (
     reward_id    INT AUTO_INCREMENT PRIMARY KEY,
     name         VARCHAR(100) NOT NULL,
@@ -368,6 +386,36 @@ CREATE TABLE Loyalty_Transactions (
 );
 
 DELIMITER $$
+
+CREATE TRIGGER trg_inventory_low_stock_notify
+AFTER UPDATE ON Inventory
+FOR EACH ROW
+BEGIN
+    IF NEW.amount_available <= 10
+       AND OLD.amount_available > 10
+       AND NEW.availability_status = TRUE THEN
+
+        INSERT INTO Manager_Notification (
+            user_id,
+            inventory_item_name,
+            title,
+            message
+        )
+        SELECT
+            u.user_id,
+            NEW.inventory_item_name,
+            'Low Inventory Alert',
+            CONCAT(
+                NEW.inventory_item_name,
+                ' is low. Current amount available: ',
+                NEW.amount_available
+            )
+        FROM Users u
+        WHERE u.role = 'manager'
+          AND u.is_active = TRUE;
+
+    END IF;
+END$$
 
 CREATE TRIGGER trg_award_loyalty_points
 AFTER UPDATE ON Online_Orders
