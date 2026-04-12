@@ -161,8 +161,13 @@ select {
 
 .app-shell__title {
   margin: 0;
-  font-size: clamp(1.6rem, 2.8vw, 2.3rem);
+  font-size: 2.1rem;
   color: #0f172a;
+}
+
+.app-shell__title--brand {
+  font-size: 2.5rem;
+  letter-spacing: 0;
 }
 
 .app-shell__nav {

@@ -94,6 +94,11 @@ function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function normalizeCategory(value) {
+  const category = value || "Uncategorized";
+  return String(category).toLowerCase() === "entree" ? "Entrees" : category;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return "—";
@@ -353,6 +358,50 @@ async function updateInventoryItemAmount(typeInput, inventoryItemNameInput, amou
   return { type, inventoryItemName, amountAvailable };
 }
 
+async function receivePurchasingStock(payload = {}) {
+  const type = normalizeInventoryType(payload.type);
+  const inventoryItemName = normalizeInventoryName(payload.inventoryItemName);
+  const quantityReceived = normalizeNonNegativeInteger(payload.quantityReceived, "quantityReceived");
+
+  if (quantityReceived <= 0) {
+    const error = new Error("quantityReceived must be greater than zero.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `UPDATE Utensil_Inventory
+       SET amount_available = amount_available + ?,
+           availability_status = TRUE
+       WHERE utensil_name = ?`,
+      [quantityReceived, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  } else {
+    const [result] = await db.pool.execute(
+      `UPDATE Inventory
+       SET amount_available = amount_available + ?,
+           availability_status = TRUE
+       WHERE inventory_item_name = ?`,
+      [quantityReceived, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
+  return { type, inventoryItemName, quantityReceived };
+}
+
 async function getBackOfficeData(range) {
   const filters = normalizeBackOfficeFilters(range);
   const inventoryRowsPromise = db.query(
@@ -491,6 +540,8 @@ async function getBackOfficeData(range) {
          u.name AS employeeName,
          o.total,
          o.status,
+         NULL AS customerStatus,
+         NULL AS paymentStatus,
          o.created_at AS createdAt,
          'In Store' AS channel
        FROM Orders o
@@ -511,6 +562,8 @@ async function getBackOfficeData(range) {
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
          END AS status,
+         oo.customer_status AS customerStatus,
+         oo.payment_status AS paymentStatus,
          oo.created_at AS createdAt,
          'Online' AS channel
        FROM Online_Orders oo
@@ -530,6 +583,8 @@ async function getBackOfficeData(range) {
          u.name AS employeeName,
          o.total,
          o.status,
+         NULL AS customerStatus,
+         NULL AS paymentStatus,
          o.created_at AS createdAt,
          'In Store' AS channel
        FROM Orders o
@@ -546,9 +601,12 @@ async function getBackOfficeData(range) {
          CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
          oo.total,
          CASE
+           WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
          END AS status,
+         oo.customer_status AS customerStatus,
+         oo.payment_status AS paymentStatus,
          oo.created_at AS createdAt,
          'Online' AS channel
        FROM Online_Orders oo
@@ -599,7 +657,7 @@ async function getBackOfficeData(range) {
   const stockRows = inventoryRows.map((row) => ({
     inventoryItemName: row.inventoryItemName,
     linkedMenuItem: row.linkedMenuItem ?? "Unlinked",
-    category: row.category,
+    category: normalizeCategory(row.category),
     amountAvailable: Number(row.amountAvailable ?? 0),
     basePrice: Number(row.basePrice ?? 0),
     status: getInventoryStatus(Number(row.amountAvailable ?? 0), Boolean(row.availabilityStatus)),
@@ -629,6 +687,7 @@ async function getBackOfficeData(range) {
       currentOnHand: row.amountAvailable,
       suggestedOrder: Math.max(12 - row.amountAvailable, 1),
       linkedMenuItem: row.linkedMenuItem,
+      category: normalizeCategory(row.category),
       priority: row.status,
       estimatedCost: Number((Math.max(12 - row.amountAvailable, 1) * Math.max(row.basePrice || 1, 1)).toFixed(2)),
     }))
@@ -755,7 +814,7 @@ async function getBackOfficeData(range) {
       items: menuItems.map((row) => ({
         menuItemId: row.menuItemId,
         name: row.name,
-        category: row.category,
+        category: normalizeCategory(row.category),
         basePrice: Number(row.basePrice ?? 0),
         description: row.description ?? "",
         photoUrl: row.photoUrl ?? "",
@@ -783,6 +842,8 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        customerStatus: row.customerStatus,
+        paymentStatus: row.paymentStatus,
         channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
@@ -793,6 +854,8 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        customerStatus: row.customerStatus,
+        paymentStatus: row.paymentStatus,
         channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
@@ -832,5 +895,6 @@ export {
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
+  receivePurchasingStock,
   updateInventoryItemAmount,
 };

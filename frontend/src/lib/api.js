@@ -107,6 +107,13 @@ export async function updateInventoryItemAmount(type, inventoryItemName, amountA
   });
 }
 
+export async function receivePurchasingStock(payload) {
+  return request("/api/back-office/purchasing/receive", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchTables() {
   return request("/api/tables");
 }
@@ -363,6 +370,13 @@ export async function updateLoyaltyReward(id, payload) {
 export async function toggleLoyaltyReward(id) {
   return request(`/api/loyalty/manage/rewards/${id}/toggle`, {
     method: "PATCH",
+  });
+}
+
+export async function adjustLoyaltyPoints(customerId, payload) {
+  return request(`/api/loyalty/manage/customers/${customerId}/points`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

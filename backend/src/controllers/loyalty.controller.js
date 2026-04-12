@@ -1,4 +1,5 @@
 import {
+  adjustCustomerPoints,
   getActiveRewards,
   getCustomerLoyaltyInfo,
   redeemReward,
@@ -179,7 +180,31 @@ async function toggleLoyaltyReward(req, res) {
   }
 }
 
+async function adjustLoyaltyPoints(req, res) {
+  try {
+    const customerId = Number(req.params.customerId);
+    const pointsDelta = Number(req.body?.pointsDelta);
+    const reason = req.body?.reason;
+
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(400).json({ error: "Invalid customer ID." });
+    }
+
+    if (!Number.isInteger(pointsDelta) || pointsDelta === 0) {
+      return res.status(400).json({ error: "pointsDelta must be a non-zero whole number." });
+    }
+
+    const result = await adjustCustomerPoints(customerId, pointsDelta, reason);
+    res.json(result);
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: error.message });
+    console.error("adjustLoyaltyPoints error:", error);
+    res.status(500).json({ error: "Failed to adjust customer points." });
+  }
+}
+
 export {
+  adjustLoyaltyPoints,
   getRewards,
   getLoyaltyInfo,
   redeem,

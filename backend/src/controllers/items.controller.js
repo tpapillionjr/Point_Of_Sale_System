@@ -17,7 +17,7 @@ function menuItemPayload(body) {
   const { name, category, basePrice, description, photoUrl, commonAllergens } = body ?? {};
   return {
     name,
-    category,
+    category: normalizeCategory(category),
     basePrice,
     description: normalizeOptionalText(description),
     photoUrl: normalizeOptionalText(photoUrl, 2048),
@@ -25,11 +25,20 @@ function menuItemPayload(body) {
   };
 }
 
+function normalizeCategory(value) {
+  const category = normalizeOptionalText(value, 50);
+  if (!category) {
+    return "Uncategorized";
+  }
+
+  return category.toLowerCase() === "entree" ? "Entrees" : category;
+}
+
 function menuItemResponse(row) {
   return {
     menuItemId: row.menuItemId,
     name: row.name,
-    category: row.category,
+    category: normalizeCategory(row.category),
     basePrice: Number(row.basePrice ?? 0),
     description: row.description ?? "",
     photoUrl: row.photoUrl ?? "",
@@ -71,12 +80,12 @@ async function createItem(req, res) {
       `INSERT INTO Menu_Item
          (name, category, base_price, description, photo_url, common_allergens, is_active)
        VALUES (?, ?, ?, ?, ?, ?, TRUE)`,
-      [name.trim(), category?.trim() || "Uncategorized", price.toFixed(2), description, photoUrl, commonAllergens]
+      [name.trim(), category, price.toFixed(2), description, photoUrl, commonAllergens]
     );
     res.status(201).json({
       menuItemId: result.insertId,
       name: name.trim(),
-      category: category?.trim() || "Uncategorized",
+      category,
       basePrice: price,
       description: description ?? "",
       photoUrl: photoUrl ?? "",
@@ -113,7 +122,7 @@ async function updateItem(req, res) {
        WHERE menu_item_id = ?`,
       [
         name.trim(),
-        category?.trim() || "Uncategorized",
+        category,
         price.toFixed(2),
         description,
         photoUrl,
@@ -129,7 +138,7 @@ async function updateItem(req, res) {
     res.json({
       menuItemId,
       name: name.trim(),
-      category: category?.trim() || "Uncategorized",
+      category,
       basePrice: price,
       description: description ?? "",
       photoUrl: photoUrl ?? "",
