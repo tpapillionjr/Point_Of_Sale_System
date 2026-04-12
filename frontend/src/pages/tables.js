@@ -341,7 +341,21 @@ export default function TablesPage() {
           return;
         }
 
-        setTables(normalized);
+        // Inject synthetic takeout tile — always present, not returned by the API filter
+        const takeoutEntry = {
+          tableId: 10000,
+          tableNumber: TAKEOUT_TABLE_NUMBER,
+          id: "Takeout",
+          area: "Takeout",
+          x: "76%",
+          y: "78%",
+          seats: 99,
+          status: "open",
+          dbStatus: "available",
+          server: "Unassigned",
+          time: "Live",
+        };
+        setTables([...normalized, takeoutEntry]);
         setSelectedTableId((current) => current ?? normalized[0]?.tableId ?? null);
         setError(null);
       } catch (loadError) {
