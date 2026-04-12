@@ -1,11 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
+import { upload } from "@vercel/blob/client";
 import { useEffect, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
 import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/$/, "");
 
 function SimpleTable({ headers, rows, renderRow }) {
   return (
@@ -32,23 +31,6 @@ function ErrorState({ message }) {
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
-}
-
-function resolveImageSrc(src) {
-  if (!src) {
-    return "";
-  }
-
-  return src.startsWith("/") ? `${API_BASE}${src}` : src;
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Could not read the selected photo."));
-    reader.readAsDataURL(file);
-  });
 }
 
 function toDateInputValue(date) {
@@ -601,7 +583,8 @@ const EMPTY_FORM = {
   basePrice: "",
   description: "",
   photoUrl: "",
-  photoDataUrl: "",
+  photoFile: null,
+  photoPreviewUrl: "",
   photoFileName: "",
   commonAllergens: "",
 };
@@ -659,7 +642,8 @@ export function MenuManagementSection() {
       basePrice: String(item.basePrice),
       description: item.description ?? "",
       photoUrl: item.photoUrl ?? "",
-      photoDataUrl: "",
+      photoFile: null,
+      photoPreviewUrl: item.photoUrl ?? "",
       photoFileName: "",
       commonAllergens: item.commonAllergens ?? "",
     });
@@ -674,6 +658,53 @@ export function MenuManagementSection() {
     setFormError(null);
   }
 
+  function handlePhotoChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setForm((current) => ({
+        ...current,
+        photoFile: null,
+        photoPreviewUrl: current.photoUrl,
+        photoFileName: "",
+      }));
+      return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setFormError("Photo must be a JPEG, PNG, or WebP image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError("Photo must be 10 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      photoFile: file,
+      photoPreviewUrl: URL.createObjectURL(file),
+      photoFileName: file.name,
+    }));
+    setFormError(null);
+  }
+
+  async function uploadPhotoIfNeeded() {
+    if (!form.photoFile) {
+      return form.photoUrl.trim();
+    }
+
+    const blob = await upload(`menu-items/${form.photoFile.name}`, form.photoFile, {
+      access: "public",
+      handleUploadUrl: "/api/menu-photo/upload",
+    });
+
+    return blob.url;
+  }
+
   async function handleSave() {
     if (!form.name.trim()) { setFormError("Name is required."); return; }
     const price = Number(form.basePrice);
@@ -682,13 +713,13 @@ export function MenuManagementSection() {
     setSaving(true);
     setFormError(null);
     try {
+      const photoUrl = await uploadPhotoIfNeeded();
       const payload = {
         name: form.name.trim(),
         category: form.category.trim() || "Uncategorized",
         basePrice: price,
         description: form.description.trim(),
-        photoUrl: form.photoUrl.trim(),
-        photoDataUrl: form.photoDataUrl,
+        photoUrl,
         commonAllergens: form.commonAllergens.trim(),
       };
       if (editTarget) {
@@ -787,7 +818,7 @@ export function MenuManagementSection() {
                     <td className="py-3 pr-4">
                       {item.photoUrl ? (
                         <img
-                          src={resolveImageSrc(item.photoUrl)}
+                          src={item.photoUrl}
                           alt={item.name}
                           className="h-14 w-14 rounded-lg object-cover"
                         />
@@ -905,28 +936,8 @@ export function MenuManagementSection() {
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Photo</label>
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) {
-                      setForm({ ...form, photoDataUrl: "", photoFileName: "" });
-                      return;
-                    }
-
-                    if (file.size > 5 * 1024 * 1024) {
-                      setFormError("Photo must be 5 MB or smaller.");
-                      e.target.value = "";
-                      return;
-                    }
-
-                    try {
-                      const photoDataUrl = await readFileAsDataUrl(file);
-                      setForm({ ...form, photoDataUrl, photoFileName: file.name });
-                      setFormError(null);
-                    } catch (err) {
-                      setFormError(err.message);
-                    }
-                  }}
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handlePhotoChange}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {form.photoFileName ? (
@@ -934,9 +945,9 @@ export function MenuManagementSection() {
                 ) : form.photoUrl ? (
                   <p className="mt-2 text-xs font-medium text-gray-500">Current photo saved.</p>
                 ) : null}
-                {form.photoDataUrl || form.photoUrl ? (
+                {form.photoPreviewUrl ? (
                   <img
-                    src={form.photoDataUrl || resolveImageSrc(form.photoUrl)}
+                    src={form.photoPreviewUrl}
                     alt="Menu item preview"
                     className="mt-3 h-32 w-full rounded-lg object-cover"
                   />

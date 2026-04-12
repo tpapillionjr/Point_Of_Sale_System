@@ -1,7 +1,5 @@
 import express from "express";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 import backOfficeRoutes from "./routes/back-office.routes.js";
 import itemsRoutes from "./routes/items.routes.js";
 import kitchenRoutes from "./routes/kitchen.routes.js";
@@ -14,15 +12,12 @@ import usersRoutes from "./routes/users.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 
 const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Middleware to capture client IP address properly
 app.set("trust proxy", 1);
 
 app.use(cors());
-app.use(express.json({ limit: "8mb" }));
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use(express.json());
 
 app.get("/", (_req, res) => {
   res.status(200).json({
