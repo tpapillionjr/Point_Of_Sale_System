@@ -16,6 +16,7 @@ export default function OrderTrackingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const currentStepRef = useRef(1);
   const [estimatedPoints, setEstimatedPoints] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("estimatedPoints");
@@ -32,8 +33,9 @@ export default function OrderTrackingPage() {
         const step = STATUS_MAP[status] ?? 1;
         currentStepRef.current = step;
         setCurrentStep(step);
-      } catch {
-        // silently ignore — keep showing last known step
+        setTrackingError("");
+      } catch (error) {
+        setTrackingError(error.message || "Unable to access this order.");
       }
     }
 
@@ -72,8 +74,14 @@ export default function OrderTrackingPage() {
           <p style={{ color: "#64748b", fontSize: "15px", margin: 0 }}>We&apos;ll keep you updated every step of the way.</p>
         </div>
 
+        {trackingError ? (
+          <div style={{ backgroundColor: "#fef2f2", borderRadius: "14px", padding: "16px 20px", border: "1px solid #fecaca", marginBottom: "24px", color: "#991b1b", fontSize: "14px", fontWeight: "700" }}>
+            {trackingError}
+          </div>
+        ) : null}
+
         {/* Points earned banner */}
-        {estimatedPoints > 0 && (
+        {!trackingError && estimatedPoints > 0 && (
           <div style={{ backgroundColor: "#f0fdf4", borderRadius: "14px", padding: "16px 24px", border: "1px solid #bbf7d0", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "24px" }}>⭐</span>
             <p style={{ margin: 0, fontSize: "14px", color: "#166534", fontWeight: "600" }}>
@@ -83,6 +91,7 @@ export default function OrderTrackingPage() {
         )}
 
         {/* Progress bar */}
+        {!trackingError && (
         <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "40px 32px 32px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)", marginBottom: "24px" }}>
 
           {/* Steps row */}
@@ -158,6 +167,7 @@ export default function OrderTrackingPage() {
             )}
           </div>
         </div>
+        )}
 
 
       </div>

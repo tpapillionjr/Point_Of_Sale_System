@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get("/menu", getCustomerMenu);
 router.post("/orders", createCustomerOrder);
-router.get("/orders/:orderId/status", getCustomerOrderStatus);
+router.get("/orders/:orderId/status", requireCustomerAuth, getCustomerOrderStatus);
 router.get("/online-orders", requireAuth, getOnlineOrders);
 router.get("/online-orders/:orderId", requireAuth, getOnlineOrderById);
 router.patch("/online-orders/:orderId/confirm", requireAuth, confirmOnlineOrder);

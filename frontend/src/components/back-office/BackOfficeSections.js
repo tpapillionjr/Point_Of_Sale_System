@@ -22,6 +22,7 @@ import {
   toggleMenuItemActive,
   updateBackOfficeSettings,
   updateLaborShift,
+  updateInventoryItemAmount,
   updateLoyaltyReward,
   updateMenuItem,
 } from "../../lib/api";
