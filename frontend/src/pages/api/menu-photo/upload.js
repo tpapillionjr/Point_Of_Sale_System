@@ -1,6 +1,12 @@
 import { handleUpload } from "@vercel/blob/client";
 
 export default async function handler(request, response) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return response.status(500).json({
+      error: "Vercel Blob is missing BLOB_READ_WRITE_TOKEN. Add it to frontend/.env.local and restart the frontend dev server.",
+    });
+  }
+
   try {
     const jsonResponse = await handleUpload({
       body: request.body,
