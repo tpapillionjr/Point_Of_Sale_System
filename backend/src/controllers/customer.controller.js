@@ -102,7 +102,7 @@ const TAX_RATE = 0.0825;
 async function createCustomerOrder(req, res) {
   try {
 
-    const { firstName, lastName, email, phone, note, cart, paymentPreference, customerId } = req.body;
+    const { firstName, lastName, email, phone, note, cart, paymentPreference, customerId, rewardId } = req.body;
 
     if (!firstName || !lastName || !email || !phone || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: "Missing required fields." });
@@ -114,10 +114,9 @@ async function createCustomerOrder(req, res) {
 
     const result = await db.withTransaction(async (connection) => {
       const [orderResult] = await connection.execute(
-
         `INSERT INTO Online_Orders (customer_num_id, first_name, last_name, email, phone, order_note, customer_status, payment_preference, subtotal, tax, total)
          VALUES (?, ?, ?, ?, ?, ?, 'placed', ?, ?, ?, ?)`,
-        [customerId ?? null, firstName.trim(), lastName.trim(), email.trim(), phone.trim(), note ?? null, payment, subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
+        [customerId ?? null, firstName.trim(), lastName.trim(), email.trim(), phone.trim(), note ?? null, paymentPreference ?? "in_store", subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
       );
 
       const onlineOrderId = orderResult.insertId;
@@ -134,6 +133,42 @@ async function createCustomerOrder(req, res) {
          VALUES (NULL, ?, 1, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [onlineOrderId]
       );
+
+      // If paying online, mark as paid immediately — triggers loyalty points award
+      if (paymentPreference === "online" && customerId) {
+        await connection.execute(
+          `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
+          [onlineOrderId]
+        );
+      }
+
+      // If a reward was selected, deduct points and log the transaction now that we have the order ID
+      if (rewardId && customerId) {
+        const [rewardRows] = await connection.execute(
+          `SELECT reward_id, name, points_cost, is_active FROM Loyalty_Rewards WHERE reward_id = ? LIMIT 1`,
+          [rewardId]
+        );
+
+        if (rewardRows.length > 0 && rewardRows[0].is_active) {
+          const reward = rewardRows[0];
+          const [customerRows] = await connection.execute(
+            `SELECT points_balance FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+            [customerId]
+          );
+
+          if (customerRows.length > 0 && customerRows[0].points_balance >= reward.points_cost) {
+            await connection.execute(
+              `UPDATE Customer SET points_balance = points_balance - ? WHERE customer_num_id = ?`,
+              [reward.points_cost, customerId]
+            );
+            await connection.execute(
+              `INSERT INTO Loyalty_Transactions (customer_num_id, online_order_id, type, points, description)
+               VALUES (?, ?, 'redeemed', ?, ?)`,
+              [customerId, onlineOrderId, reward.points_cost, `Redeemed: ${reward.name}`]
+            );
+          }
+        }
+      }
 
       return onlineOrderId;
     });
@@ -193,9 +228,9 @@ async function getOnlineOrders(req, res) {
   try {
     const rows = await db.query(
       `SELECT online_order_id, first_name, last_name, phone, order_note,
-              subtotal, tax, total, customer_status, payment_preference, created_at
+              subtotal, tax, total, customer_status, payment_preference, payment_status, created_at
        FROM Online_Orders
-       WHERE customer_status NOT IN ('ready')
+       WHERE customer_status != 'picked_up'
        ORDER BY created_at DESC`
     );
 
@@ -235,4 +270,89 @@ async function confirmOnlineOrder(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer };
+async function markOrderPickedUp(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    await db.query(
+      `UPDATE Online_Orders SET customer_status = 'picked_up' WHERE online_order_id = ?`,
+      [orderId]
+    );
+
+    res.json({ orderId, customer_status: "picked_up" });
+  } catch (error) {
+    console.error("markOrderPickedUp error:", error);
+    res.status(500).json({ error: "Failed to mark order as picked up." });
+  }
+}
+
+async function getOnlineOrderById(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    const rows = await db.query(
+      `SELECT online_order_id, customer_num_id, first_name, last_name, email, phone,
+              order_note, customer_status, payment_preference, payment_status,
+              subtotal, tax, total, created_at
+       FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
+      [orderId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const items = await db.query(
+      `SELECT mi.name, oi.quantity, oi.price
+       FROM Online_Order_Item oi
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       WHERE oi.online_order_id = ?`,
+      [orderId]
+    );
+
+    res.json({ ...rows[0], items });
+  } catch (error) {
+    console.error("getOnlineOrderById error:", error);
+    res.status(500).json({ error: "Failed to fetch order." });
+  }
+}
+
+async function markOnlineOrderPaid(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    const rows = await db.query(
+      `SELECT payment_status FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
+      [orderId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (rows[0].payment_status === "paid") {
+      return res.status(400).json({ error: "Order is already paid." });
+    }
+
+    await db.query(
+      `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
+      [orderId]
+    );
+
+    res.json({ orderId, payment_status: "paid" });
+  } catch (error) {
+    console.error("markOnlineOrderPaid error:", error);
+    res.status(500).json({ error: "Failed to mark order as paid." });
+  }
+}
+
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };

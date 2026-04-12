@@ -228,8 +228,9 @@ CREATE TABLE Online_Orders (
     order_note VARCHAR(255) NULL,
 
     -- Status tracking
-    customer_status ENUM('placed','confirmed','preparing','ready') NOT NULL DEFAULT 'placed',
+    customer_status ENUM('placed','confirmed','preparing','ready','picked_up') NOT NULL DEFAULT 'placed',
     payment_preference ENUM('online','in_store') NOT NULL DEFAULT 'in_store',
+    payment_status ENUM('unpaid','paid') NOT NULL DEFAULT 'unpaid',
 
     -- Financials
     subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -329,3 +330,77 @@ CREATE TABLE Employee_Shift ( -- used to calculate employee shifts for reports
         FOREIGN KEY (scheduled_by) REFERENCES Users(user_id)
         ON DELETE SET NULL ON UPDATE CASCADE
 );
+
+CREATE TABLE Loyalty_Rewards (
+    reward_id    INT AUTO_INCREMENT PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    points_cost  INT NOT NULL,
+    menu_item_id INT NULL,
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_reward_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
+    CONSTRAINT chk_reward_points_positive CHECK (points_cost >= 1),
+
+    CONSTRAINT fk_reward_menu_item
+        FOREIGN KEY (menu_item_id) REFERENCES Menu_Item(menu_item_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE Loyalty_Transactions (
+    transaction_id  INT AUTO_INCREMENT PRIMARY KEY,
+    customer_num_id INT NOT NULL,
+    online_order_id INT NULL,
+    type            ENUM('earned', 'redeemed') NOT NULL,
+    points          INT NOT NULL,
+    description     VARCHAR(255) NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_loyalty_points_positive CHECK (points > 0),
+
+    CONSTRAINT fk_loyalty_customer
+        FOREIGN KEY (customer_num_id) REFERENCES Customer(customer_num_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    CONSTRAINT fk_loyalty_online_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+DELIMITER $$
+
+CREATE TRIGGER trg_award_loyalty_points
+AFTER UPDATE ON Online_Orders
+FOR EACH ROW
+BEGIN
+    DECLARE v_points INT;
+
+    IF OLD.payment_status = 'unpaid'
+       AND NEW.payment_status = 'paid'
+       AND NEW.customer_num_id IS NOT NULL
+    THEN
+        SET v_points = FLOOR(NEW.total) * 10;
+
+        IF v_points > 0 THEN
+            INSERT INTO Loyalty_Transactions (
+                customer_num_id,
+                online_order_id,
+                type,
+                points,
+                description
+            ) VALUES (
+                NEW.customer_num_id,
+                NEW.online_order_id,
+                'earned',
+                v_points,
+                CONCAT('Points earned from online order #', NEW.online_order_id)
+            );
+
+            UPDATE Customer
+            SET points_balance = points_balance + v_points
+            WHERE customer_num_id = NEW.customer_num_id;
+        END IF;
+    END IF;
+END$$
+
+DELIMITER ;
