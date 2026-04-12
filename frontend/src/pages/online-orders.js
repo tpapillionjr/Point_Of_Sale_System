@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { fetchOnlineOrders, confirmOnlineOrder } from "../lib/api";
+import { fetchOnlineOrders, confirmOnlineOrder, markOnlineOrderPickedUp } from "../lib/api";
 
 const STATUS_META = {
   placed:    { label: "New",       color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
@@ -34,7 +34,16 @@ export default function OnlineOrdersPage() {
   }, []);
 
   function handleCheckout(orderId) {
-    router.push(`/checkout?orderId=${orderId}`);
+    router.push(`/online-checkout?orderId=${orderId}`);
+  }
+
+  async function handlePickup(orderId) {
+    try {
+      await markOnlineOrderPickedUp(orderId);
+      setOrders((prev) => prev.filter((o) => o.order_id !== orderId));
+    } catch (err) {
+      setMessage(err.message);
+    }
   }
 
   async function handleConfirm(orderId) {
@@ -93,7 +102,7 @@ export default function OnlineOrdersPage() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {newOrders.map((order) => (
-                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} />
+                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} onPickup={handlePickup} />
                 ))}
               </div>
             </div>
@@ -107,7 +116,7 @@ export default function OnlineOrdersPage() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {activeOrders.map((order) => (
-                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} />
+                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} onPickup={handlePickup} />
                 ))}
               </div>
             </div>
@@ -119,7 +128,7 @@ export default function OnlineOrdersPage() {
   );
 }
 
-function OrderCard({ order, onConfirm, onCheckout }) {
+function OrderCard({ order, onConfirm, onCheckout, onPickup }) {
   const meta = STATUS_META[order.customer_status] ?? STATUS_META.placed;
   const note = order.order_note || "";
   // Parse contact info from order_note: "FirstName LastName | phone | note"
@@ -181,21 +190,31 @@ function OrderCard({ order, onConfirm, onCheckout }) {
           </button>
         )}
         {order.customer_status !== "placed" && (
-          order.payment_preference === "online" ? (
-            <button
-              disabled
-              style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: "14px", fontWeight: "700", cursor: "not-allowed" }}
-            >
-              ✓ Paid Online
-            </button>
-          ) : (
-            <button
-              onClick={() => onCheckout(order.order_id)}
-              style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#3b82f6", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
-            >
-              Checkout Customer
-            </button>
-          )
+          <>
+            {order.payment_status === "unpaid" ? (
+              <button
+                onClick={() => onCheckout(order.order_id)}
+                style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#3b82f6", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
+              >
+                Checkout Customer
+              </button>
+            ) : (
+              <button
+                disabled
+                style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: "14px", fontWeight: "700", cursor: "not-allowed" }}
+              >
+                ✓ Paid
+              </button>
+            )}
+            {order.customer_status === "ready" && order.payment_status === "paid" && (
+              <button
+                onClick={() => onPickup(order.order_id)}
+                style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#111827", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
+              >
+                ✓ Customer Picked Up
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

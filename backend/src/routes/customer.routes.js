@@ -1,5 +1,5 @@
 import express from "express";
-import { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer } from "../controllers/customer.controller.js";
+import { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp } from "../controllers/customer.controller.js";
 import { requireAuth, requireCustomerAuth } from "../../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -8,7 +8,10 @@ router.get("/menu", getCustomerMenu);
 router.post("/orders", createCustomerOrder);
 router.get("/orders/:orderId/status", getCustomerOrderStatus);
 router.get("/online-orders", requireAuth, getOnlineOrders);
+router.get("/online-orders/:orderId", requireAuth, getOnlineOrderById);
 router.patch("/online-orders/:orderId/confirm", requireAuth, confirmOnlineOrder);
+router.patch("/online-orders/:orderId/pay", requireAuth, markOnlineOrderPaid);
+router.patch("/online-orders/:orderId/pickup", requireAuth, markOrderPickedUp);
 router.post("/register", registerCustomer);
 router.post("/login", loginCustomer);
 
