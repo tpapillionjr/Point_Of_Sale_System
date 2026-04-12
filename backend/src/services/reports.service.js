@@ -98,6 +98,11 @@ function buildRangeFilter(filters, column = "created_at") {
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
+function buildCurrentWeekFilter(column = "created_at") {
+  return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY)
+    AND DATE(${column}) < DATE_ADD(DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY), INTERVAL 7 DAY)`;
+}
+
 function hoursBetween(start, end) {
   if (!start || !end) {
     return 0;
@@ -128,11 +133,19 @@ async function getSummaryForFilters(filters) {
   const [orderRows, tipRows] = await Promise.all([
     db.query(
       `SELECT
-         COALESCE(SUM(o.total), 0) AS revenue,
+         COALESCE(SUM(total), 0) AS revenue,
          COUNT(*) AS orders
-       FROM Orders o
-       WHERE o.status <> 'Void'
-         AND ${buildRangeFilter(filters, "o.created_at")}`
+       FROM (
+         SELECT o.total, o.created_at AS createdAt
+         FROM Orders o
+         WHERE o.status <> 'Void'
+
+         UNION ALL
+
+         SELECT oo.total, oo.created_at AS createdAt
+         FROM Online_Orders oo
+       ) all_orders
+       WHERE ${buildRangeFilter(filters, "createdAt")}`
     ),
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS tips
@@ -152,29 +165,47 @@ async function getSummaryForFilters(filters) {
 async function getRevenueTrend(filters) {
   return db.query(
     `SELECT
-       DATE_FORMAT(created_at, '%b %e') AS date,
+       DATE_FORMAT(createdAt, '%b %e') AS date,
        ROUND(COALESCE(SUM(total), 0), 2) AS revenue
-     FROM Orders
-     WHERE status <> 'Void'
-       AND ${buildRangeFilter(filters)}
-     GROUP BY DATE(created_at), DATE_FORMAT(created_at, '%b %e')
-     ORDER BY DATE(created_at) ASC`
+     FROM (
+       SELECT total, created_at AS createdAt
+       FROM Orders
+       WHERE status <> 'Void'
+
+       UNION ALL
+
+       SELECT total, created_at AS createdAt
+       FROM Online_Orders
+     ) all_orders
+     WHERE ${buildRangeFilter(filters, "createdAt")}
+     GROUP BY DATE(createdAt), DATE_FORMAT(createdAt, '%b %e')
+     ORDER BY DATE(createdAt) ASC`
   );
 }
 
 async function getTopSellingItems(limit = 5, filters) {
   return db.query(
     `SELECT
-       mi.name AS name,
-       COALESCE(SUM(oi.quantity), 0) AS sold,
-       ROUND(COALESCE(SUM(oi.quantity * oi.price), 0), 2) AS revenue
-     FROM Order_Item oi
-     JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
-     JOIN Orders o ON o.order_id = oi.order_id
-     WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(filters, "o.created_at")}
-     GROUP BY mi.menu_item_id, mi.name
-     ORDER BY sold DESC, revenue DESC, mi.name ASC
+       item_sales.name AS name,
+       COALESCE(SUM(item_sales.quantity), 0) AS sold,
+       ROUND(COALESCE(SUM(item_sales.quantity * item_sales.price), 0), 2) AS revenue
+     FROM (
+       SELECT mi.menu_item_id AS menuItemId, mi.name, oi.quantity, oi.price, o.created_at AS createdAt
+       FROM Order_Item oi
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       JOIN Orders o ON o.order_id = oi.order_id
+       WHERE o.status <> 'Void'
+
+       UNION ALL
+
+       SELECT mi.menu_item_id AS menuItemId, mi.name, ooi.quantity, ooi.price, oo.created_at AS createdAt
+       FROM Online_Order_Item ooi
+       JOIN Menu_Item mi ON mi.menu_item_id = ooi.menu_item_id
+       JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+     ) item_sales
+     WHERE ${buildRangeFilter(filters, "item_sales.createdAt")}
+     GROUP BY item_sales.menuItemId, item_sales.name
+     ORDER BY sold DESC, revenue DESC, item_sales.name ASC
      LIMIT ${Number(limit)}`
   );
 }
@@ -199,30 +230,45 @@ async function getLowInventoryItems(limit = 5) {
 async function getSalesByCategory(filters) {
   return db.query(
     `SELECT
-       COALESCE(mi.category, 'Uncategorized') AS category,
-       ROUND(COALESCE(SUM(oi.quantity * oi.price), 0), 2) AS revenue
-     FROM Order_Item oi
-     JOIN Orders o ON o.order_id = oi.order_id
-     JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
-     WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(filters, "o.created_at")}
-     GROUP BY COALESCE(mi.category, 'Uncategorized')
+       category_sales.category AS category,
+       ROUND(COALESCE(SUM(category_sales.quantity * category_sales.price), 0), 2) AS revenue
+     FROM (
+       SELECT COALESCE(mi.category, 'Uncategorized') AS category, oi.quantity, oi.price, o.created_at AS createdAt
+       FROM Order_Item oi
+       JOIN Orders o ON o.order_id = oi.order_id
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       WHERE o.status <> 'Void'
+
+       UNION ALL
+
+       SELECT COALESCE(mi.category, 'Uncategorized') AS category, ooi.quantity, ooi.price, oo.created_at AS createdAt
+       FROM Online_Order_Item ooi
+       JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+       JOIN Menu_Item mi ON mi.menu_item_id = ooi.menu_item_id
+     ) category_sales
+     WHERE ${buildRangeFilter(filters, "category_sales.createdAt")}
+     GROUP BY category_sales.category
      ORDER BY revenue DESC, category ASC`
   );
 }
 
 async function getSalesByServer(filters) {
   return db.query(
-    `SELECT
-       u.name AS name,
-       ROUND(COALESCE(SUM(o.total), 0), 2) AS revenue,
-       COUNT(*) AS orders
-     FROM Orders o
-     JOIN Users u ON u.user_id = o.created_by
-     WHERE o.status <> 'Void'
-       AND ${buildRangeFilter(filters, "o.created_at")}
-     GROUP BY u.user_id, u.name
-     ORDER BY revenue DESC, u.name ASC`
+    `SELECT name, ROUND(COALESCE(SUM(total), 0), 2) AS revenue, COUNT(*) AS orders
+     FROM (
+       SELECT u.name AS name, o.total, o.created_at AS createdAt
+       FROM Orders o
+       JOIN Users u ON u.user_id = o.created_by
+       WHERE o.status <> 'Void'
+
+       UNION ALL
+
+       SELECT 'Online Ordering' AS name, oo.total, oo.created_at AS createdAt
+       FROM Online_Orders oo
+     ) server_sales
+     WHERE ${buildRangeFilter(filters, "createdAt")}
+     GROUP BY name
+     ORDER BY revenue DESC, name ASC`
   );
 }
 
@@ -263,6 +309,19 @@ async function getLaborRows(filters) {
      FROM Employee_Shift es
      JOIN Users u ON u.user_id = es.user_id
      WHERE ${buildRangeFilter(filters, "es.scheduled_start")}
+     ORDER BY u.name ASC, es.scheduled_start DESC`
+  );
+}
+
+async function getCurrentWeekLaborRows() {
+  return db.query(
+    `SELECT
+       u.name,
+       es.clock_in AS clockIn,
+       es.clock_out AS clockOut
+     FROM Employee_Shift es
+     JOIN Users u ON u.user_id = es.user_id
+     WHERE ${buildCurrentWeekFilter("es.scheduled_start")}
      ORDER BY u.name ASC, es.scheduled_start DESC`
   );
 }
@@ -333,14 +392,26 @@ async function getRefundRows(filters) {
 
 async function getPaymentMethodRows(filters) {
   return db.query(
-    `SELECT
-       CONCAT(UPPER(LEFT(payment_type, 1)), LOWER(SUBSTRING(payment_type, 2))) AS method,
-       COUNT(*) AS count,
-       ROUND(COALESCE(SUM(amount), 0), 2) AS amount
-     FROM Payment
-     WHERE status = 'approved'
-       AND ${buildRangeFilter(filters, "paid_at")}
-     GROUP BY payment_type
+    `SELECT method, COUNT(*) AS count, ROUND(COALESCE(SUM(amount), 0), 2) AS amount
+     FROM (
+       SELECT
+         CONCAT(UPPER(LEFT(payment_type, 1)), LOWER(SUBSTRING(payment_type, 2))) AS method,
+         amount,
+         paid_at AS paidAt
+       FROM Payment
+       WHERE status = 'approved'
+
+       UNION ALL
+
+       SELECT
+         'Online' AS method,
+         total AS amount,
+         created_at AS paidAt
+       FROM Online_Orders
+       WHERE payment_status = 'paid'
+     ) payments
+     WHERE ${buildRangeFilter(filters, "paidAt")}
+     GROUP BY method
      ORDER BY amount DESC`
   );
 }
@@ -354,14 +425,24 @@ async function getCustomerSummary(filters) {
        FROM Customer`
     ),
     db.query(
-      `SELECT mi.name
-       FROM Order_Item oi
-       JOIN Orders o ON o.order_id = oi.order_id
-       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
-       WHERE o.status <> 'Void'
-         AND ${buildRangeFilter(filters, "o.created_at")}
-       GROUP BY mi.menu_item_id, mi.name
-       ORDER BY SUM(oi.quantity) DESC, mi.name ASC
+      `SELECT name
+       FROM (
+         SELECT mi.menu_item_id AS menuItemId, mi.name, oi.quantity, o.created_at AS createdAt
+         FROM Order_Item oi
+         JOIN Orders o ON o.order_id = oi.order_id
+         JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+         WHERE o.status <> 'Void'
+
+         UNION ALL
+
+         SELECT mi.menu_item_id AS menuItemId, mi.name, ooi.quantity, oo.created_at AS createdAt
+         FROM Online_Order_Item ooi
+         JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+         JOIN Menu_Item mi ON mi.menu_item_id = ooi.menu_item_id
+       ) favorites
+       WHERE ${buildRangeFilter(filters, "createdAt")}
+       GROUP BY menuItemId, name
+       ORDER BY SUM(quantity) DESC, name ASC
        LIMIT 1`
     ),
     db.query(
@@ -371,11 +452,19 @@ async function getCustomerSummary(filters) {
          AND ${buildRangeFilter(filters)}`
     ),
     db.query(
-      `SELECT HOUR(created_at) AS orderHour, COUNT(*) AS orderCount
-       FROM Orders
-       WHERE status <> 'Void'
-         AND ${buildRangeFilter(filters)}
-       GROUP BY HOUR(created_at)
+      `SELECT HOUR(createdAt) AS orderHour, COUNT(*) AS orderCount
+       FROM (
+         SELECT created_at AS createdAt
+         FROM Orders
+         WHERE status <> 'Void'
+
+         UNION ALL
+
+         SELECT created_at AS createdAt
+         FROM Online_Orders
+       ) all_orders
+       WHERE ${buildRangeFilter(filters, "createdAt")}
+       GROUP BY HOUR(createdAt)
        ORDER BY orderCount DESC, orderHour ASC
        LIMIT 1`
     ),
@@ -392,7 +481,7 @@ async function getCustomerSummary(filters) {
 
 async function getReportsDashboard(range) {
   const filters = normalizeReportFilters(range);
-  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
+  const [summary, revenueTrend, topItems, lowInventory, salesCategories, salesServers, tipSummary, laborRows, currentWeekLaborRows, latestClockRows, voidRows, discountRows, refundRows, paymentMethodRows, customerSummary] =
     await Promise.all([
       getSummaryForFilters(filters),
       getRevenueTrend(filters),
@@ -402,6 +491,7 @@ async function getReportsDashboard(range) {
       getSalesByServer(filters),
       getTipSummary(filters),
       getLaborRows(filters),
+      getCurrentWeekLaborRows(),
       getLatestClockRows(),
       getVoidRows(filters),
       getDiscountRows(filters),
@@ -410,12 +500,31 @@ async function getReportsDashboard(range) {
       getCustomerSummary(filters),
     ]);
 
+  const weeklyHoursByEmployee = new Map();
+  for (const row of currentWeekLaborRows) {
+    const existing = weeklyHoursByEmployee.get(row.name) ?? {
+      name: row.name,
+      hoursWorkedThisWeek: 0,
+    };
+    const workedHours = row.clockIn ? hoursBetween(row.clockIn, row.clockOut ?? new Date().toISOString()) : 0;
+    existing.hoursWorkedThisWeek += workedHours;
+    weeklyHoursByEmployee.set(row.name, existing);
+  }
+
+  const laborWeeklyHours = [...weeklyHoursByEmployee.values()]
+    .map((row) => ({
+      ...row,
+      hoursWorkedThisWeek: Number(row.hoursWorkedThisWeek.toFixed(1)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const laborByEmployee = new Map();
   for (const row of laborRows) {
     const existing = laborByEmployee.get(row.name) ?? {
       name: row.name,
       scheduled: 0,
       worked: 0,
+      hoursWorkedThisWeek: 0,
       clockIns: 0,
       performance: "Average",
     };
@@ -441,6 +550,9 @@ async function getReportsDashboard(range) {
         ...row,
         scheduled: roundedScheduled,
         worked: roundedWorked,
+        hoursWorkedThisWeek: weeklyHoursByEmployee.get(row.name)?.hoursWorkedThisWeek
+          ? Number(weeklyHoursByEmployee.get(row.name).hoursWorkedThisWeek.toFixed(1))
+          : 0,
         performance,
       };
     })
@@ -481,6 +593,7 @@ async function getReportsDashboard(range) {
       averageTips: Number(tipSummary.averageTips || 0),
     },
     laborOverview,
+    laborWeeklyHours,
     laborClock,
     inventoryUsage: topItems.map((row) => ({
       itemName: row.name,

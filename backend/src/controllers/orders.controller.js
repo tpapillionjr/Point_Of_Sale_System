@@ -1,4 +1,4 @@
-import { cancelOrder, createOrder, addItemsToOrder, findActiveOrderByTableNumber } from "../services/orders.service.js";
+import { cancelOrder, createOrder, addItemsToOrder, findActiveOrderByTableNumber, getActiveTakeoutOrders } from "../services/orders.service.js";
 
 async function postOrder(req, res) {
   try {
@@ -20,7 +20,7 @@ async function postCancelOrder(req, res) {
   try {
     const result = await cancelOrder({
       ...req.body,
-      voidedBy: req.user?.sub,
+      voidedBy: req.user?.sub ?? req.user?.userId ?? req.body?.voidedBy,
     });
     res.json(result);
   } catch (error) {
@@ -60,4 +60,13 @@ async function postAddItems(req, res) {
   }
 }
 
-export { postOrder, postCancelOrder, postAddItems, getActiveOrderByTable };
+async function getActiveTakeoutOrdersHandler(_req, res) {
+  try {
+    const result = await getActiveTakeoutOrders();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch takeout orders." });
+  }
+}
+
+export { postOrder, postCancelOrder, postAddItems, getActiveOrderByTable, getActiveTakeoutOrdersHandler };

@@ -1,9 +1,9 @@
-import { authenticatePin, clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
+import { authenticateCredentials, clockIn, clockOut, getClockSession } from "../services/shifts.service.js";
 
 async function authShift(req, res) {
   try {
-    await authenticatePin(req.body?.pin);
-    const session = await getClockSession(req.body?.pin);
+    await authenticateCredentials(req.body);
+    const session = await getClockSession(req.body);
     res.json(session);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;

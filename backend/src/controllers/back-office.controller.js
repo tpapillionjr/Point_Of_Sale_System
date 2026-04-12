@@ -1,4 +1,11 @@
-import { getBackOfficeDashboard, getBackOfficeData } from "../services/back-office.service.js";
+import {
+  createInventoryItem,
+  deleteInventoryItem,
+  getBackOfficeDashboard,
+  getBackOfficeData,
+  receivePurchasingStock,
+  updateInventoryItemAmount,
+} from "../services/back-office.service.js";
 
 async function getDashboard(req, res) {
   try {
@@ -20,4 +27,48 @@ async function getData(req, res) {
   }
 }
 
-export { getDashboard, getData };
+async function postInventoryItem(req, res) {
+  try {
+    const result = await createInventoryItem(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Failed to create inventory item:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.statusCode ? error.message : "Failed to create inventory item" });
+  }
+}
+
+async function removeInventoryItem(req, res) {
+  try {
+    const result = await deleteInventoryItem(req.params.type, decodeURIComponent(req.params.name));
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to delete inventory item:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.statusCode ? error.message : "Failed to delete inventory item" });
+  }
+}
+
+async function patchInventoryItemAmount(req, res) {
+  try {
+    const result = await updateInventoryItemAmount(
+      req.params.type,
+      decodeURIComponent(req.params.name),
+      req.body?.amountAvailable
+    );
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to update inventory count:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.statusCode ? error.message : "Failed to update inventory count" });
+  }
+}
+
+async function postReceivePurchasingStock(req, res) {
+  try {
+    const result = await receivePurchasingStock(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to receive purchasing stock:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.statusCode ? error.message : "Failed to receive purchasing stock" });
+  }
+}
+
+export { getDashboard, getData, patchInventoryItemAmount, postInventoryItem, postReceivePurchasingStock, removeInventoryItem };

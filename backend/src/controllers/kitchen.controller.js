@@ -18,7 +18,7 @@ async function patchKitchenTicket(req, res) {
   try {
     const result = await updateTicketStatus({
       ticketId: req.params.ticketId,
-      userId: req.user?.sub,
+      userId: req.user?.sub ?? req.user?.userId ?? req.body?.userId,
       status: req.body?.status,
     });
     res.json(result);

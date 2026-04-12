@@ -33,9 +33,9 @@ INSERT INTO Dining_Tables (table_id, table_number, capacity, status) VALUES
 -- USERS
 -- =========================
 INSERT INTO Users (user_id, name, email, pin_code, password_hash, role, is_active) VALUES
-(1, 'Theron Papillion', 'theron.manager@pos.local', '1234', 'hash_manager_demo', 'manager', TRUE),
-(2, 'Ava Carter', 'ava.employee@pos.local', '5678', 'hash_employee_demo', 'employee', TRUE),
-(3, 'Leo Nguyen', 'leo.kitchen@pos.local', '9012', 'hash_kitchen_demo', 'kitchen', TRUE);
+(1, 'Theron Papillion', 'theron.manager@pos.local', '1234', '$2b$10$ZhK.LYRHkNakGqeENsr/MeuHmBK5iYnWpLSsMGtZ9yqGzfXudSvYO', 'manager', TRUE),
+(2, 'Ava Carter', 'ava.employee@pos.local', '5678', '$2b$10$FZJ9PjEc7vqLIcwoCiZ5sOXKEqSg5sRioLQIbQtnfgLBTlk1PmA.q', 'employee', TRUE),
+(3, 'Leo Nguyen', 'leo.kitchen@pos.local', '9012', '$2b$10$HmnK5b7S5h1mYGx7r1DhMOz5SEbvKQBIya4z/kgJK0tUm3fEj59/q', 'kitchen', TRUE);
 
 -- =========================
 -- EMPLOYEE SHIFTS
@@ -50,10 +50,10 @@ INSERT INTO Employee_Shift (
 -- =========================
 -- MENU + MODIFIERS
 -- =========================
-INSERT INTO Menu_Item (menu_item_id, name, category, base_price, is_active) VALUES
-(1, 'Cheeseburger', 'Entree', 12.99, TRUE),
-(2, 'Fries', 'Sides', 3.99, TRUE),
-(3, 'Iced Tea', 'Drinks', 2.49, TRUE);
+INSERT INTO Menu_Item (menu_item_id, name, category, base_price, description, photo_url, common_allergens, is_active) VALUES
+(1, 'Cheeseburger', 'Entrees', 12.99, 'A grilled beef patty with cheddar, lettuce, tomato, and house sauce on a toasted bun.', NULL, 'Milk, Wheat, Sesame', TRUE),
+(2, 'Fries', 'Sides', 3.99, 'Crispy golden fries served hot with a side of ketchup.', NULL, '', TRUE),
+(3, 'Iced Tea', 'Drinks', 2.49, 'Fresh brewed black tea served over ice.', NULL, '', TRUE);
 
 INSERT INTO Modifier (modifier_id, name, price, is_active) VALUES
 (1, 'Extra Cheese', 1.25, TRUE),

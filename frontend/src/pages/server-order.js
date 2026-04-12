@@ -1,19 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import menuData from "../lib/menuData";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
-import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables } from "../lib/api";
+import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables, fetchItems } from "../lib/api";
 
 export default function ServerOrderPage() {
   const router = useRouter();
   const [cart, setCart] = useState([]);
   const [sentItemIds, setSentItemIds] = useState([]);
   const [tableNumber, setTableNumber] = useState("");
+  const [takeoutName, setTakeoutName] = useState("");
+  const [takeoutPhone, setTakeoutPhone] = useState("");
   const [guestCount, setGuestCount] = useState(1);
   const [orderType, setOrderType] = useState("Dine In");
   const [orderNote, setOrderNote] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Entrees");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [pendingQty, setPendingQty] = useState(1);
   const [showQtyPad, setShowQtyPad] = useState(false);
   const [qtyInput, setQtyInput] = useState("");
@@ -26,12 +27,21 @@ export default function ServerOrderPage() {
   const [managerPin, setManagerPin] = useState("");
   const [approvalError, setApprovalError] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showGuestPad, setShowGuestPad] = useState(false);
+  const [guestInput, setGuestInput] = useState("");
 
-  const categories = ["Appetizers", "Entrees", "Sides", "Drinks"];
-  const supportedMenu = useMemo(() => menuData, []);
+  const [menuItems, setMenuItems] = useState([]);
+
+  const categories = useMemo(() => [...new Set(menuItems.map((i) => i.category))], [menuItems]);
+
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
   const filteredMenu = useMemo(
-    () => supportedMenu.filter((item) => item.category === selectedCategory),
-    [selectedCategory, supportedMenu]
+    () => menuItems.filter((item) => item.category === selectedCategory),
+    [selectedCategory, menuItems]
   );
 
   useEffect(() => {
@@ -49,13 +59,32 @@ export default function ServerOrderPage() {
         if (router.query.table) {
           setTableNumber(String(router.query.table));
         }
+        if (router.query.guests) {
+          setGuestCount(Number(router.query.guests));
+        }
+        if (router.query.takeoutName) {
+          setTakeoutName(String(router.query.takeoutName));
+        }
+        if (router.query.takeoutPhone) {
+          setTakeoutPhone(String(router.query.takeoutPhone));
+        }
       } catch (error) {
         setMessage({ type: "error", text: error.message });
       }
     }
 
+    async function loadMenu() {
+      try {
+        const rows = await fetchItems();
+        setMenuItems(rows.map((item) => ({ id: item.menuItemId, name: item.name, category: item.category, price: Number(item.basePrice) })));
+      } catch {
+        // non-fatal — menu stays empty
+      }
+    }
+
     loadTables();
-  }, [router.isReady, router.query.table]);
+    loadMenu();
+  }, [router.isReady, router.query.table, router.query.guests, router.query.takeoutName, router.query.takeoutPhone]);
 
   useEffect(() => {
     if (!tableNumber) return;
@@ -139,24 +168,6 @@ export default function ServerOrderPage() {
     setQtyInput("");
   };
 
-  const increaseQuantity = (id) => {
-    setCart((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, quantity: item.quantity + 1 } : item
-      )
-    );
-  };
-
-  const decreaseQuantity = (id) => {
-    setCart((current) =>
-      current
-        .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity - 1 } : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
-  };
-
   const removeItem = (id) => {
     setCart((current) => current.filter((item) => item.id !== id));
   };
@@ -171,7 +182,7 @@ export default function ServerOrderPage() {
     }
   };
 
-  async function handleManagerApproval() {
+  const handleManagerApproval = useCallback(async () => {
     if (managerPin.length !== 4) return;
     try {
       setIsVerifying(true);
@@ -186,9 +197,30 @@ export default function ServerOrderPage() {
     } finally {
       setIsVerifying(false);
     }
-  }
+  }, [managerPin, pendingRemoveId]);
 
-  async function handleSubmitOrder(action) {
+  useEffect(() => {
+    if (pendingRemoveId === null) return;
+
+    function handleKey(e) {
+      if (e.key >= "0" && e.key <= "9") {
+        setManagerPin((p) => (p.length < 4 ? p + e.key : p));
+      } else if (e.key === "Backspace") {
+        setManagerPin((p) => p.slice(0, -1));
+      } else if (e.key === "Enter") {
+        handleManagerApproval();
+      } else if (e.key === "Escape") {
+        setPendingRemoveId(null);
+        setManagerPin("");
+        setApprovalError(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [pendingRemoveId, handleManagerApproval]);
+
+  async function handleSubmitOrder() {
     if (!employee?.userId) {
       setMessage({ type: "error", text: "Clock in and log in before sending an order." });
       return;
@@ -205,13 +237,14 @@ export default function ServerOrderPage() {
       return;
     }
 
+    const isTakeoutTable = String(tableNumber) === "10000";
     const payload = {
       tableId: selectedTable.tableId,
       createdBy: employee.userId,
       guestCount: Number(guestCount),
-      orderType: action === "TAKE OUT" ? "Takeout" : "Dine_in",
-      orderChannel: action === "TAKE OUT" ? "Phone" : "In_Store",
-      orderNote: action === "RUSH" ? [orderNote, "RUSH"].filter(Boolean).join(" - ") : orderNote,
+      orderType: isTakeoutTable ? "Takeout" : "Dine_in",
+      orderChannel: isTakeoutTable ? "Phone" : "In_Store",
+      orderNote: orderNote,
       items: cart.map((item) => ({
         menuItemId: item.id,
         quantity: item.quantity,
@@ -221,6 +254,7 @@ export default function ServerOrderPage() {
       tax: 0,
       serviceCharge: 0,
       isSplitCheck: false,
+      ...(isTakeoutTable && { takeoutName, takeoutPhone }),
     };
 
     const newItems = cart.filter((item) => !sentItemIds.includes(item.id) || String(item.id).endsWith("_pending"));
@@ -322,15 +356,29 @@ export default function ServerOrderPage() {
       >
         <div>
           <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Table</label>
-          <select
-            value={tableNumber}
-            onChange={(e) => {
-              setTableNumber(e.target.value);
-              setCart([]);
-              setSentItemIds([]);
-              setSubmittedOrder(null);
-              setMessage(null);
+          <div
+            style={{
+              marginTop: "6px",
+              padding: "8px 12px",
+              borderRadius: "8px",
+              border: "2px solid #2563eb",
+              backgroundColor: "#eff6ff",
+              fontSize: "14px",
+              fontWeight: "700",
+              color: "#1d4ed8",
+              boxSizing: "border-box",
             }}
+          >
+            {String(tableNumber) === "10000"
+              ? `Takeout${takeoutName ? ` — ${takeoutName}` : ""}`
+              : tableNumber ? `Table ${tableNumber}` : "No table selected"}
+          </div>
+        </div>
+
+        <div>
+          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Guest Count</label>
+          <button
+            onClick={() => { setGuestInput(""); setShowGuestPad(true); }}
             style={{
               width: "100%",
               marginTop: "6px",
@@ -340,40 +388,13 @@ export default function ServerOrderPage() {
               fontSize: "14px",
               color: "#111827",
               backgroundColor: "white",
+              textAlign: "left",
+              cursor: "pointer",
               boxSizing: "border-box",
             }}
           >
-            <option value="">— Select Table —</option>
-            {tables
-              .filter((t) => t.status !== "inactive")
-              .sort((a, b) => a.tableNumber - b.tableNumber)
-              .map((t) => (
-                <option key={t.tableId} value={String(t.tableNumber)}>
-                  Table {t.tableNumber} ({t.status})
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: "14px", fontWeight: "500", color: "#374151" }}>Guest Count</label>
-          <input
-            type="number"
-            min="1"
-            max="8"
-            value={guestCount}
-            onChange={(e) => setGuestCount(Number(e.target.value))}
-            style={{
-              width: "100%",
-              marginTop: "6px",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
-              fontSize: "14px",
-              color: "#111827",
-              boxSizing: "border-box",
-            }}
-          />
+            {guestCount}
+          </button>
         </div>
 
         <div>
@@ -500,8 +521,6 @@ export default function ServerOrderPage() {
           <OrderCart
             cart={cart}
             sentItemIds={sentItemIds}
-            increaseQuantity={increaseQuantity}
-            decreaseQuantity={decreaseQuantity}
             removeItem={handleRemoveItem}
           />
 
@@ -528,90 +547,26 @@ export default function ServerOrderPage() {
             {pendingQty > 1 ? `QTY: ${pendingQty} — tap an item` : "QTY"}
           </button>
 
-          <div
+          <button
+            onClick={() => handleSubmitOrder("SEND")}
+            disabled={isSubmitting}
             style={{
               marginTop: "8px",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "8px",
+              width: "100%",
+              padding: "14px 8px",
+              border: "none",
+              borderRadius: "10px",
+              backgroundColor: "#16a34a",
+              color: "white",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "700",
+              letterSpacing: "0.05em",
+              opacity: isSubmitting ? 0.6 : 1,
             }}
           >
-            <button
-              onClick={() => handleSubmitOrder("SEND")}
-              disabled={isSubmitting}
-              style={{
-                padding: "14px 8px",
-                border: "none",
-                borderRadius: "10px",
-                backgroundColor: "#16a34a",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "700",
-                letterSpacing: "0.05em",
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
-            >
-              SEND
-            </button>
-
-            <button
-              onClick={() => handleSubmitOrder("TAKE OUT")}
-              disabled={isSubmitting}
-              style={{
-                padding: "14px 8px",
-                border: "none",
-                borderRadius: "10px",
-                backgroundColor: "#2563eb",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "700",
-                letterSpacing: "0.05em",
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
-            >
-              TAKE OUT
-            </button>
-
-            <button
-              onClick={() => handleSubmitOrder("RUSH")}
-              disabled={isSubmitting}
-              style={{
-                padding: "14px 8px",
-                border: "none",
-                borderRadius: "10px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "700",
-                letterSpacing: "0.05em",
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
-            >
-              RUSH
-            </button>
-
-            <button
-              onClick={() => setCart([])}
-              disabled={isSubmitting}
-              style={{
-                padding: "14px 8px",
-                border: "none",
-                borderRadius: "10px",
-                backgroundColor: "#6b7280",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "700",
-                letterSpacing: "0.05em",
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
-            >
-              CLEAR
-            </button>
-          </div>
+            SEND
+          </button>
 
           <button
             onClick={() => {
@@ -662,192 +617,137 @@ export default function ServerOrderPage() {
           style={{
             position: "fixed",
             inset: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
+            backgroundColor: "rgba(0,0,0,0.45)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 50,
           }}
         >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "16px",
-              padding: "28px",
-              width: "300px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
-            }}
-          >
-            <p style={{ fontSize: "15px", fontWeight: "700", color: "#111827", marginBottom: "4px" }}>
+          <div className="ci-card">
+            <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>
               Manager Approval Required
             </p>
-            <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "16px" }}>
-              Enter a manager PIN to remove a sent item.
-            </p>
+            <p className="ci-sub">Enter manager PIN to remove item.</p>
 
-            <div
-              style={{
-                backgroundColor: "#f3f4f6",
-                borderRadius: "8px",
-                padding: "12px",
-                textAlign: "center",
-                fontSize: "28px",
-                fontWeight: "700",
-                color: "#111827",
-                letterSpacing: "0.3em",
-                marginBottom: "12px",
-                minHeight: "54px",
-              }}
-            >
-              {"●".repeat(managerPin.length) || "—"}
+            <div className="ci-dots">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className={i < managerPin.length ? "ci-dot ci-dot--filled" : "ci-dot"} />
+              ))}
             </div>
 
             {approvalError && (
-              <p style={{ color: "#b91c1c", fontSize: "13px", marginBottom: "10px", fontWeight: "600" }}>
-                {approvalError}
-              </p>
+              <p className="ci-status ci-status--error">{approvalError}</p>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
-              {["7","8","9","4","5","6","1","2","3"].map((d) => (
+            <div className="ci-grid">
+              {["1","2","3","4","5","6","7","8","9"].map((d) => (
                 <button
                   key={d}
+                  className="ci-btn"
                   onClick={() => setManagerPin((p) => (p.length < 4 ? p + d : p))}
-                  style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}
                 >
                   {d}
                 </button>
               ))}
               <button
-                onClick={() => { setPendingRemoveId(null); setManagerPin(""); setApprovalError(null); }}
-                style={{ padding: "14px", fontSize: "13px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "#fef2f2", color: "#dc2626", cursor: "pointer" }}
+                className="ci-btn ci-btn--ghost"
+                onClick={() => setManagerPin((p) => p.slice(0, -1))}
               >
-                Cancel
+                ⌫
               </button>
               <button
+                className="ci-btn"
                 onClick={() => setManagerPin((p) => (p.length < 4 ? p + "0" : p))}
-                style={{ padding: "14px", fontSize: "18px", fontWeight: "600", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "white", cursor: "pointer" }}
               >
                 0
               </button>
               <button
+                className="ci-btn ci-btn--enter"
                 onClick={handleManagerApproval}
                 disabled={managerPin.length !== 4 || isVerifying}
-                style={{ padding: "14px", fontSize: "13px", fontWeight: "700", border: "none", borderRadius: "8px", backgroundColor: "#16a34a", color: "white", cursor: "pointer", opacity: managerPin.length !== 4 || isVerifying ? 0.5 : 1 }}
               >
-                {isVerifying ? "..." : "OK"}
+                {isVerifying ? "..." : "✓"}
               </button>
             </div>
+
+            <button
+              onClick={() => { setPendingRemoveId(null); setManagerPin(""); setApprovalError(null); }}
+              style={{ width: "100%", padding: "10px", border: "1.5px solid #c8d8e8", borderRadius: "12px", backgroundColor: "white", color: "#c0392b", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
 
+      {showGuestPad && (() => {
+        const selectedTable = tables.find((t) => String(t.tableNumber) === String(tableNumber));
+        const maxGuests = selectedTable?.capacity ?? 99;
+        const val = parseInt(guestInput, 10);
+        const overMax = val > maxGuests;
+        const confirmGuest = () => {
+          if (!val || val < 1 || overMax) return;
+          setGuestCount(val);
+          setShowGuestPad(false);
+        };
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
+            onClick={() => setShowGuestPad(false)}
+          >
+            <div className="ci-card" onClick={(e) => e.stopPropagation()}>
+              <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>Update Guest Count</p>
+              <p className="ci-sub">Max {maxGuests} seats</p>
+              <div className="ci-dots" style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "0.1em", color: overMax ? "#dc2626" : undefined }}>
+                {guestInput || "0"}
+              </div>
+              {overMax && (
+                <p className="ci-status ci-status--error">Exceeds max seats ({maxGuests})</p>
+              )}
+              <div className="ci-grid">
+                {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                  <button key={d} className="ci-btn" onClick={() => setGuestInput((p) => p.length < 2 ? p + d : p)}>{d}</button>
+                ))}
+                <button className="ci-btn ci-btn--ghost" onClick={() => setGuestInput((p) => p.slice(0, -1))}>⌫</button>
+                <button className="ci-btn" onClick={() => setGuestInput((p) => p.length < 2 ? p + "0" : p)}>0</button>
+                <button className="ci-btn ci-btn--enter" onClick={confirmGuest} disabled={overMax || !val || val < 1}>✓</button>
+              </div>
+              <button
+                onClick={() => setShowGuestPad(false)}
+                style={{ width: "100%", padding: "10px", border: "1.5px solid #c8d8e8", borderRadius: "12px", backgroundColor: "white", color: "#c0392b", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {showQtyPad && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-          }}
+          style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}
           onClick={() => setShowQtyPad(false)}
         >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "16px",
-              padding: "24px",
-              width: "260px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p style={{ fontSize: "14px", fontWeight: "600", color: "#374151", marginBottom: "10px" }}>
-              Enter Quantity
-            </p>
-
-            <div
-              style={{
-                backgroundColor: "#f3f4f6",
-                borderRadius: "8px",
-                padding: "12px",
-                textAlign: "right",
-                fontSize: "28px",
-                fontWeight: "700",
-                color: "#111827",
-                marginBottom: "12px",
-                minHeight: "54px",
-              }}
-            >
+          <div className="ci-card" onClick={(e) => e.stopPropagation()}>
+            <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>Enter Quantity</p>
+            <div className="ci-dots" style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "0.1em" }}>
               {qtyInput || "0"}
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
-              {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((digit) => (
-                <button
-                  key={digit}
-                  onClick={() => handleQtyDigit(digit)}
-                  style={{
-                    padding: "16px",
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    backgroundColor: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  {digit}
-                </button>
+            <div className="ci-grid">
+              {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                <button key={d} className="ci-btn" onClick={() => handleQtyDigit(d)}>{d}</button>
               ))}
-              <button
-                onClick={handleQtyClear}
-                style={{
-                  padding: "16px",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "8px",
-                  backgroundColor: "#fef2f2",
-                  color: "#dc2626",
-                  cursor: "pointer",
-                }}
-              >
-                CLR
-              </button>
-              <button
-                onClick={() => handleQtyDigit("0")}
-                style={{
-                  padding: "16px",
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "8px",
-                  backgroundColor: "white",
-                  cursor: "pointer",
-                }}
-              >
-                0
-              </button>
-              <button
-                onClick={handleQtyConfirm}
-                style={{
-                  padding: "16px",
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  border: "none",
-                  borderRadius: "8px",
-                  backgroundColor: "#16a34a",
-                  color: "white",
-                  cursor: "pointer",
-                }}
-              >
-                OK
-              </button>
+              <button className="ci-btn ci-btn--ghost" onClick={handleQtyClear}>⌫</button>
+              <button className="ci-btn" onClick={() => handleQtyDigit("0")}>0</button>
+              <button className="ci-btn ci-btn--enter" onClick={handleQtyConfirm}>✓</button>
             </div>
+            <button
+              onClick={() => setShowQtyPad(false)}
+              style={{ width: "100%", padding: "10px", border: "1.5px solid #c8d8e8", borderRadius: "12px", backgroundColor: "white", color: "#c0392b", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

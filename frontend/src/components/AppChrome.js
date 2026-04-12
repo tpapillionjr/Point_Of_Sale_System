@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
+import { canAccessManagerRoutes, clearStaffSession, getStoredEmployee } from "../lib/session";
 
 const NAV_ITEMS = [
+  { href: "/clock-in", label: "Clock In" },
   { href: "/tables", label: "Tables" },
-  { href: "/server-order", label: "Server Order" },
-  { href: "/checkout", label: "Checkout" },
+  { href: "/online-orders", label: "Takeout / Online Orders" },
   { href: "/kitchen", label: "Kitchen" },
   { href: "/back-office", label: "Back Office" },
   { href: "/reports", label: "Reports" },
@@ -18,20 +18,48 @@ function isActiveRoute(pathname, href) {
     return true;
   }
 
-  if (href === "/back-office" || href === "/reports" || href === "/checkout") {
+  if (href === "/back-office" || href === "/reports") {
     return pathname.startsWith(href);
   }
 
   return false;
 }
 
+function subscribeToStorage(listener) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", listener);
+  window.addEventListener("pos-session-change", listener);
+  return () => {
+    window.removeEventListener("storage", listener);
+    window.removeEventListener("pos-session-change", listener);
+  };
+}
+
+function getEmployeeSnapshot() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem("currentEmployee");
+}
+
 export default function AppChrome({ children }) {
   const router = useRouter();
-  const [employee, setEmployee] = useState(null);
+  const employeeSnapshot = useSyncExternalStore(subscribeToStorage, getEmployeeSnapshot, () => null);
+  const employee = useMemo(() => {
+    if (!employeeSnapshot) {
+      return null;
+    }
 
-  useEffect(() => {
-    setEmployee(getStoredEmployee());
-  }, []);
+    try {
+      return JSON.parse(employeeSnapshot);
+    } catch {
+      return getStoredEmployee();
+    }
+  }, [employeeSnapshot]);
 
   const navItems = NAV_ITEMS.filter((item) => {
     if (item.href === "/back-office" || item.href === "/reports") {
@@ -42,12 +70,7 @@ export default function AppChrome({ children }) {
   });
 
   function handleLogout() {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("currentEmployee");
-      window.localStorage.removeItem("currentOrder");
-      window.localStorage.removeItem("authToken");
-    }
-
+    clearStaffSession();
     router.push("/clock-in");
   }
 
@@ -65,8 +88,7 @@ export default function AppChrome({ children }) {
           />
 
           <div>
-            <p className="app-shell__eyebrow">Lumi POS</p>
-            <h1 className="app-shell__title">Front of House</h1>
+            <h1 className="app-shell__title app-shell__title--brand">lumi POS</h1>
           </div>
         </div>
 

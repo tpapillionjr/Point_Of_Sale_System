@@ -4,8 +4,13 @@ CREATE TABLE Dining_Tables (
     table_number SMALLINT NOT NULL UNIQUE,
     capacity SMALLINT NULL,
     status ENUM('available','occupied','reserved','inactive') NOT NULL DEFAULT 'available',
-    CONSTRAINT chk_table_number_positive CHECK (table_number >= 1),
+<<<<<<< HEAD
+    CONSTRAINT chk_table_number_range CHECK (table_number >= 1 AND table_number <= 99),
     CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 8))
+=======
+    CONSTRAINT chk_table_number_nonneg CHECK (table_number >= 0),
+    CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 99))
+>>>>>>> 472a1550fda52af52fd228c8796a890658c53092
 );
 
 CREATE TABLE Users (
@@ -29,6 +34,9 @@ CREATE TABLE Menu_Item (
     name VARCHAR(50) NOT NULL,
     category VARCHAR(50) NULL,
     base_price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    description TEXT NULL,
+    photo_url VARCHAR(2048) NULL,
+    common_allergens VARCHAR(255) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT chk_menu_item_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
     CONSTRAINT chk_menu_item_price_nonneg CHECK (base_price >= 0)
@@ -79,10 +87,14 @@ CREATE TABLE Utensil_Inventory (
 );
 
 CREATE TABLE Customer (
-    customer_num_id INT PRIMARY KEY,
+    customer_num_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(250) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
     phone_number VARCHAR(10) NOT NULL UNIQUE,
     points_balance INT NOT NULL DEFAULT 0,
-    CONSTRAINT chk_customer_id_positive CHECK (customer_num_id > 0),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_customer_phone_digits CHECK (phone_number REGEXP '^[0-9]{10}$'),
     CONSTRAINT chk_points_nonneg CHECK (points_balance >= 0)
 );
@@ -96,8 +108,11 @@ CREATE TABLE Orders (
     receipt_number VARCHAR(30) UNIQUE,
     order_note VARCHAR(255),
 
-    order_type ENUM('Dine_in', 'Takeout', 'Delivery') NOT NULL DEFAULT 'Dine_in',
-    order_channel ENUM('In_Store','Phone','Online') NOT NULL DEFAULT 'In_Store',
+    order_type ENUM('Dine_in', 'Takeout', 'Online') NOT NULL DEFAULT 'Dine_in',
+
+    customer_num_id INT NULL,
+    customer_status ENUM('placed','confirmed','preparing','ready') DEFAULT 'placed',
+
     guest_count SMALLINT NOT NULL DEFAULT 1,
 
     is_split_check BOOLEAN NOT NULL DEFAULT FALSE,
@@ -113,6 +128,9 @@ CREATE TABLE Orders (
     tax DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     service_charge DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    takeout_name VARCHAR(100) NULL,
+    takeout_phone VARCHAR(20) NULL,
 
     void_reason VARCHAR(100),
     voided_by INT NULL,
@@ -209,9 +227,54 @@ CREATE TABLE Payment (
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
+CREATE TABLE Online_Orders (
+    online_order_id INT AUTO_INCREMENT PRIMARY KEY,
+
+    -- Customer info (guest or logged-in)
+    customer_num_id INT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(250) NOT NULL,
+    phone VARCHAR(10) NOT NULL,
+    order_note VARCHAR(255) NULL,
+
+    -- Status tracking
+    customer_status ENUM('placed','confirmed','preparing','ready','picked_up') NOT NULL DEFAULT 'placed',
+    payment_preference ENUM('online','in_store') NOT NULL DEFAULT 'in_store',
+    payment_status ENUM('unpaid','paid') NOT NULL DEFAULT 'unpaid',
+
+    -- Financials
+    subtotal DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    tax DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_online_order_customer
+        FOREIGN KEY (customer_num_id) REFERENCES Customer(customer_num_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE Online_Order_Item (
+    online_order_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    online_order_id INT NOT NULL,
+    menu_item_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    price DECIMAL(10,2) NOT NULL,
+    CONSTRAINT chk_online_order_item_qty CHECK (quantity >= 1),
+    CONSTRAINT chk_online_order_item_price CHECK (price >= 0),
+    CONSTRAINT fk_online_order_item_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_online_order_item_menu
+        FOREIGN KEY (menu_item_id) REFERENCES Menu_Item(menu_item_id)
+        ON DELETE RESTRICT
+);
+
 CREATE TABLE Kitchen_Ticket (
     ticket_id INT AUTO_INCREMENT PRIMARY KEY,
-    order_id INT NOT NULL,
+    order_id INT NULL,
+    online_order_id INT NULL,
     table_id INT NOT NULL,
     status ENUM('new','in_progress','done','canceled') NOT NULL DEFAULT 'new',
     completed_by INT NULL,
@@ -221,6 +284,9 @@ CREATE TABLE Kitchen_Ticket (
 
     CONSTRAINT fk_kitchen_order
         FOREIGN KEY (order_id) REFERENCES Orders(order_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_kitchen_online_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_kitchen_table
         FOREIGN KEY (table_id) REFERENCES Dining_Tables(table_id)
@@ -395,3 +461,124 @@ CREATE TABLE CAPTCHA_Validation (
     INDEX idx_user_id (user_id),
     INDEX idx_expires_at (expires_at)
 );
+CREATE TABLE Manager_Notification (
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    inventory_item_name VARCHAR(100) NOT NULL,
+    title VARCHAR(100) NOT NULL,
+    message VARCHAR(255) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_manager_notification_user
+        FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    CONSTRAINT fk_manager_notification_inventory
+        FOREIGN KEY (inventory_item_name) REFERENCES Inventory(inventory_item_name)
+        ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE Loyalty_Rewards (
+    reward_id    INT AUTO_INCREMENT PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    points_cost  INT NOT NULL,
+    menu_item_id INT NULL,
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_reward_name_nonblank CHECK (CHAR_LENGTH(TRIM(name)) > 0),
+    CONSTRAINT chk_reward_points_positive CHECK (points_cost >= 1),
+
+    CONSTRAINT fk_reward_menu_item
+        FOREIGN KEY (menu_item_id) REFERENCES Menu_Item(menu_item_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE Loyalty_Transactions (
+    transaction_id  INT AUTO_INCREMENT PRIMARY KEY,
+    customer_num_id INT NOT NULL,
+    online_order_id INT NULL,
+    type            ENUM('earned', 'redeemed') NOT NULL,
+    points          INT NOT NULL,
+    description     VARCHAR(255) NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_loyalty_points_positive CHECK (points > 0),
+
+    CONSTRAINT fk_loyalty_customer
+        FOREIGN KEY (customer_num_id) REFERENCES Customer(customer_num_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+
+    CONSTRAINT fk_loyalty_online_order
+        FOREIGN KEY (online_order_id) REFERENCES Online_Orders(online_order_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+DELIMITER $$
+
+CREATE TRIGGER trg_inventory_low_stock_notify
+AFTER UPDATE ON Inventory
+FOR EACH ROW
+BEGIN
+    IF NEW.amount_available <= 10
+       AND OLD.amount_available > 10
+       AND NEW.availability_status = TRUE THEN
+
+        INSERT INTO Manager_Notification (
+            user_id,
+            inventory_item_name,
+            title,
+            message
+        )
+        SELECT
+            u.user_id,
+            NEW.inventory_item_name,
+            'Low Inventory Alert',
+            CONCAT(
+                NEW.inventory_item_name,
+                ' is low. Current amount available: ',
+                NEW.amount_available
+            )
+        FROM Users u
+        WHERE u.role = 'manager'
+          AND u.is_active = TRUE;
+
+    END IF;
+END$$
+
+CREATE TRIGGER trg_award_loyalty_points
+AFTER UPDATE ON Online_Orders
+FOR EACH ROW
+BEGIN
+    DECLARE v_points INT;
+
+    IF OLD.payment_status = 'unpaid'
+       AND NEW.payment_status = 'paid'
+       AND NEW.customer_num_id IS NOT NULL
+    THEN
+        SET v_points = FLOOR(NEW.total) * 10;
+
+        IF v_points > 0 THEN
+            INSERT INTO Loyalty_Transactions (
+                customer_num_id,
+                online_order_id,
+                type,
+                points,
+                description
+            ) VALUES (
+                NEW.customer_num_id,
+                NEW.online_order_id,
+                'earned',
+                v_points,
+                CONCAT('Points earned from online order #', NEW.online_order_id)
+            );
+
+            UPDATE Customer
+            SET points_balance = points_balance + v_points
+            WHERE customer_num_id = NEW.customer_num_id;
+        END IF;
+    END IF;
+END$$
+
+DELIMITER ;

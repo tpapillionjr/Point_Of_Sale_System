@@ -1,10 +1,15 @@
 import db from "../db/index.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { createValidationError } from "../validation/business-rules.js";
 
-function validatePin(pin) {
-  if (typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
-    throw createValidationError("PIN must be exactly 4 digits.");
+function validateCredentials(identifier, password) {
+  if (typeof identifier !== "string" || identifier.trim().length === 0) {
+    throw createValidationError("Username or email is required.");
+  }
+
+  if (typeof password !== "string" || password.length === 0) {
+    throw createValidationError("Password is required.");
   }
 }
 
@@ -36,7 +41,21 @@ function createAuthToken(user) {
   );
 }
 
+async function verifyPassword(password, passwordHash) {
+  if (!passwordHash) {
+    return false;
+  }
+
+  if (passwordHash.startsWith("$2")) {
+    return bcrypt.compare(password, passwordHash);
+  }
+
+  return password === passwordHash;
+}
+
 function toSessionPayload(user, shift) {
+  const scheduledHours = shift ? hoursBetween(shift.scheduledStart, shift.scheduledEnd) : 0;
+
   return {
     token: createAuthToken(user),
     userId: user.user_id,
@@ -44,29 +63,43 @@ function toSessionPayload(user, shift) {
     role: user.role,
     roles: [formatRole(user.role)],
     scheduledToday: Boolean(shift),
+    scheduledHours,
     clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
     shift,
   };
 }
 
-async function findUserByPin(connection, pin) {
+async function findUserByCredentials(connection, identifier, password) {
   const [rows] = await connection.execute(
-    `SELECT user_id, name, role, is_active
+    `SELECT user_id, name, email, role, is_active, password_hash
      FROM Users
-     WHERE pin_code = ?
+     WHERE LOWER(email) = LOWER(?)
      LIMIT 1`,
-    [pin]
+    [identifier.trim()]
   );
 
   if (rows.length === 0) {
-    throw createValidationError("Incorrect PIN. Try again.");
+    throw createValidationError("Incorrect username/email or password.");
   }
 
   if (!rows[0].is_active) {
     throw createValidationError("This employee account is inactive.");
   }
 
+  const passwordValid = await verifyPassword(password, rows[0].password_hash);
+  if (!passwordValid) {
+    throw createValidationError("Incorrect username/email or password.");
+  }
+
   return rows[0];
+}
+
+function hoursBetween(start, end) {
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Number(Math.max((new Date(end).getTime() - new Date(start).getTime()) / 3600000, 0).toFixed(2));
 }
 
 async function findUserById(connection, userId) {
@@ -116,22 +149,26 @@ async function findCurrentShift(connection, userId) {
   return rows[0] ?? null;
 }
 
-async function getClockSession(pin) {
-  validatePin(pin);
+async function getClockSession(credentials) {
+  const identifier = credentials?.identifier ?? credentials?.email ?? credentials?.username;
+  const password = credentials?.password;
+  validateCredentials(identifier, password);
 
   return db.withTransaction(async (connection) => {
-    const user = await findUserByPin(connection, pin);
+    const user = await findUserByCredentials(connection, identifier, password);
     const shift = await findCurrentShift(connection, user.user_id);
 
     return toSessionPayload(user, shift);
   });
 }
 
-async function authenticatePin(pin) {
-  validatePin(pin);
+async function authenticateCredentials(credentials) {
+  const identifier = credentials?.identifier ?? credentials?.email ?? credentials?.username;
+  const password = credentials?.password;
+  validateCredentials(identifier, password);
 
   return db.withTransaction(async (connection) => {
-    const user = await findUserByPin(connection, pin);
+    const user = await findUserByCredentials(connection, identifier, password);
 
     return {
       authenticated: true,
@@ -229,4 +266,4 @@ async function clockOut(userId, tipDeclaredAmount = null) {
   });
 }
 
-export { authenticatePin, getClockSession, clockIn, clockOut };
+export { authenticateCredentials, getClockSession, clockIn, clockOut };
