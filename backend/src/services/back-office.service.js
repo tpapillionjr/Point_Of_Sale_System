@@ -389,12 +389,32 @@ async function getBackOfficeData(range) {
      FROM (
        SELECT
          i.inventory_item_name AS inventoryItemName,
-         COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
-         ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
-         COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
+         COALESCE(SUM(CASE WHEN order_usage.inRange THEN order_usage.quantity ELSE 0 END), 0) AS unitsUsed,
+         ROUND(COALESCE(SUM(CASE WHEN order_usage.inRange THEN order_usage.quantity * order_usage.price ELSE 0 END), 0), 2) AS revenue,
+         COUNT(DISTINCT CASE WHEN order_usage.inRange THEN order_usage.orderKey ELSE NULL END) AS orderCount
        FROM Inventory i
-       LEFT JOIN Order_Item oi ON oi.menu_item_id = i.menu_item_id
-       LEFT JOIN Orders o ON o.order_id = oi.order_id
+       LEFT JOIN (
+         SELECT
+           CONCAT('pos-', oi.order_id) AS orderKey,
+           oi.menu_item_id AS menuItemId,
+           oi.quantity,
+           oi.price,
+           (${rangeFilter(filters, "o.created_at")}) AS inRange
+         FROM Order_Item oi
+         JOIN Orders o ON o.order_id = oi.order_id
+         WHERE o.status <> 'Void'
+
+         UNION ALL
+
+         SELECT
+           CONCAT('online-', ooi.online_order_id) AS orderKey,
+           ooi.menu_item_id AS menuItemId,
+           ooi.quantity,
+           ooi.price,
+           (${rangeFilter(filters, "oo.created_at")}) AS inRange
+         FROM Online_Order_Item ooi
+         JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+       ) order_usage ON order_usage.menuItemId = i.menu_item_id
        GROUP BY i.inventory_item_name
 
        UNION ALL
@@ -410,8 +430,12 @@ async function getBackOfficeData(range) {
   );
 
   const inventoryUpdateStatsPromise = db.query(
-    `SELECT MAX(created_at) AS lastOrderAt
-     FROM Orders`
+    `SELECT MAX(createdAt) AS lastOrderAt
+     FROM (
+       SELECT created_at AS createdAt FROM Orders
+       UNION ALL
+       SELECT created_at AS createdAt FROM Online_Orders
+     ) all_orders`
   );
 
   const laborRowsPromise = db.query(
@@ -458,36 +482,79 @@ async function getBackOfficeData(range) {
   );
 
   const recentOrdersPromise = db.query(
-    `SELECT
-       o.order_id AS orderId,
-       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
-       dt.table_number AS tableNumber,
-       u.name AS employeeName,
-       o.total,
-       o.status,
-       o.created_at AS createdAt
-     FROM Orders o
-     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
-     LEFT JOIN Users u ON u.user_id = o.created_by
-     WHERE ${rangeFilter(filters, "o.created_at")}
-     ORDER BY o.created_at DESC
+    `SELECT *
+     FROM (
+       SELECT
+         o.order_id AS orderId,
+         COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+         dt.table_number AS tableNumber,
+         u.name AS employeeName,
+         o.total,
+         o.status,
+         o.created_at AS createdAt,
+         'In Store' AS channel
+       FROM Orders o
+       LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+       LEFT JOIN Users u ON u.user_id = o.created_by
+       WHERE ${rangeFilter(filters, "o.created_at")}
+
+       UNION ALL
+
+       SELECT
+         oo.online_order_id AS orderId,
+         CONCAT('Online #', oo.online_order_id) AS receiptNumber,
+         'Online' AS tableNumber,
+         CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
+         oo.total,
+         CASE
+           WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
+           WHEN oo.payment_status = 'paid' THEN 'Paid Online'
+           ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
+         END AS status,
+         oo.created_at AS createdAt,
+         'Online' AS channel
+       FROM Online_Orders oo
+       WHERE ${rangeFilter(filters, "oo.created_at")}
+     ) combined_orders
+     ORDER BY createdAt DESC
      LIMIT 12`
   );
 
   const activeOrdersPromise = db.query(
-    `SELECT
-       o.order_id AS orderId,
-       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
-       dt.table_number AS tableNumber,
-       u.name AS employeeName,
-       o.total,
-       o.status,
-       o.created_at AS createdAt
-     FROM Orders o
-     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
-     LEFT JOIN Users u ON u.user_id = o.created_by
-     WHERE o.status IN ('Open', 'Sent', 'Completed')
-     ORDER BY o.created_at DESC`
+    `SELECT *
+     FROM (
+       SELECT
+         o.order_id AS orderId,
+         COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+         dt.table_number AS tableNumber,
+         u.name AS employeeName,
+         o.total,
+         o.status,
+         o.created_at AS createdAt,
+         'In Store' AS channel
+       FROM Orders o
+       LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+       LEFT JOIN Users u ON u.user_id = o.created_by
+       WHERE o.status IN ('Open', 'Sent', 'Completed')
+
+       UNION ALL
+
+       SELECT
+         oo.online_order_id AS orderId,
+         CONCAT('Online #', oo.online_order_id) AS receiptNumber,
+         'Online' AS tableNumber,
+         CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
+         oo.total,
+         CASE
+           WHEN oo.payment_status = 'paid' THEN 'Paid Online'
+           ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
+         END AS status,
+         oo.created_at AS createdAt,
+         'Online' AS channel
+       FROM Online_Orders oo
+       WHERE oo.customer_status <> 'picked_up'
+     ) active_orders
+     ORDER BY createdAt DESC`
   );
 
   const refundCountsPromise = db.query(
@@ -625,7 +692,7 @@ async function getBackOfficeData(range) {
   }).length;
   const tipsPending = laborRows.filter((row) => row.clockOut && Number(row.tipDeclaredAmount ?? 0) === 0).length;
 
-  const paidOrders = recentOrders.filter((row) => row.status === "Paid").length;
+  const paidOrders = recentOrders.filter((row) => row.status === "Paid" || row.status === "Paid Online").length;
   const voidOrders = recentOrders.filter((row) => row.status === "Void").length;
 
   const userRoleCounts = Object.fromEntries(userCountsRows.map((row) => [row.role, Number(row.count ?? 0)]));
@@ -716,6 +783,7 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
       recentOrders: recentOrders.map((row) => ({
@@ -725,6 +793,7 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
     },

@@ -1424,28 +1424,30 @@ export function OrderHistorySection() {
                 <div className="space-y-3">
                   {orders.activeOrders.map((item) => (
                     <div
-                      key={`active-${item.orderId}`}
+                      key={`active-${item.channel}-${item.orderId}`}
                       className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="space-y-1 text-sm text-gray-700">
                           <p className="font-semibold text-gray-900">
-                            {item.receiptNumber} · Table {item.tableNumber}
+                            {item.receiptNumber} · {item.channel === "Online" ? "Online Order" : `Table ${item.tableNumber}`}
                           </p>
                           <p>
-                            Server: {item.employeeName} · Status: {item.status} · Total: $
+                            {item.channel === "Online" ? "Customer" : "Server"}: {item.employeeName} · Status: {item.status} · Total: $
                             {item.total.toFixed(2)}
                           </p>
                           <p>Created: {item.createdAt}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleManagerCancel(item.orderId)}
-                          disabled={cancelingOrderId === item.orderId}
-                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-                        >
-                          {cancelingOrderId === item.orderId ? "Canceling..." : "Manager Cancel"}
-                        </button>
+                        {item.channel !== "Online" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleManagerCancel(item.orderId)}
+                            disabled={cancelingOrderId === item.orderId}
+                            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                          >
+                            {cancelingOrderId === item.orderId ? "Canceling..." : "Manager Cancel"}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -1455,10 +1457,11 @@ export function OrderHistorySection() {
 
             {orders?.recentOrders?.length ? (
               <SimpleTable
-                headers={["Order", "Receipt", "Table", "Employee", "Total", "Status", "Created"]}
+                headers={["Channel", "Order", "Receipt", "Table", "Employee", "Total", "Status", "Created"]}
                 rows={orders.recentOrders}
                 renderRow={(item) => (
-                  <tr key={item.orderId} className="border-b last:border-b-0">
+                  <tr key={`${item.channel}-${item.orderId}`} className="border-b last:border-b-0">
+                    <td className="py-3 pr-4">{item.channel}</td>
                     <td className="py-3 pr-4 font-medium text-gray-800">{item.orderId}</td>
                     <td className="py-3 pr-4">{item.receiptNumber}</td>
                     <td className="py-3 pr-4">{item.tableNumber}</td>

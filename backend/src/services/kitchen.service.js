@@ -11,6 +11,7 @@ async function getActiveTickets() {
       kt.status,
       kt.created_at AS createdAt,
       kt.updated_at AS updatedAt,
+      GREATEST(TIMESTAMPDIFF(SECOND, kt.created_at, CURRENT_TIMESTAMP), 0) AS ageSeconds,
       CASE
         WHEN kt.online_order_id IS NOT NULL THEN
           GROUP_CONCAT(CONCAT(mi.name, ' x', ooi.quantity) ORDER BY ooi.online_order_item_id SEPARATOR '||')

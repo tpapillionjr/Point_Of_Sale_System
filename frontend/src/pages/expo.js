@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, startTransition } from "react";
 import { fetchKitchenTickets, updateKitchenTicket } from "../lib/api";
 
 function getTicketState(ticket, now) {
-  const ageMinutes = (now - new Date(ticket.createdAt).getTime()) / 60000;
+  const baseAgeSeconds = Number(ticket.ageSeconds ?? 0);
+  const fetchedAt = Number(ticket.fetchedAt ?? now);
+  const ageMinutes = Math.max(0, (baseAgeSeconds + ((now - fetchedAt) / 1000)) / 60);
 
   if (ageMinutes >= 18) {
     return "red";
@@ -35,7 +37,8 @@ export default function KitchenPage() {
     async function loadTickets() {
       try {
         const rows = await fetchKitchenTickets();
-        setTickets(rows);
+        const fetchedAt = Date.now();
+        setTickets(rows.map((ticket) => ({ ...ticket, fetchedAt })));
         setMessage(null);
       } catch (error) {
         setMessage(error.message);
@@ -123,7 +126,9 @@ export default function KitchenPage() {
 
       <section className="expo-grid" aria-label="Kitchen tickets">
         {tickets.map((ticket) => {
-          const ageMinutes = Math.floor((now - new Date(ticket.createdAt).getTime()) / 60000);
+          const baseAgeSeconds = Number(ticket.ageSeconds ?? 0);
+          const fetchedAt = Number(ticket.fetchedAt ?? now);
+          const ageMinutes = Math.max(0, Math.floor((baseAgeSeconds + ((now - fetchedAt) / 1000)) / 60));
           const state = getTicketState(ticket, now);
 
           return (
