@@ -99,6 +99,11 @@ async function loginCustomer(req, res) {
 
 const TAX_RATE = 0.0825;
 
+function normalizeCategory(value) {
+  const category = value || "Other";
+  return String(category).toLowerCase() === "entree" ? "Entrees" : category;
+}
+
 async function createCustomerOrder(req, res) {
   try {
 
@@ -214,7 +219,7 @@ async function getCustomerMenu(req, res) {
 
     const grouped = {};
     for (const item of rows) {
-      const cat = item.category ?? "Other";
+      const cat = normalizeCategory(item.category);
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(item);
     }

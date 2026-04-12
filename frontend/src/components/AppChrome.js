@@ -91,8 +91,7 @@ export default function AppChrome({ children }) {
           />
 
           <div>
-            <p className="app-shell__eyebrow">Lumi POS</p>
-            <h1 className="app-shell__title">Front of House</h1>
+            <h1 className="app-shell__title app-shell__title--brand">lumi POS</h1>
           </div>
         </div>
 

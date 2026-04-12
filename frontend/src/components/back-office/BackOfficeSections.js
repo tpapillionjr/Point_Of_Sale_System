@@ -3,7 +3,23 @@ import { upload } from "@vercel/blob/client";
 import { useEffect, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
-import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive, fetchLoyaltyRewards, createLoyaltyReward, updateLoyaltyReward, toggleLoyaltyReward } from "../../lib/api";
+import {
+  adjustLoyaltyPoints,
+  cancelOrder,
+  confirmOnlineOrder,
+  createLoyaltyReward,
+  createMenuItem,
+  fetchBackOfficeData,
+  fetchItems,
+  fetchLoyaltyRewards,
+  markOnlineOrderPaid,
+  markOnlineOrderPickedUp,
+  receivePurchasingStock,
+  toggleLoyaltyReward,
+  toggleMenuItemActive,
+  updateLoyaltyReward,
+  updateMenuItem,
+} from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
@@ -777,19 +793,27 @@ export function InventorySection() {
 
 export function InventoryCountsSection() {
   const [selectedType, setSelectedType] = useState("menu");
+  const [selectedCountFilter, setSelectedCountFilter] = useState("All");
+  const [countSearchTerm, setCountSearchTerm] = useState("");
   const { data, isLoading, error } = useBackOfficeData("7days");
   const inventory = data?.inventory;
-  const stockRows = (inventory?.stockRows ?? []).filter((item) =>
+  const typeStockRows = (inventory?.stockRows ?? []).filter((item) =>
     selectedType === "utensils" ? item.category === "Utensils" : item.category !== "Utensils"
   );
+  const countFilterOptions = [...new Set(typeStockRows.map((item) => item.category || "Uncategorized"))].sort();
+  const stockRows = typeStockRows.filter((item) =>
+    (selectedCountFilter === "All" ? true : (item.category || "Uncategorized") === selectedCountFilter) &&
+    (countSearchTerm.trim()
+      ? [
+          item.inventoryItemName,
+          item.linkedMenuItem,
+          item.category,
+          item.status,
+        ].some((value) => String(value ?? "").toLowerCase().includes(countSearchTerm.trim().toLowerCase()))
+      : true)
+  );
   const usageRows = (inventory?.usageRows ?? []).filter((item) =>
-    selectedType === "utensils"
-      ? (inventory?.stockRows ?? []).some(
-          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category === "Utensils"
-        )
-      : (inventory?.stockRows ?? []).some(
-          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category !== "Utensils"
-        )
+    stockRows.some((stockItem) => stockItem.inventoryItemName === item.inventoryItemName)
   );
   const filteredSummaries = buildInventorySummaries(
     stockRows,
@@ -799,13 +823,62 @@ export function InventoryCountsSection() {
 
   return (
     <>
-      <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
+      <InventoryTypeTabs
+        selectedType={selectedType}
+        onChange={(nextType) => {
+          setSelectedType(nextType);
+          setSelectedCountFilter("All");
+          setCountSearchTerm("");
+        }}
+      />
 
       <ReportSection title="Count Session Summary">
         <SummaryCards cards={filteredSummaries.countSummary} isLoading={isLoading} error={error} />
       </ReportSection>
 
       <ReportSection title={selectedType === "utensils" ? "Tracked Utensil Counts" : "Tracked Inventory Counts"}>
+        {typeStockRows.length ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedCountFilter("All")}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                selectedCountFilter === "All"
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              All ({typeStockRows.length})
+            </button>
+            {countFilterOptions.map((category) => {
+              const count = typeStockRows.filter((item) => (item.category || "Uncategorized") === category).length;
+              return (
+                <button
+                  type="button"
+                  key={category}
+                  onClick={() => setSelectedCountFilter(category)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                    selectedCountFilter === category
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {category} ({count})
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-semibold text-gray-700">Search Counts</label>
+          <input
+            type="search"
+            value={countSearchTerm}
+            onChange={(event) => setCountSearchTerm(event.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Search by stock item, linked menu item, category, or status"
+          />
+        </div>
         {error ? (
           <ErrorState message={error} />
         ) : stockRows.length ? (
@@ -838,8 +911,34 @@ export function InventoryCountsSection() {
 export function PurchasingSection() {
   const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
   const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
-  const { data, isLoading, error } = useBackOfficeData(selectedRange);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [orderedItems, setOrderedItems] = useState({});
+  const [purchasingMessage, setPurchasingMessage] = useState("");
+  const [purchasingError, setPurchasingError] = useState("");
+  const [receivingItem, setReceivingItem] = useState(null);
+  const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const purchasing = data?.purchasing;
+
+  async function handleReceive(item) {
+    setPurchasingMessage("");
+    setPurchasingError("");
+    setReceivingItem(item.inventoryItemName);
+
+    try {
+      await receivePurchasingStock({
+        type: item.category === "Utensils" ? "utensils" : "menu",
+        inventoryItemName: item.inventoryItemName,
+        quantityReceived: item.suggestedOrder,
+      });
+      setOrderedItems((current) => ({ ...current, [item.inventoryItemName]: false }));
+      setPurchasingMessage(`${item.suggestedOrder} units received for ${item.inventoryItemName}.`);
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setPurchasingError(actionError.message || "Failed to receive stock.");
+    } finally {
+      setReceivingItem(null);
+    }
+  }
 
   return (
     <>
@@ -850,11 +949,13 @@ export function PurchasingSection() {
       </ReportSection>
 
       <ReportSection title="Recommended Reorders">
+        {purchasingMessage ? <p className="mb-4 text-sm text-green-700">{purchasingMessage}</p> : null}
+        {purchasingError ? <p className="mb-4 text-sm text-red-600">{purchasingError}</p> : null}
         {error ? (
           <ErrorState message={error} />
         ) : purchasing?.reorderRows?.length ? (
           <SimpleTable
-            headers={["Inventory Item", "Current On Hand", "Suggested Order", "Estimated Cost", "Priority"]}
+            headers={["Inventory Item", "Current On Hand", "Suggested Order", "Estimated Cost", "Priority", "Actions"]}
             rows={purchasing.reorderRows}
             renderRow={(item) => (
               <tr key={item.inventoryItemName} className="border-b last:border-b-0">
@@ -863,6 +964,27 @@ export function PurchasingSection() {
                 <td className="py-3 pr-4">{item.suggestedOrder}</td>
                 <td className="py-3 pr-4">${item.estimatedCost.toFixed(2)}</td>
                 <td className="py-3 pr-4">{item.priority}</td>
+                <td className="flex flex-wrap gap-2 py-3 pr-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderedItems((current) => ({ ...current, [item.inventoryItemName]: true }));
+                      setPurchasingMessage(`${item.inventoryItemName} marked as ordered.`);
+                      setPurchasingError("");
+                    }}
+                    className="rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+                  >
+                    {orderedItems[item.inventoryItemName] ? "Ordered" : "Mark Ordered"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleReceive(item)}
+                    disabled={receivingItem === item.inventoryItemName}
+                    className="rounded bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
+                  >
+                    {receivingItem === item.inventoryItemName ? "Receiving..." : "Receive Stock"}
+                  </button>
+                </td>
               </tr>
             )}
           />
@@ -1371,6 +1493,7 @@ export function OrderHistorySection() {
   const [cancelMessage, setCancelMessage] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelingOrderId, setCancelingOrderId] = useState(null);
+  const [onlineActionId, setOnlineActionId] = useState(null);
   const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const orders = data?.orders;
 
@@ -1398,6 +1521,31 @@ export function OrderHistorySection() {
       setCancelError(actionError.message || "Failed to cancel the order.");
     } finally {
       setCancelingOrderId(null);
+    }
+  }
+
+  async function handleOnlineAction(orderId, action) {
+    setOnlineActionId(`${action}-${orderId}`);
+    setCancelError("");
+    setCancelMessage("");
+
+    try {
+      if (action === "confirm") {
+        await confirmOnlineOrder(orderId);
+        setCancelMessage(`Online order #${orderId} was confirmed.`);
+      } else if (action === "pay") {
+        await markOnlineOrderPaid(orderId);
+        setCancelMessage(`Online order #${orderId} was marked paid.`);
+      } else if (action === "pickup") {
+        await markOnlineOrderPickedUp(orderId);
+        setCancelMessage(`Online order #${orderId} was marked picked up.`);
+      }
+
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setCancelError(actionError.message || "Failed to update online order.");
+    } finally {
+      setOnlineActionId(null);
     }
   }
 
@@ -1438,7 +1586,40 @@ export function OrderHistorySection() {
                           </p>
                           <p>Created: {item.createdAt}</p>
                         </div>
-                        {item.channel !== "Online" ? (
+                        {item.channel === "Online" ? (
+                          <div className="flex flex-wrap gap-2">
+                            {item.customerStatus === "placed" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOnlineAction(item.orderId, "confirm")}
+                                disabled={onlineActionId === `confirm-${item.orderId}`}
+                                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+                              >
+                                Confirm
+                              </button>
+                            ) : null}
+                            {item.paymentStatus !== "paid" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOnlineAction(item.orderId, "pay")}
+                                disabled={onlineActionId === `pay-${item.orderId}`}
+                                className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
+                              >
+                                Mark Paid
+                              </button>
+                            ) : null}
+                            {item.customerStatus === "ready" && item.paymentStatus === "paid" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOnlineAction(item.orderId, "pickup")}
+                                disabled={onlineActionId === `pickup-${item.orderId}`}
+                                className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
+                              >
+                                Picked Up
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : (
                           <button
                             type="button"
                             onClick={() => handleManagerCancel(item.orderId)}
@@ -1447,7 +1628,7 @@ export function OrderHistorySection() {
                           >
                             {cancelingOrderId === item.orderId ? "Canceling..." : "Manager Cancel"}
                           </button>
-                        ) : null}
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1485,7 +1666,8 @@ export function OrderHistorySection() {
 const EMPTY_REWARD_FORM = { name: "", pointsCost: "", menuItemId: "" };
 
 export function CustomerLoyaltySection() {
-  const { data, isLoading, error } = useBackOfficeData("30days");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const { data, isLoading, error } = useBackOfficeData("30days", refreshToken);
   const customers = data?.customers;
 
   const [rewards, setRewards] = useState(null);
@@ -1499,6 +1681,9 @@ export function CustomerLoyaltySection() {
   const [formError, setFormError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
+  const [adjustForm, setAdjustForm] = useState({ customerId: "", pointsDelta: "", reason: "" });
+  const [adjustError, setAdjustError] = useState(null);
+  const [adjusting, setAdjusting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -1597,6 +1782,40 @@ export function CustomerLoyaltySection() {
     }
   }
 
+  async function handleAdjustPoints(event) {
+    event.preventDefault();
+    const customerId = Number(adjustForm.customerId);
+    const pointsDelta = Number(adjustForm.pointsDelta);
+
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      setAdjustError("Choose a customer.");
+      return;
+    }
+
+    if (!Number.isInteger(pointsDelta) || pointsDelta === 0) {
+      setAdjustError("Enter a non-zero whole number of points.");
+      return;
+    }
+
+    setAdjusting(true);
+    setAdjustError(null);
+    setActionMessage(null);
+
+    try {
+      const result = await adjustLoyaltyPoints(customerId, {
+        pointsDelta,
+        reason: adjustForm.reason,
+      });
+      setActionMessage(`Customer #${customerId} now has ${result.newBalance} points.`);
+      setAdjustForm({ customerId: "", pointsDelta: "", reason: "" });
+      setRefreshToken((value) => value + 1);
+    } catch (err) {
+      setAdjustError(err.message || "Failed to adjust points.");
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
   return (
     <>
       <ReportSection title="Customer Snapshot">
@@ -1621,6 +1840,55 @@ export function CustomerLoyaltySection() {
         ) : (
           <EmptyState message={isLoading ? "Loading customer records..." : "No customer records are available."} />
         )}
+      </ReportSection>
+
+      <ReportSection title="Adjust Customer Points">
+        {adjustError ? <p className="mb-4 text-sm text-red-600">{adjustError}</p> : null}
+        <form onSubmit={handleAdjustPoints} className="grid gap-3 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Customer</label>
+            <select
+              value={adjustForm.customerId}
+              onChange={(event) => setAdjustForm((current) => ({ ...current, customerId: event.target.value }))}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              <option value="">Select customer</option>
+              {(customers?.customers ?? []).map((customer) => (
+                <option key={customer.customerId} value={customer.customerId}>
+                  #{customer.customerId} · {customer.phoneNumber} · {customer.pointsBalance} pts
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Point Change</label>
+            <input
+              type="number"
+              step="1"
+              value={adjustForm.pointsDelta}
+              onChange={(event) => setAdjustForm((current) => ({ ...current, pointsDelta: event.target.value }))}
+              placeholder="+50 or -25"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Reason</label>
+            <input
+              type="text"
+              value={adjustForm.reason}
+              onChange={(event) => setAdjustForm((current) => ({ ...current, reason: event.target.value }))}
+              placeholder="Service recovery, correction, promotion..."
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={adjusting}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
+          >
+            {adjusting ? "Saving..." : "Adjust"}
+          </button>
+        </form>
       </ReportSection>
 
       {actionMessage && (

@@ -150,7 +150,51 @@ async function toggleReward(rewardId) {
   return rows[0]?.is_active ?? false;
 }
 
+async function adjustCustomerPoints(customerId, pointsDelta, reason) {
+  if (!Number.isInteger(customerId) || customerId <= 0) {
+    throw { status: 400, message: "Valid customerId required." };
+  }
+
+  if (!Number.isInteger(pointsDelta) || pointsDelta === 0) {
+    throw { status: 400, message: "pointsDelta must be a non-zero whole number." };
+  }
+
+  const description = reason?.trim() || "Manager points adjustment";
+
+  return db.withTransaction(async (connection) => {
+    const [customerRows] = await connection.execute(
+      `SELECT points_balance FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+      [customerId]
+    );
+
+    if (customerRows.length === 0) {
+      throw { status: 404, message: "Customer not found." };
+    }
+
+    const currentBalance = Number(customerRows[0].points_balance ?? 0);
+    const newBalance = currentBalance + pointsDelta;
+
+    if (newBalance < 0) {
+      throw { status: 400, message: "Point adjustment cannot make the balance negative." };
+    }
+
+    await connection.execute(
+      `UPDATE Customer SET points_balance = ? WHERE customer_num_id = ?`,
+      [newBalance, customerId]
+    );
+
+    await connection.execute(
+      `INSERT INTO Loyalty_Transactions (customer_num_id, online_order_id, type, points, description)
+       VALUES (?, NULL, ?, ?, ?)`,
+      [customerId, pointsDelta > 0 ? "earned" : "redeemed", Math.abs(pointsDelta), description]
+    );
+
+    return { customerId, pointsDelta, newBalance };
+  });
+}
+
 export {
+  adjustCustomerPoints,
   getActiveRewards,
   getCustomerLoyaltyInfo,
   redeemReward,

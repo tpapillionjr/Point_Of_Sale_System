@@ -3,6 +3,7 @@ import {
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
+  receivePurchasingStock,
   updateInventoryItemAmount,
 } from "../services/back-office.service.js";
 
@@ -60,4 +61,14 @@ async function patchInventoryItemAmount(req, res) {
   }
 }
 
-export { getDashboard, getData, patchInventoryItemAmount, postInventoryItem, removeInventoryItem };
+async function postReceivePurchasingStock(req, res) {
+  try {
+    const result = await receivePurchasingStock(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to receive purchasing stock:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.statusCode ? error.message : "Failed to receive purchasing stock" });
+  }
+}
+
+export { getDashboard, getData, patchInventoryItemAmount, postInventoryItem, postReceivePurchasingStock, removeInventoryItem };

@@ -7,6 +7,7 @@ import {
   getDashboard,
   getData,
   patchInventoryItemAmount,
+  postReceivePurchasingStock,
   postInventoryItem,
   removeInventoryItem,
 } from "../controllers/back-office.controller.js";
@@ -18,5 +19,6 @@ router.get("/dashboard", requireAuth, requireManager, getDashboard);
 router.post("/inventory", requireAuth, requireManager, postInventoryItem);
 router.patch("/inventory/:type/:name", requireAuth, requireManager, patchInventoryItemAmount);
 router.delete("/inventory/:type/:name", requireAuth, requireManager, removeInventoryItem);
+router.post("/purchasing/receive", requireAuth, requireManager, postReceivePurchasingStock);
 
 export default router;
