@@ -20,7 +20,7 @@ async function postCancelOrder(req, res) {
   try {
     const result = await cancelOrder({
       ...req.body,
-      voidedBy: req.user?.sub,
+      voidedBy: req.user?.sub ?? req.user?.userId ?? req.body?.voidedBy,
     });
     res.json(result);
   } catch (error) {

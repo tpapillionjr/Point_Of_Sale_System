@@ -10,6 +10,7 @@ async function getTables(_req, res) {
         capacity,
         status
        FROM Dining_Tables
+       WHERE table_number >= 1
        ORDER BY table_number ASC`
     );
 
@@ -40,6 +41,7 @@ async function updateTableStatus(req, res) {
         `SELECT table_id AS tableId, table_number AS tableNumber, capacity, status
          FROM Dining_Tables
          WHERE table_id = ?
+           AND table_number >= 1
          LIMIT 1`,
         [tableId]
       );
@@ -74,6 +76,7 @@ async function updateTableStatus(req, res) {
         `SELECT table_id AS tableId, table_number AS tableNumber, capacity, status
          FROM Dining_Tables
          WHERE table_id = ?
+           AND table_number >= 1
          LIMIT 1`,
         [tableId]
       );
