@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -15,8 +15,12 @@ export default function OrderTrackingPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const currentStepRef = useRef(1);
+  const [estimatedPoints, setEstimatedPoints] = useState(null);
 
   useEffect(() => {
+    const stored = localStorage.getItem("estimatedPoints");
+    if (stored) { startTransition(() => setEstimatedPoints(Number(stored))); localStorage.removeItem("estimatedPoints"); }
+
     const orderId = router.query.orderId;
     if (!orderId) return;
 
@@ -67,6 +71,16 @@ export default function OrderTrackingPage() {
           <h1 style={{ fontSize: "32px", fontWeight: "900", color: "#1e3a5f", margin: "0 0 8px", letterSpacing: "-0.02em" }}>Order Tracker</h1>
           <p style={{ color: "#64748b", fontSize: "15px", margin: 0 }}>We&apos;ll keep you updated every step of the way.</p>
         </div>
+
+        {/* Points earned banner */}
+        {estimatedPoints > 0 && (
+          <div style={{ backgroundColor: "#f0fdf4", borderRadius: "14px", padding: "16px 24px", border: "1px solid #bbf7d0", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "24px" }}>⭐</span>
+            <p style={{ margin: 0, fontSize: "14px", color: "#166534", fontWeight: "600" }}>
+              You&apos;ll earn approximately <strong>{estimatedPoints} points</strong> when this order is paid.
+            </p>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "40px 32px 32px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)", marginBottom: "24px" }}>

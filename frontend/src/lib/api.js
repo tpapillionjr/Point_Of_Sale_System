@@ -309,3 +309,85 @@ export async function fetchCustomerOrderStatus(orderId) {
   if (!res.ok) throw new Error("Failed to fetch order status.");
   return res.json();
 }
+
+// Online order checkout (POS staff)
+export async function fetchOnlineOrderById(orderId) {
+  return request(`/api/customer/online-orders/${orderId}`);
+}
+
+export async function markOnlineOrderPaid(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/pay`, { method: "PATCH" });
+}
+
+export async function markOnlineOrderPickedUp(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/pickup`, { method: "PATCH" });
+}
+
+// Loyalty rewards — back-office (uses staff auth token via request())
+export async function fetchLoyaltyRewards() {
+  return request("/api/loyalty/manage/rewards");
+}
+
+export async function createLoyaltyReward(payload) {
+  return request("/api/loyalty/manage/rewards", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLoyaltyReward(id, payload) {
+  return request(`/api/loyalty/manage/rewards/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function toggleLoyaltyReward(id) {
+  return request(`/api/loyalty/manage/rewards/${id}/toggle`, {
+    method: "PATCH",
+  });
+}
+
+// Loyalty — customer-facing (uses customer auth token)
+export async function fetchCustomerLoyaltyInfo(customerToken) {
+  const res = await fetch(`${API_URL}/api/loyalty/balance`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerToken}`,
+    },
+  });
+  if (!res.ok) throw new Error("Failed to fetch loyalty info.");
+  return res.json();
+}
+
+export async function fetchLoyaltyRewardsPublic() {
+  const res = await fetch(`${API_URL}/api/loyalty/rewards`);
+  if (!res.ok) throw new Error("Failed to fetch rewards.");
+  return res.json();
+}
+
+export async function redeemLoyaltyReward(customerToken, rewardId) {
+  const res = await fetch(`${API_URL}/api/loyalty/redeem`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerToken}`,
+    },
+    body: JSON.stringify({ rewardId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to redeem reward.");
+  return data;
+}
+
+// Loyalty — POS staff lookup (uses staff auth token)
+export async function lookupCustomerByPhone(phone) {
+  return request(`/api/loyalty/lookup?phone=${encodeURIComponent(phone)}`);
+}
+
+export async function staffAwardLoyaltyPoints(payload) {
+  return request("/api/loyalty/staff-award", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

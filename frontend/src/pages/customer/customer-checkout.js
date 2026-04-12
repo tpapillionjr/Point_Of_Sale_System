@@ -2,7 +2,7 @@ import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { placeCustomerOrder } from "../../lib/api";
+import { placeCustomerOrder, fetchLoyaltyRewardsPublic } from "../../lib/api";
 import { useCustomerSession } from "../../lib/useCustomerSession";
 
 const TAX_RATE = 0.0825;
@@ -16,17 +16,15 @@ export default function CustomerOrderPage() {
     const stored = localStorage.getItem("customerCart");
     if (stored) startTransition(() => setCart(JSON.parse(stored)));
   }, []);
+
   const [paymentPreference, setPaymentPreference] = useState("in_store");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderError, setOrderError] = useState(null);
 
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    note: "",
-  });
+  const [rewards, setRewards] = useState([]);
+  const [selectedRewardId, setSelectedRewardId] = useState(null);
+
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", note: "" });
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -37,6 +35,12 @@ export default function CustomerOrderPage() {
       lastName: customer.lastName ?? prev.lastName,
       email: customer.email ?? prev.email,
     })));
+
+    if ((customer.pointsBalance ?? 0) >= 100) {
+      fetchLoyaltyRewardsPublic()
+        .then((rows) => setRewards(rows.filter((r) => r.points_cost <= customer.pointsBalance)))
+        .catch(() => {});
+    }
   }, [customer]);
 
   if (cart.length === 0) {
@@ -55,6 +59,7 @@ export default function CustomerOrderPage() {
   const subtotal = cart.reduce((sum, item) => sum + Number(item.base_price) * item.quantity, 0);
   const tax = subtotal * TAX_RATE;
   const total = subtotal + tax;
+  const estimatedPoints = Math.floor(total) * 10;
 
   function validate() {
     const errs = {};
@@ -80,9 +85,14 @@ export default function CustomerOrderPage() {
         phone: form.phone,
         note: form.note,
         cart,
+        paymentPreference,
+        customerId: customer?.customerId ?? null,
+        rewardId: selectedRewardId ?? null,
       });
+
       localStorage.removeItem("customerCart");
       localStorage.setItem("lastOrderId", orderId);
+      localStorage.setItem("estimatedPoints", estimatedPoints);
       router.push(`/customer/order-tracking?orderId=${orderId}`);
     } catch (err) {
       setOrderError(err.message || "Something went wrong. Please try again.");
@@ -121,7 +131,7 @@ export default function CustomerOrderPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: "24px", alignItems: "start" }}>
 
-          {/* Left — Contact info */}
+          {/* Left column */}
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
             {/* Contact info */}
@@ -160,6 +170,77 @@ export default function CustomerOrderPage() {
                 </div>
               </div>
             </div>
+
+            {/* Payment preference */}
+            <div style={{ backgroundColor: "rgba(255,255,255,0.8)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)" }}>
+              <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "14px" }}>How would you like to pay?</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {[
+                  { value: "online", label: "Pay Online", sub: "Pay now when placing order" },
+                  { value: "in_store", label: "Pay at Pickup", sub: "Pay when you collect your order" },
+                ].map(({ value, label, sub }) => (
+                  <label key={value} style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "14px", borderRadius: "10px", border: `2px solid ${paymentPreference === value ? "#3b82f6" : "#e2e8f0"}`, backgroundColor: paymentPreference === value ? "#eff6ff" : "white", cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input type="radio" name="paymentPreference" value={value} checked={paymentPreference === value} onChange={() => setPaymentPreference(value)} style={{ accentColor: "#3b82f6" }} />
+                      <span style={{ fontSize: "14px", fontWeight: "700", color: "#1e3a5f" }}>{label}</span>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#64748b", paddingLeft: "22px" }}>{sub}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Points balance + reward redemption (logged-in only) */}
+            {customer && (
+              <div style={{ backgroundColor: "rgba(255,255,255,0.8)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: rewards.length > 0 ? "16px" : "0" }}>
+                  <div>
+                    <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", margin: "0 0 4px" }}>Your Loyalty Points</p>
+                    <p style={{ fontSize: "24px", fontWeight: "900", color: "#1e3a5f", margin: 0 }}>{(customer.pointsBalance ?? 0).toLocaleString()} pts</p>
+                  </div>
+                  <div style={{ fontSize: "36px" }}>⭐</div>
+                </div>
+
+                {rewards.length > 0 ? (
+                  <div>
+                    <p style={{ fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "10px" }}>Redeem a reward with this order:</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {rewards.map((reward) => (
+                        <label key={reward.reward_id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 14px", borderRadius: "10px", border: `1.5px solid ${selectedRewardId === reward.reward_id ? "#3b82f6" : "#e2e8f0"}`, backgroundColor: selectedRewardId === reward.reward_id ? "#eff6ff" : "white", cursor: "pointer" }}>
+                          <input
+                            type="radio"
+                            name="reward"
+                            value={reward.reward_id}
+                            checked={selectedRewardId === reward.reward_id}
+                            onChange={() => setSelectedRewardId(
+                              selectedRewardId === reward.reward_id ? null : reward.reward_id
+                            )}
+                            style={{ accentColor: "#3b82f6" }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#1e3a5f" }}>{reward.name}</p>
+                            {reward.menu_item_name && <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>{reward.menu_item_name}</p>}
+                          </div>
+                          <span style={{ fontSize: "13px", fontWeight: "700", color: "#3b82f6" }}>{reward.points_cost} pts</span>
+                        </label>
+                      ))}
+                      {selectedRewardId && (
+                        <button
+                          onClick={() => setSelectedRewardId(null)}
+                          style={{ fontSize: "12px", color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: "4px 0" }}
+                        >
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
+                    You&apos;ll earn approximately <strong style={{ color: "#1e3a5f" }}>{estimatedPoints} pts</strong> from this order.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right — Order summary */}
@@ -174,6 +255,12 @@ export default function CustomerOrderPage() {
                     <span style={{ fontWeight: "600", color: "#1e3a5f" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
+                {selectedRewardId && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                    <span style={{ color: "#16a34a", fontWeight: "500" }}>🎁 {rewards.find(r => r.reward_id === selectedRewardId)?.name}</span>
+                    <span style={{ fontWeight: "600", color: "#16a34a" }}>Reward</span>
+                  </div>
+                )}
               </div>
 
               <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -188,11 +275,23 @@ export default function CustomerOrderPage() {
                   <span style={{ color: "#3b82f6" }}>${total.toFixed(2)}</span>
                 </div>
               </div>
+
+              <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "8px", backgroundColor: paymentPreference === "online" ? "#eff6ff" : "#f8fafc", border: `1px solid ${paymentPreference === "online" ? "#bfdbfe" : "#e2e8f0"}`, textAlign: "center" }}>
+                <p style={{ fontSize: "12px", fontWeight: "700", color: paymentPreference === "online" ? "#1d4ed8" : "#64748b", margin: 0 }}>
+                  {paymentPreference === "online" ? "💳 Paying online now" : "💵 Pay at pickup"}
+                </p>
+              </div>
+              {customer && (
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "8px 0 0", textAlign: "center" }}>
+                  ~{estimatedPoints} points earned {paymentPreference === "online" ? "automatically" : "when paid at store"}
+                </p>
+              )}
             </div>
 
             {orderError && (
               <p style={{ fontSize: "13px", color: "#dc2626", textAlign: "center", margin: 0 }}>{orderError}</p>
             )}
+
             <button
               onClick={handlePlaceOrder}
               disabled={isSubmitting}
