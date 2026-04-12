@@ -24,8 +24,18 @@ function validateOrderPayload(payload) {
     issues.push("createdBy must be a positive integer.");
   }
 
-  if (!Number.isInteger(payload.guestCount) || payload.guestCount < 1 || payload.guestCount > 8) {
-    issues.push("guestCount must be between 1 and 8.");
+  const isTakeout = payload.orderType === "Takeout";
+  if (!Number.isInteger(payload.guestCount) || payload.guestCount < 1 || (!isTakeout && payload.guestCount > 8)) {
+    issues.push("guestCount must be between 1 and 8 for dine-in orders.");
+  }
+
+  if (isTakeout) {
+    if (!payload.takeoutName || String(payload.takeoutName).trim().length === 0) {
+      issues.push("takeoutName is required for takeout orders.");
+    }
+    if (!payload.takeoutPhone || String(payload.takeoutPhone).trim().length === 0) {
+      issues.push("takeoutPhone is required for takeout orders.");
+    }
   }
 
   if (!Array.isArray(payload.items) || payload.items.length === 0) {
@@ -107,6 +117,8 @@ function validateOrderPayload(payload) {
     orderChannel: payload.orderChannel ?? "In_Store",
     guestCount: payload.guestCount,
     isSplitCheck: Boolean(payload.isSplitCheck),
+    takeoutName: isTakeout ? String(payload.takeoutName).trim() : null,
+    takeoutPhone: isTakeout ? String(payload.takeoutPhone).trim() : null,
     items: normalizedItems,
     subtotal: Number(subtotal.toFixed(2)),
     discountAmount: Number(discountAmount.toFixed(2)),

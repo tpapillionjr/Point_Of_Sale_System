@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { fetchActiveOrderByTable, fetchTables, updateTableStatus } from "../lib/api";
 
+const TAKEOUT_TABLE_NUMBER = 10000;
+
 const TABLE_LAYOUT = {
   1: { id: "T1", area: "Main", x: "11%", y: "18%" },
   2: { id: "T2", area: "Main", x: "25%", y: "18%" },
@@ -13,6 +15,7 @@ const TABLE_LAYOUT = {
   8: { id: "T5", area: "Patio", x: "17%", y: "67%" },
   9: { id: "T6", area: "Patio", x: "35%", y: "67%" },
   10: { id: "T7", area: "Patio", x: "53%", y: "67%" },
+  [TAKEOUT_TABLE_NUMBER]: { id: "Takeout", area: "Takeout", x: "76%", y: "78%" },
 };
 
 const STATUS_MAP = {
@@ -200,27 +203,28 @@ const styles = {
 
 function getTableStyle(table, active) {
   const meta = STATUS_META[table.status];
+  const isTakeout = table.area === "Takeout";
 
   return {
     position: "absolute",
     left: table.x,
     top: table.y,
     zIndex: 2,
-    width: table.area === "Bar" ? "74px" : "96px",
-    minHeight: table.area === "Bar" ? "74px" : "96px",
+    width: isTakeout ? "110px" : table.area === "Bar" ? "74px" : "96px",
+    minHeight: isTakeout ? "64px" : table.area === "Bar" ? "74px" : "96px",
     display: "grid",
     gap: "4px",
     placeItems: "center",
     padding: table.area === "Bar" ? "8px 6px" : "10px 8px",
-    border: `2px solid ${meta.border}`,
-    borderRadius: table.area === "Bar" ? "999px" : "18px",
+    border: isTakeout ? "2px solid #f59e0b" : `2px solid ${meta.border}`,
+    borderRadius: isTakeout ? "14px" : table.area === "Bar" ? "999px" : "18px",
     boxShadow: active
       ? "0 20px 40px rgba(15, 23, 42, 0.14)"
       : "0 16px 36px rgba(15, 23, 42, 0.08)",
     transform: active ? "translateY(-4px)" : "none",
     transition: "transform 0.18s ease, box-shadow 0.18s ease",
-    backgroundColor: meta.fill,
-    color: meta.text,
+    backgroundColor: isTakeout ? "#fef3c7" : meta.fill,
+    color: isTakeout ? "#92400e" : meta.text,
     cursor: "pointer",
   };
 }
@@ -291,6 +295,39 @@ export default function TablesPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
+  const [guestModal, setGuestModal] = useState(null); // { tableNumber, maxSeats }
+  const [guestInput, setGuestInput] = useState("");
+  const [takeoutModal, setTakeoutModal] = useState(false);
+  const [takeoutFirstName, setTakeoutFirstName] = useState("");
+  const [takeoutLastName, setTakeoutLastName] = useState("");
+  const [takeoutPhone, setTakeoutPhone] = useState("");
+
+  useEffect(() => {
+    if (!guestModal) return;
+
+    function handleKey(e) {
+      if (e.key >= "0" && e.key <= "9") {
+        const d = e.key;
+        setGuestInput((prev) => {
+          const next = prev + d;
+          return Number(next) <= guestModal.maxSeats ? next : prev;
+        });
+      } else if (e.key === "Backspace") {
+        setGuestInput((prev) => prev.slice(0, -1));
+      } else if (e.key === "Enter") {
+        const count = parseInt(guestInput, 10);
+        if (count && count >= 1) {
+          router.push(`/server-order?table=${guestModal.tableNumber}&guests=${count}`);
+          setGuestModal(null);
+        }
+      } else if (e.key === "Escape") {
+        setGuestModal(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [guestModal, guestInput, router]);
 
   useEffect(() => {
     let active = true;
@@ -442,6 +479,7 @@ export default function TablesPage() {
         <div className="app-surface" style={styles.floor}>
           <span style={{ ...styles.zoneLabel, top: "22px", left: "22px" }}>Main Floor</span>
           <span style={{ ...styles.zoneLabel, top: "22px", right: "22px" }}>Bar</span>
+          <span style={{ ...styles.zoneLabel, bottom: "18px", right: "22px" }}>Takeout</span>
           <div style={styles.mainZone} />
           <div style={styles.patioZone} />
           <div style={styles.verticalAisle} />
@@ -524,26 +562,65 @@ export default function TablesPage() {
               <div style={styles.actions}>
                 <ActionButton
                   background="#1d4ed8"
-                  onClick={() =>
-                    router.push(`/server-order?table=${selectedTable.tableNumber}`)
-                  }
+                  onClick={() => {
+                    if (activeOrder) {
+                      router.push(`/server-order?table=${selectedTable.tableNumber}`);
+                    } else if (selectedTable.tableNumber === TAKEOUT_TABLE_NUMBER) {
+                      setTakeoutFirstName("");
+                      setTakeoutLastName("");
+                      setTakeoutPhone("");
+                      setTakeoutModal(true);
+                    } else {
+                      setGuestInput("");
+                      setGuestModal({ tableNumber: selectedTable.tableNumber, maxSeats: selectedTable.seats });
+                    }
+                  }}
                 >
                   {activeOrder ? "Resume Order" : "Start Order"}
                 </ActionButton>
-                <ActionButton
-                  background="#0f766e"
-                  onClick={() => handleStatusChange("reserved")}
-                  disabled={isUpdating}
-                >
-                  Mark Reserved
-                </ActionButton>
-                <ActionButton
-                  background="#475569"
-                  onClick={() => handleStatusChange("available")}
-                  disabled={isUpdating}
-                >
-                  Mark Clean
-                </ActionButton>
+                {activeOrder && (
+                  <ActionButton
+                    background="#7c3aed"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.localStorage.setItem(
+                          "currentOrder",
+                          JSON.stringify({
+                            orderId: activeOrder.orderId,
+                            tableNumber: selectedTable.tableNumber,
+                            cart: activeOrder.items.map((item) => ({
+                              id: item.menuItemId,
+                              name: item.name,
+                              price: Number(item.price),
+                              quantity: item.quantity,
+                            })),
+                          })
+                        );
+                      }
+                      router.push("/checkout");
+                    }}
+                  >
+                    Checkout Table {selectedTable.id}
+                  </ActionButton>
+                )}
+                {selectedTable.tableNumber !== TAKEOUT_TABLE_NUMBER && (
+                  <>
+                    <ActionButton
+                      background="#0f766e"
+                      onClick={() => handleStatusChange("reserved")}
+                      disabled={isUpdating}
+                    >
+                      Mark Reserved
+                    </ActionButton>
+                    <ActionButton
+                      background="#475569"
+                      onClick={() => handleStatusChange("available")}
+                      disabled={isUpdating}
+                    >
+                      Mark Clean
+                    </ActionButton>
+                  </>
+                )}
               </div>
             </>
           ) : (
@@ -559,6 +636,185 @@ export default function TablesPage() {
           }
         }
       `}</style>
+
+      {takeoutModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => setTakeoutModal(false)}
+        >
+          <div className="ci-card" style={{ width: "360px" }} onClick={(e) => e.stopPropagation()}>
+            <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>
+              Takeout Customer Info
+            </p>
+            <p className="ci-sub">Enter name and phone number for this order.</p>
+
+            <div style={{ display: "grid", gap: "10px", width: "100%" }}>
+              <input
+                type="text"
+                placeholder="First Name"
+                value={takeoutFirstName}
+                onChange={(e) => setTakeoutFirstName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #c8d8e8",
+                  fontSize: "15px",
+                  color: "#0f172a",
+                  boxSizing: "border-box",
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={takeoutLastName}
+                onChange={(e) => setTakeoutLastName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #c8d8e8",
+                  fontSize: "15px",
+                  color: "#0f172a",
+                  boxSizing: "border-box",
+                }}
+              />
+              <input
+                type="tel"
+                placeholder="Phone Number"
+                value={takeoutPhone}
+                onChange={(e) => setTakeoutPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #c8d8e8",
+                  fontSize: "15px",
+                  color: "#0f172a",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <button
+              disabled={!takeoutFirstName.trim() || !takeoutLastName.trim() || takeoutPhone.length < 10}
+              onClick={() => {
+                router.push(
+                  `/server-order?table=${TAKEOUT_TABLE_NUMBER}&takeoutName=${encodeURIComponent(takeoutFirstName.trim() + " " + takeoutLastName.trim())}&takeoutPhone=${encodeURIComponent(takeoutPhone)}`
+                );
+                setTakeoutModal(false);
+              }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "none",
+                borderRadius: "12px",
+                backgroundColor: "#1d4ed8",
+                color: "white",
+                fontWeight: 700,
+                fontSize: "1rem",
+                cursor: "pointer",
+                opacity: !takeoutFirstName.trim() || !takeoutLastName.trim() || takeoutPhone.length < 10 ? 0.5 : 1,
+              }}
+            >
+              Continue to Order
+            </button>
+
+            <button
+              onClick={() => setTakeoutModal(false)}
+              style={{ width: "100%", padding: "10px", border: "1.5px solid #c8d8e8", borderRadius: "12px", backgroundColor: "white", color: "#c0392b", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {guestModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => setGuestModal(null)}
+        >
+          <div className="ci-card" onClick={(e) => e.stopPropagation()}>
+            <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>
+              How many guests?
+            </p>
+            <p className="ci-sub">
+              Max {guestModal.maxSeats} seat{guestModal.maxSeats !== 1 ? "s" : ""}
+            </p>
+
+            <div className="ci-dots">
+              {guestInput
+                ? guestInput.split("").map((_, i) => (
+                    <div key={i} className="ci-dot ci-dot--filled" />
+                  ))
+                : <div className="ci-dot" />}
+            </div>
+
+            <div className="ci-grid">
+              {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                <button
+                  key={d}
+                  className="ci-btn"
+                  onClick={() =>
+                    setGuestInput((prev) => {
+                      const next = prev + d;
+                      return Number(next) <= guestModal.maxSeats ? next : prev;
+                    })
+                  }
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                className="ci-btn ci-btn--ghost"
+                onClick={() => setGuestInput((prev) => prev.slice(0, -1))}
+              >
+                ⌫
+              </button>
+              <button
+                className="ci-btn"
+                onClick={() =>
+                  setGuestInput((prev) => {
+                    const next = prev + "0";
+                    return Number(next) <= guestModal.maxSeats ? next : prev;
+                  })
+                }
+              >
+                0
+              </button>
+              <button
+                className="ci-btn ci-btn--enter"
+                disabled={!guestInput || parseInt(guestInput, 10) < 1}
+                onClick={() => {
+                  const count = parseInt(guestInput, 10);
+                  if (!count || count < 1) return;
+                  router.push(`/server-order?table=${guestModal.tableNumber}&guests=${count}`);
+                  setGuestModal(null);
+                }}
+              >
+                ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

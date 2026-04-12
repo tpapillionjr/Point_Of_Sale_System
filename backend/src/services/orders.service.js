@@ -91,8 +91,11 @@ async function createOrder(payload) {
 
   return db.withTransaction(async (connection) => {
     const user = await ensureUserExists(connection, order.createdBy);
+    const isTakeoutTable = order.tableId === 10000;
     await ensureTableAvailable(connection, order.tableId);
-    await ensureTableCanBeReseated(connection, order.tableId);
+    if (!isTakeoutTable) {
+      await ensureTableCanBeReseated(connection, order.tableId);
+    }
 
     if (user.role === "employee" && order.discountAmount > 0) {
       throw createValidationError("Servers cannot apply discounts.");
@@ -165,12 +168,14 @@ async function createOrder(payload) {
         order_type,
         guest_count,
         is_split_check,
+        takeout_name,
+        takeout_phone,
         subtotal,
         discount_amount,
         tax,
         service_charge,
         total
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         order.tableId,
         order.createdBy,
@@ -179,6 +184,8 @@ async function createOrder(payload) {
         order.orderType,
         order.guestCount,
         order.isSplitCheck,
+        order.takeoutName,
+        order.takeoutPhone,
         order.subtotal,
         order.discountAmount,
         order.tax,
@@ -219,15 +226,17 @@ async function createOrder(payload) {
       );
     }
 
-    await connection.execute(
-      `UPDATE Dining_Tables
-       SET status = CASE
-         WHEN status = 'available' THEN 'occupied'
-         ELSE status
-       END
-       WHERE table_id = ?`,
-      [order.tableId]
-    );
+    if (!isTakeoutTable) {
+      await connection.execute(
+        `UPDATE Dining_Tables
+         SET status = CASE
+           WHEN status = 'available' THEN 'occupied'
+           ELSE status
+         END
+         WHERE table_id = ?`,
+        [order.tableId]
+      );
+    }
 
     await connection.execute(
       `INSERT INTO Kitchen_Ticket (order_id, table_id, status, created_at, updated_at)
@@ -436,8 +445,8 @@ async function cancelOrder(payload) {
 async function findActiveOrderByTableNumber(tableNumber) {
   const parsedTableNumber = Number.parseInt(tableNumber, 10);
 
-  if (!Number.isInteger(parsedTableNumber) || parsedTableNumber <= 0) {
-    throw createValidationError("tableNumber must be a positive integer.");
+  if (!Number.isInteger(parsedTableNumber) || parsedTableNumber < 0) {
+    throw createValidationError("tableNumber must be a non-negative integer.");
   }
 
   const rows = await db.query(
@@ -449,6 +458,8 @@ async function findActiveOrderByTableNumber(tableNumber) {
       o.subtotal,
       o.tax,
       o.total,
+      o.takeout_name AS takeoutName,
+      o.takeout_phone AS takeoutPhone,
       o.created_at AS createdAt
      FROM Orders o
      JOIN Dining_Tables dt ON dt.table_id = o.table_id
@@ -482,4 +493,43 @@ async function findActiveOrderByTableNumber(tableNumber) {
   return { ...order, items: itemRows };
 }
 
-export { createOrder, addItemsToOrder, cancelOrder, findActiveOrderByTableNumber };
+async function getActiveTakeoutOrders() {
+  const rows = await db.query(
+    `SELECT
+      o.order_id AS orderId,
+      o.takeout_name AS takeoutName,
+      o.takeout_phone AS takeoutPhone,
+      o.status,
+      o.total,
+      o.created_at AS createdAt,
+      kt.status AS kitchenStatus
+     FROM Orders o
+     LEFT JOIN Kitchen_Ticket kt ON kt.order_id = o.order_id
+     WHERE o.table_id = 10000
+       AND o.status IN ('Open', 'Sent', 'Completed')
+     ORDER BY o.created_at ASC`
+  );
+
+  if (rows.length === 0) return [];
+
+  const orderIds = rows.map((r) => r.orderId);
+  const placeholders = orderIds.map(() => "?").join(", ");
+  const itemRows = await db.query(
+    `SELECT oi.order_id AS orderId, mi.name, oi.quantity, oi.price
+     FROM Order_Item oi
+     JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+     WHERE oi.order_id IN (${placeholders})
+     ORDER BY oi.order_item_id ASC`,
+    orderIds
+  );
+
+  const itemsByOrder = {};
+  for (const item of itemRows) {
+    if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
+    itemsByOrder[item.orderId].push(item);
+  }
+
+  return rows.map((r) => ({ ...r, items: itemsByOrder[r.orderId] ?? [] }));
+}
+
+export { createOrder, addItemsToOrder, cancelOrder, findActiveOrderByTableNumber, getActiveTakeoutOrders };
