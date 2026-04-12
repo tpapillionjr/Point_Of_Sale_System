@@ -3,6 +3,7 @@ import {
   getAllUsers,
   postCreateUser,
   putDeactivateUser,
+  postResetPassword,
   postVerifyManager,
   postLogin,
   postValidateCaptcha,
@@ -20,6 +21,7 @@ router.post("/validate-captcha", loginRateLimit, postValidateCaptcha);
 // Protected endpoints
 router.get("/", requireAuth, getAllUsers);
 router.post("/", requireAuth, requireManager, postCreateUser);
+router.post("/reset-password", requireAuth, requireManager, postResetPassword);
 router.post("/verify-manager", postVerifyManager);
 router.put("/:userId/deactivate", requireAuth, requireManager, putDeactivateUser);
 router.get("/:userId/security-status", requireAuth, getSecurityStatus);

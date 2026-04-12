@@ -1,4 +1,5 @@
 import db from "../db/index.js";
+import bcrypt from "bcryptjs";
 import { createValidationError } from "../validation/business-rules.js";
 
 function validateUserPayload(payload) {
@@ -23,6 +24,22 @@ function validateUserPayload(payload) {
 
   if (issues.length > 0) {
     throw createValidationError("User validation failed.", issues);
+  }
+}
+
+function validatePasswordResetPayload(payload) {
+  const issues = [];
+
+  if (!payload?.email || typeof payload.email !== "string" || !payload.email.includes("@")) {
+    issues.push("a valid email is required.");
+  }
+
+  if (!payload?.password || typeof payload.password !== "string" || payload.password.length < 6) {
+    issues.push("password must be at least 6 characters.");
+  }
+
+  if (issues.length > 0) {
+    throw createValidationError("Password reset validation failed.", issues);
   }
 }
 
@@ -81,10 +98,12 @@ async function createUser(payload, requestingUserId) {
 
     const pinCode = await generateUniquePin(connection);
 
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+
     const [result] = await connection.execute(
       `INSERT INTO Users (name, email, pin_code, password_hash, role)
        VALUES (?, ?, ?, ?, ?)`,
-      [payload.name.trim(), payload.email.trim().toLowerCase(), pinCode, payload.password, payload.role]
+      [payload.name.trim(), payload.email.trim().toLowerCase(), pinCode, passwordHash, payload.role]
     );
 
     return { userId: result.insertId, name: payload.name.trim(), role: payload.role };
@@ -117,6 +136,39 @@ async function deactivateUser(userId, requestingUserId) {
   });
 }
 
+async function resetUserPassword(payload, requestingUserId) {
+  validatePasswordResetPayload(payload);
+
+  return db.withTransaction(async (connection) => {
+    const [managerRows] = await connection.execute(
+      `SELECT role
+       FROM Users
+       WHERE user_id = ? AND is_active = true
+       LIMIT 1`,
+      [requestingUserId]
+    );
+
+    if (managerRows.length === 0 || managerRows[0].role !== "manager") {
+      throw createValidationError("Only managers can reset passwords.");
+    }
+
+    const email = payload.email.trim().toLowerCase();
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+    const [result] = await connection.execute(
+      `UPDATE Users
+       SET password_hash = ?
+       WHERE LOWER(email) = LOWER(?)`,
+      [passwordHash, email]
+    );
+
+    if (result.affectedRows === 0) {
+      throw createValidationError("No employee account was found for that email.");
+    }
+
+    return { email, status: "password_reset" };
+  });
+}
+
 async function verifyManager(email, password) {
   if (!email || !password) {
     throw createValidationError("Email and password are required.");
@@ -137,7 +189,9 @@ async function verifyManager(email, password) {
   const user = rows[0];
 
   // Verify password matches
-  const passwordValid = password === user.password_hash;
+  const passwordValid = user.password_hash?.startsWith("$2")
+    ? await bcrypt.compare(password, user.password_hash)
+    : password === user.password_hash;
   if (!passwordValid) {
     throw createValidationError("Incorrect email or password.");
   }
@@ -149,4 +203,4 @@ async function verifyManager(email, password) {
   return { approved: true, name: user.name };
 }
 
-export { getUsers, createUser, deactivateUser, verifyManager };
+export { getUsers, createUser, deactivateUser, resetUserPassword, verifyManager };

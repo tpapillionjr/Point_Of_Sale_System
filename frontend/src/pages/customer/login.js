@@ -2,12 +2,13 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { customerLogin, customerRegister } from "../../lib/api";
+import { customerLogin, customerRegister, staffLogin } from "../../lib/api";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [forgotEmail, setForgotEmail] = useState("");
   const [signupForm, setSignupForm] = useState({
     firstName: "",
     lastName: "",
@@ -21,16 +22,31 @@ export default function CustomerLoginPage() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const mode = router.query.mode === "signup" ? "signup" : "login";
+  const mode = ["signup", "forgot"].includes(router.query.mode) ? router.query.mode : "login";
 
   function handleModeSwitch(next) {
     setError("");
     setMessage("");
-    router.push(next === "signup" ? "/customer/login?mode=signup" : "/customer/login", undefined, { shallow: true });
+    const path = next === "login" ? "/customer/login" : `/customer/login?mode=${next}`;
+    router.push(path, undefined, { shallow: true });
   }
 
   function validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function routeStaffUser(user) {
+    if (user.role === "kitchen") {
+      router.push("/expo");
+      return;
+    }
+
+    if (user.role === "manager") {
+      router.push("/back-office");
+      return;
+    }
+
+    router.push("/tables");
   }
 
   async function handleLoginSubmit(e) {
@@ -39,16 +55,28 @@ export default function CustomerLoginPage() {
     setMessage("");
 
     if (!loginForm.email || !loginForm.password) { setError("All fields are required."); return; }
-    if (!validateEmail(loginForm.email)) { setError("Please enter a valid email address."); return; }
 
     setIsSubmitting(true);
     try {
-      const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
-      localStorage.setItem("customerAuthToken", data.token);
-      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
-      router.push("/customer/dashboard");
-    } catch (err) {
-      setError(err.message);
+      try {
+        const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
+        localStorage.setItem("customerAuthToken", data.token);
+        localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
+        router.push("/customer/dashboard");
+      } catch (customerError) {
+        const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
+        localStorage.setItem("authToken", staffData.token);
+        localStorage.setItem("currentEmployee", JSON.stringify({
+          userId: staffData.user.userId,
+          name: staffData.user.name,
+          role: staffData.user.role,
+          displayRole: staffData.user.role,
+        }));
+        window.dispatchEvent(new Event("pos-session-change"));
+        routeStaffUser(staffData.user);
+      }
+    } catch {
+      setError("Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }
@@ -78,6 +106,19 @@ export default function CustomerLoginPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleForgotSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!validateEmail(forgotEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    setMessage("If that email belongs to a staff account, a manager can reset it from Back Office. Customer password email reset is not connected yet.");
   }
 
   const inputStyle = {
@@ -151,40 +192,42 @@ export default function CustomerLoginPage() {
           <div style={{ textAlign: "center", marginBottom: "24px" }}>
             <Image src="/lumii2.png" alt="Lumi" width={56} height={56} style={{ objectFit: "contain" }} />
             <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "6px", fontWeight: "500" }}>
-              {mode === "login" ? "Sign in to your account" : "Create your account"}
+              {mode === "signup" ? "Create your account" : mode === "forgot" ? "Reset access" : "Sign in to your account"}
             </p>
           </div>
 
           {/* Mode toggle */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            backgroundColor: "rgba(241,245,249,0.8)",
-            borderRadius: "12px",
-            padding: "4px",
-            marginBottom: "28px",
-          }}>
-            {[{ key: "login", label: "Log In" }, { key: "signup", label: "Sign Up" }].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => handleModeSwitch(key)}
-                style={{
-                  padding: "9px",
-                  borderRadius: "9px",
-                  border: "none",
-                  fontSize: "14px",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                  backgroundColor: mode === key ? "white" : "transparent",
-                  color: mode === key ? "#1e3a5f" : "#94a3b8",
-                  boxShadow: mode === key ? "0 1px 4px rgba(15,23,42,0.1)" : "none",
-                  transition: "all 0.15s",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {mode !== "forgot" && (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              backgroundColor: "rgba(241,245,249,0.8)",
+              borderRadius: "12px",
+              padding: "4px",
+              marginBottom: "28px",
+            }}>
+              {[{ key: "login", label: "Log In" }, { key: "signup", label: "Sign Up" }].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => handleModeSwitch(key)}
+                  style={{
+                    padding: "9px",
+                    borderRadius: "9px",
+                    border: "none",
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    backgroundColor: mode === key ? "white" : "transparent",
+                    color: mode === key ? "#1e3a5f" : "#94a3b8",
+                    boxShadow: mode === key ? "0 1px 4px rgba(15,23,42,0.1)" : "none",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Messages */}
           {error && (
@@ -204,7 +247,7 @@ export default function CustomerLoginPage() {
               <div>
                 <label style={labelStyle}>Email</label>
                 <input
-                  type="email"
+                  type="text"
                   placeholder="you@example.com"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
@@ -236,13 +279,60 @@ export default function CustomerLoginPage() {
                 marginTop: "4px",
                 boxShadow: "0 4px 14px rgba(59,130,246,0.3)",
               }}>
-                Log In
+                {isSubmitting ? "Logging in..." : "Log In"}
+              </button>
+
+              <div style={{ display: "grid", gap: "8px", justifyItems: "center" }}>
+                <button type="button" onClick={() => handleModeSwitch("forgot")} style={{ background: "none", border: "none", color: "#3b82f6", fontWeight: "700", cursor: "pointer", fontSize: "13px", padding: 0 }}>
+                  Forgot password?
+                </button>
+                <p style={{ textAlign: "center", fontSize: "13px", color: "#64748b", margin: 0 }}>
+                  Don&apos;t have an account?{" "}
+                  <button type="button" onClick={() => handleModeSwitch("signup")} style={{ background: "none", border: "none", color: "#3b82f6", fontWeight: "700", cursor: "pointer", fontSize: "13px", padding: 0 }}>
+                    Sign up
+                  </button>
+                </p>
+              </div>
+            </form>
+          )}
+
+          {/* Forgot password form */}
+          {mode === "forgot" && (
+            <form onSubmit={handleForgotSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <label style={labelStyle}>Account Email</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <button type="submit" disabled={!validateEmail(forgotEmail)} style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: "999px",
+                border: "none",
+                backgroundColor: validateEmail(forgotEmail) ? "#3b82f6" : "#cbd5e1",
+                color: "white",
+                fontSize: "15px",
+                fontWeight: "700",
+                cursor: validateEmail(forgotEmail) ? "pointer" : "not-allowed",
+                marginTop: "4px",
+                boxShadow: validateEmail(forgotEmail) ? "0 4px 14px rgba(59,130,246,0.3)" : "none",
+              }}>
+                Request Password Help
               </button>
 
               <p style={{ textAlign: "center", fontSize: "13px", color: "#64748b", margin: 0 }}>
-                Don&apos;t have an account?{" "}
                 <button type="button" onClick={() => handleModeSwitch("signup")} style={{ background: "none", border: "none", color: "#3b82f6", fontWeight: "700", cursor: "pointer", fontSize: "13px", padding: 0 }}>
-                  Sign up
+                  Create an account
+                </button>
+                {" "}or{" "}
+                <button type="button" onClick={() => handleModeSwitch("login")} style={{ background: "none", border: "none", color: "#3b82f6", fontWeight: "700", cursor: "pointer", fontSize: "13px", padding: 0 }}>
+                  back to login
                 </button>
               </p>
             </form>

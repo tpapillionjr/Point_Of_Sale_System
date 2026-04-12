@@ -1,5 +1,6 @@
 import db from "../db/index.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { createValidationError } from "../validation/business-rules.js";
 
 function validateCredentials(identifier, password) {
@@ -40,7 +41,21 @@ function createAuthToken(user) {
   );
 }
 
+async function verifyPassword(password, passwordHash) {
+  if (!passwordHash) {
+    return false;
+  }
+
+  if (passwordHash.startsWith("$2")) {
+    return bcrypt.compare(password, passwordHash);
+  }
+
+  return password === passwordHash;
+}
+
 function toSessionPayload(user, shift) {
+  const scheduledHours = shift ? hoursBetween(shift.scheduledStart, shift.scheduledEnd) : 0;
+
   return {
     token: createAuthToken(user),
     userId: user.user_id,
@@ -48,6 +63,7 @@ function toSessionPayload(user, shift) {
     role: user.role,
     roles: [formatRole(user.role)],
     scheduledToday: Boolean(shift),
+    scheduledHours,
     clockedIn: Boolean(shift?.clockIn && !shift?.clockOut),
     shift,
   };
@@ -57,9 +73,9 @@ async function findUserByCredentials(connection, identifier, password) {
   const [rows] = await connection.execute(
     `SELECT user_id, name, email, role, is_active, password_hash
      FROM Users
-     WHERE (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?))
+     WHERE LOWER(email) = LOWER(?)
      LIMIT 1`,
-    [identifier.trim(), identifier.trim()]
+    [identifier.trim()]
   );
 
   if (rows.length === 0) {
@@ -70,11 +86,20 @@ async function findUserByCredentials(connection, identifier, password) {
     throw createValidationError("This employee account is inactive.");
   }
 
-  if (password !== rows[0].password_hash) {
+  const passwordValid = await verifyPassword(password, rows[0].password_hash);
+  if (!passwordValid) {
     throw createValidationError("Incorrect username/email or password.");
   }
 
   return rows[0];
+}
+
+function hoursBetween(start, end) {
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Number(Math.max((new Date(end).getTime() - new Date(start).getTime()) / 3600000, 0).toFixed(2));
 }
 
 async function findUserById(connection, userId) {

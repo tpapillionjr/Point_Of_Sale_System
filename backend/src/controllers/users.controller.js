@@ -1,4 +1,10 @@
-import { getUsers, createUser, deactivateUser, verifyManager } from "../services/users.service.js";
+import {
+  getUsers,
+  createUser,
+  deactivateUser,
+  resetUserPassword,
+  verifyManager,
+} from "../services/users.service.js";
 import {
   trackLoginAttempt,
   generateCaptchaSession,
@@ -11,6 +17,19 @@ import {
   getUserSecurityMetrics,
 } from "../services/security.service.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+
+async function verifyPassword(password, passwordHash) {
+  if (!passwordHash) {
+    return false;
+  }
+
+  if (passwordHash.startsWith("$2")) {
+    return bcrypt.compare(password, passwordHash);
+  }
+
+  return password === passwordHash;
+}
 
 async function getAllUsers(_req, res) {
   try {
@@ -53,6 +72,20 @@ async function putDeactivateUser(req, res) {
   }
 }
 
+async function postResetPassword(req, res) {
+  try {
+    const requestingUserId = req.user?.userId ?? req.body?.requestingUserId;
+    const result = await resetUserPassword(req.body, requestingUserId);
+    res.json(result);
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500;
+    res.status(statusCode).json({
+      error: error.message || "Failed to reset password.",
+      details: error.details ?? [],
+    });
+  }
+}
+
 async function postVerifyManager(req, res) {
   try {
     const result = await verifyManager(req.body?.pin);
@@ -66,17 +99,7 @@ async function postVerifyManager(req, res) {
   }
 }
 
-/**
- * Enhanced login endpoint with username/email and password
- * Security features:
- * - Rate limiting (handled by middleware)
- * - IP tracking
- * - Brute force detection
- * - CAPTCHA after 3 failures
- * - Account locking after 5 failures
- * - Manager alerts
- * - Password hashing with bcrypt
- */
+
 async function postLogin(req, res) {
   try {
     const { email, username, identifier, password, captchaToken } = req.body;
@@ -102,11 +125,11 @@ async function postLogin(req, res) {
     // 2. Find user by email
     const db = (await import("../db/index.js")).default;
     const users = await db.query(
-      `SELECT user_id, name, email, password_hash, role, is_active, is_pos_locked, failed_pin_attempts
+      `SELECT user_id, name, email, password_hash, role, is_active
        FROM Users
-       WHERE (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)) AND is_active = true
+       WHERE LOWER(email) = LOWER(?) AND is_active = true
        LIMIT 1`,
-      [loginIdentifier.trim(), loginIdentifier.trim()]
+      [loginIdentifier.trim()]
     );
 
     // 3. Handle failed login (invalid email or password)
@@ -163,9 +186,7 @@ async function postLogin(req, res) {
       });
     }
 
-    // 4. Verify password (basic comparison - in production use bcrypt)
-    // For now, compare plain text. In production, use: bcrypt.compare(password, user.password_hash)
-    const passwordValid = password === user.password_hash;
+    const passwordValid = await verifyPassword(password, user.password_hash);
 
     if (!passwordValid) {
       // Password mismatch
@@ -272,11 +293,11 @@ async function postValidateCaptcha(req, res) {
     // Now attempt login with CAPTCHA validated
     const db = (await import("../db/index.js")).default;
     const users = await db.query(
-      `SELECT user_id, name, email, password_hash, role, is_active, is_pos_locked
+      `SELECT user_id, name, email, password_hash, role, is_active
        FROM Users
-       WHERE (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)) AND is_active = true
+       WHERE LOWER(email) = LOWER(?) AND is_active = true
        LIMIT 1`,
-      [loginIdentifier.trim(), loginIdentifier.trim()]
+      [loginIdentifier.trim()]
     );
 
     if (users.length === 0) {
@@ -295,8 +316,7 @@ async function postValidateCaptcha(req, res) {
       });
     }
 
-    // Verify password
-    const passwordValid = password === user.password_hash;
+    const passwordValid = await verifyPassword(password, user.password_hash);
 
     if (!passwordValid) {
       const metrics = await trackLoginAttempt(user.user_id, ipAddress, false);
@@ -372,6 +392,7 @@ export {
   getAllUsers,
   postCreateUser,
   putDeactivateUser,
+  postResetPassword,
   postVerifyManager,
   postLogin,
   postValidateCaptcha,

@@ -8,6 +8,7 @@ export default function ClockinPage() {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
+  const [scheduledHours, setScheduledHours] = useState(0);
   const [tipDeclaredAmount, setTipDeclaredAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -60,6 +61,7 @@ export default function ClockinPage() {
       });
       setRole(session.roles[0] ?? null);
       setClockedIn(session.clockedIn);
+      setScheduledHours(Number(session.scheduledHours ?? 0));
       setTipDeclaredAmount("");
       setCredentials({ identifier: "", password: "" });
 
@@ -83,6 +85,7 @@ export default function ClockinPage() {
       setUser(null);
       setRole(null);
       setClockedIn(false);
+      setScheduledHours(0);
       setAuthToken(null);
       localStorage.removeItem("authToken");
       setMessage({ type: "error", text: error.message });
@@ -101,6 +104,7 @@ export default function ClockinPage() {
         const session = await clockInShift();
         setClockedIn(true);
         setRole(session.roles[0] ?? role);
+        setScheduledHours(Number(session.scheduledHours ?? scheduledHours));
         setMessage({
           type: "success",
           text: `${session.name} (${session.roles[0]}) clocked in successfully.`,
@@ -116,6 +120,7 @@ export default function ClockinPage() {
         });
         setUser(null);
         setRole(null);
+        setScheduledHours(0);
         setAuthToken(null);
         localStorage.removeItem("authToken");
 
@@ -148,6 +153,7 @@ export default function ClockinPage() {
         displayRole: role,
       })
     );
+    window.dispatchEvent(new Event("pos-session-change"));
 
     if (user.role === "kitchen") {
       router.push("/expo");
@@ -232,6 +238,11 @@ export default function ClockinPage() {
                 {role}
               </button>
             </div>
+            {["employee", "manager"].includes(user.role) && (
+              <p className="ci-roles__label" style={{ marginTop: "12px" }}>
+                Scheduled hours today: {scheduledHours ? `${scheduledHours.toFixed(2)} hours` : "No shift scheduled"}
+              </p>
+            )}
           </div>
         )}
 

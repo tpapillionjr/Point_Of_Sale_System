@@ -64,7 +64,10 @@ export default function CustomerMenuPage() {
   if (isLoading) {
     return (
       <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" }}>
-        <p style={{ color: "#64748b", fontWeight: "600" }}>Loading menu...</p>
+        <div style={{ display: "grid", justifyItems: "center", gap: "14px" }}>
+          <div className="lumi-loader" aria-hidden="true" />
+          <p style={{ color: "#64748b", fontWeight: "600", margin: 0 }}>Loading menu...</p>
+        </div>
       </div>
     );
   }
@@ -158,8 +161,12 @@ export default function CustomerMenuPage() {
                       <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: "600", marginLeft: "4px" }}>Added</span>
                     </div>
                   ) : (
-                    <button onClick={() => addToCart(item)} style={{ padding: "8px 16px", borderRadius: "999px", border: "none", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "700", cursor: "pointer", alignSelf: "flex-start" }}>
-                      + Add
+                    <button
+                      onClick={() => addToCart(item)}
+                      aria-label={`Add ${item.name} to cart`}
+                      style={{ width: "36px", height: "36px", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.25)", backgroundColor: "white", color: "#2563eb", fontSize: "22px", fontWeight: "800", lineHeight: 1, cursor: "pointer", alignSelf: "flex-start", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(15,23,42,0.08)" }}
+                    >
+                      +
                     </button>
                   )}
                 </div>
