@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
 
 const NAV_ITEMS = [
+  { href: "/clock-in", label: "Clock In" },
   { href: "/tables", label: "Tables" },
   { href: "/server-order", label: "Server Order" },
   { href: "/online-orders", label: "Online Orders" },
@@ -26,13 +27,37 @@ function isActiveRoute(pathname, href) {
   return false;
 }
 
+function subscribeToStorage(listener) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+
+function getEmployeeSnapshot() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem("currentEmployee");
+}
+
 export default function AppChrome({ children }) {
   const router = useRouter();
-  const [employee, setEmployee] = useState(null);
+  const employeeSnapshot = useSyncExternalStore(subscribeToStorage, getEmployeeSnapshot, () => null);
+  const employee = useMemo(() => {
+    if (!employeeSnapshot) {
+      return null;
+    }
 
-  useEffect(() => {
-    setEmployee(getStoredEmployee());
-  }, []);
+    try {
+      return JSON.parse(employeeSnapshot);
+    } catch {
+      return getStoredEmployee();
+    }
+  }, [employeeSnapshot]);
 
   const navItems = NAV_ITEMS.filter((item) => {
     if (item.href === "/back-office" || item.href === "/reports") {

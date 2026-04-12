@@ -250,6 +250,13 @@ export async function deactivateUser(userId, requestingUserId) {
   });
 }
 
+export async function resetUserPassword(payload) {
+  return request("/api/users/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function verifyManager(pin) {
   return request("/api/users/verify-manager", {
     method: "POST",
@@ -281,6 +288,17 @@ export async function customerRegister(payload) {
 
 export async function customerLogin(payload) {
   const res = await fetch(`${API_URL}/api/customer/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to login.");
+  return data;
+}
+
+export async function staffLogin(payload) {
+  const res = await fetch(`${API_URL}/api/users/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
