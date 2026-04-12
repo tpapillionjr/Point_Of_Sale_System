@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, startTransition } from "react";
 import { fetchKitchenTickets, updateKitchenTicket } from "../lib/api";
 
 function getTicketState(ticket, now) {
-  const ageMinutes = (now - new Date(ticket.createdAt).getTime()) / 60000;
+  const baseAgeSeconds = Number(ticket.ageSeconds ?? 0);
+  const fetchedAt = Number(ticket.fetchedAt ?? now);
+  const ageMinutes = Math.max(0, (baseAgeSeconds + ((now - fetchedAt) / 1000)) / 60);
 
   if (ageMinutes >= 18) {
     return "red";
@@ -29,13 +31,14 @@ export default function KitchenPage() {
   useEffect(() => {
     const storedEmployee = localStorage.getItem("currentEmployee");
     if (storedEmployee) {
-      setEmployee(JSON.parse(storedEmployee));
+      startTransition(() => setEmployee(JSON.parse(storedEmployee)));
     }
 
     async function loadTickets() {
       try {
         const rows = await fetchKitchenTickets();
-        setTickets(rows);
+        const fetchedAt = Date.now();
+        setTickets(rows.map((ticket) => ({ ...ticket, fetchedAt })));
         setMessage(null);
       } catch (error) {
         setMessage(error.message);
@@ -72,7 +75,9 @@ export default function KitchenPage() {
         status,
       });
       setTickets((current) =>
-        current.filter((ticket) => !(ticket.ticketId === ticketId && status === "done"))
+        current
+          .filter((ticket) => !(ticket.ticketId === ticketId && status === "done"))
+          .map((ticket) => ticket.ticketId === ticketId ? { ...ticket, status } : ticket)
       );
       setMessage(null);
     } catch (error) {
@@ -121,7 +126,9 @@ export default function KitchenPage() {
 
       <section className="expo-grid" aria-label="Kitchen tickets">
         {tickets.map((ticket) => {
-          const ageMinutes = Math.floor((now - new Date(ticket.createdAt).getTime()) / 60000);
+          const baseAgeSeconds = Number(ticket.ageSeconds ?? 0);
+          const fetchedAt = Number(ticket.fetchedAt ?? now);
+          const ageMinutes = Math.max(0, Math.floor((baseAgeSeconds + ((now - fetchedAt) / 1000)) / 60));
           const state = getTicketState(ticket, now);
 
           return (
@@ -129,7 +136,13 @@ export default function KitchenPage() {
               <div className="expo-ticket__top">
                 <div>
                   <p className="expo-ticket__source">{ticket.status.replace("_", " ")}</p>
-                  <h3 className="expo-ticket__id">Table {ticket.tableNumber}</h3>
+                  <h3 className="expo-ticket__id">
+                    {String(ticket.tableNumber) === "10000"
+                      ? `TAKEOUT${ticket.takeoutName ? ` — ${ticket.takeoutName}` : ""}`
+                      : ticket.tableNumber === "Online"
+                      ? "Online Order"
+                      : `Table ${ticket.tableNumber}`}
+                  </h3>
                 </div>
 
                 <div className={`expo-ticket__timer expo-ticket__timer--${state}`}>{ageMinutes}m</div>

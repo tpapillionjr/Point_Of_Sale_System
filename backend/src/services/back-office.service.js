@@ -65,6 +65,11 @@ function rangeFilter(filters, column = "created_at") {
   return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL ${days - 1} DAY)`;
 }
 
+function currentWeekFilter(column = "created_at") {
+  return `DATE(${column}) >= DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY)
+    AND DATE(${column}) < DATE_ADD(DATE_SUB(CURRENT_DATE, INTERVAL (DAYOFWEEK(CURRENT_DATE) - 1) DAY), INTERVAL 7 DAY)`;
+}
+
 function createAction({ title, description, priority }) {
   return { title, description, priority };
 }
@@ -89,6 +94,11 @@ function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function normalizeCategory(value) {
+  const category = value || "Uncategorized";
+  return String(category).toLowerCase() === "entree" ? "Entrees" : category;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return "—";
@@ -100,6 +110,14 @@ function formatDateTime(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function hoursBetween(start, end) {
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Math.max((new Date(end).getTime() - new Date(start).getTime()) / 3600000, 0);
 }
 
 async function getBackOfficeDashboard() {
@@ -183,6 +201,207 @@ async function getBackOfficeDashboard() {
   return { summary, managerActions };
 }
 
+function normalizeInventoryType(type) {
+  return type === "utensils" ? "utensils" : "menu";
+}
+
+function normalizeInventoryName(value, label = "inventoryItemName") {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) {
+    const error = new Error(`${label} is required.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return name;
+}
+
+function normalizeNonNegativeInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    const error = new Error(`${label} must be a non-negative integer.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return number;
+}
+
+async function createInventoryItem(payload = {}) {
+  const type = normalizeInventoryType(payload.type);
+  const amountAvailable = normalizeNonNegativeInteger(payload.amountAvailable, "amountAvailable");
+  const availabilityStatus = typeof payload.availabilityStatus === "boolean" ? payload.availabilityStatus : true;
+
+  if (type === "utensils") {
+    const utensilName = normalizeInventoryName(payload.inventoryItemName, "utensilName");
+    const reorderThreshold = normalizeNonNegativeInteger(payload.reorderThreshold ?? 10, "reorderThreshold");
+
+    await db.pool.execute(
+      `INSERT INTO Utensil_Inventory (utensil_name, amount_available, reorder_threshold, availability_status)
+       VALUES (?, ?, ?, ?)`,
+      [utensilName, amountAvailable, reorderThreshold, availabilityStatus]
+    );
+
+    return {
+      type,
+      inventoryItemName: utensilName,
+      amountAvailable,
+      reorderThreshold,
+      availabilityStatus,
+    };
+  }
+
+  const inventoryItemName = normalizeInventoryName(payload.inventoryItemName);
+  const menuItemId = Number(payload.menuItemId);
+  if (!Number.isInteger(menuItemId) || menuItemId <= 0) {
+    const error = new Error("menuItemId must be a positive integer.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const menuRows = await db.query(
+    `SELECT menu_item_id FROM Menu_Item WHERE menu_item_id = ? LIMIT 1`,
+    [menuItemId]
+  );
+  if (menuRows.length === 0) {
+    const error = new Error("Linked menu item was not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await db.pool.execute(
+    `INSERT INTO Inventory (inventory_item_name, amount_available, menu_item_id, availability_status)
+     VALUES (?, ?, ?, ?)`,
+    [inventoryItemName, amountAvailable, menuItemId, availabilityStatus]
+  );
+
+  return {
+    type,
+    inventoryItemName,
+    amountAvailable,
+    menuItemId,
+    availabilityStatus,
+  };
+}
+
+async function deleteInventoryItem(typeInput, inventoryItemNameInput) {
+  const type = normalizeInventoryType(typeInput);
+  const inventoryItemName = normalizeInventoryName(inventoryItemNameInput);
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `DELETE FROM Utensil_Inventory WHERE utensil_name = ?`,
+      [inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return { type, inventoryItemName };
+  }
+
+  await db.withTransaction(async (connection) => {
+    await connection.execute(
+      `DELETE FROM Manager_Notification WHERE inventory_item_name = ?`,
+      [inventoryItemName]
+    );
+
+    const [result] = await connection.execute(
+      `DELETE FROM Inventory WHERE inventory_item_name = ?`,
+      [inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  });
+
+  return { type, inventoryItemName };
+}
+
+async function updateInventoryItemAmount(typeInput, inventoryItemNameInput, amountAvailableInput) {
+  const type = normalizeInventoryType(typeInput);
+  const inventoryItemName = normalizeInventoryName(inventoryItemNameInput);
+  const amountAvailable = normalizeNonNegativeInteger(amountAvailableInput, "amountAvailable");
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `UPDATE Utensil_Inventory SET amount_available = ? WHERE utensil_name = ?`,
+      [amountAvailable, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return { type, inventoryItemName, amountAvailable };
+  }
+
+  const [result] = await db.pool.execute(
+    `UPDATE Inventory SET amount_available = ? WHERE inventory_item_name = ?`,
+    [amountAvailable, inventoryItemName]
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error("Inventory item not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return { type, inventoryItemName, amountAvailable };
+}
+
+async function receivePurchasingStock(payload = {}) {
+  const type = normalizeInventoryType(payload.type);
+  const inventoryItemName = normalizeInventoryName(payload.inventoryItemName);
+  const quantityReceived = normalizeNonNegativeInteger(payload.quantityReceived, "quantityReceived");
+
+  if (quantityReceived <= 0) {
+    const error = new Error("quantityReceived must be greater than zero.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (type === "utensils") {
+    const [result] = await db.pool.execute(
+      `UPDATE Utensil_Inventory
+       SET amount_available = amount_available + ?,
+           availability_status = TRUE
+       WHERE utensil_name = ?`,
+      [quantityReceived, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  } else {
+    const [result] = await db.pool.execute(
+      `UPDATE Inventory
+       SET amount_available = amount_available + ?,
+           availability_status = TRUE
+       WHERE inventory_item_name = ?`,
+      [quantityReceived, inventoryItemName]
+    );
+
+    if (result.affectedRows === 0) {
+      const error = new Error("Inventory item not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
+  return { type, inventoryItemName, quantityReceived };
+}
+
 async function getBackOfficeData(range) {
   const filters = normalizeBackOfficeFilters(range);
   const inventoryRowsPromise = db.query(
@@ -219,12 +438,32 @@ async function getBackOfficeData(range) {
      FROM (
        SELECT
          i.inventory_item_name AS inventoryItemName,
-         COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity ELSE 0 END), 0) AS unitsUsed,
-         ROUND(COALESCE(SUM(CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.quantity * oi.price ELSE 0 END), 0), 2) AS revenue,
-         COUNT(DISTINCT CASE WHEN o.status <> 'Void' AND ${rangeFilter(filters, "o.created_at")} THEN oi.order_id ELSE NULL END) AS orderCount
+         COALESCE(SUM(CASE WHEN order_usage.inRange THEN order_usage.quantity ELSE 0 END), 0) AS unitsUsed,
+         ROUND(COALESCE(SUM(CASE WHEN order_usage.inRange THEN order_usage.quantity * order_usage.price ELSE 0 END), 0), 2) AS revenue,
+         COUNT(DISTINCT CASE WHEN order_usage.inRange THEN order_usage.orderKey ELSE NULL END) AS orderCount
        FROM Inventory i
-       LEFT JOIN Order_Item oi ON oi.menu_item_id = i.menu_item_id
-       LEFT JOIN Orders o ON o.order_id = oi.order_id
+       LEFT JOIN (
+         SELECT
+           CONCAT('pos-', oi.order_id) AS orderKey,
+           oi.menu_item_id AS menuItemId,
+           oi.quantity,
+           oi.price,
+           (${rangeFilter(filters, "o.created_at")}) AS inRange
+         FROM Order_Item oi
+         JOIN Orders o ON o.order_id = oi.order_id
+         WHERE o.status <> 'Void'
+
+         UNION ALL
+
+         SELECT
+           CONCAT('online-', ooi.online_order_id) AS orderKey,
+           ooi.menu_item_id AS menuItemId,
+           ooi.quantity,
+           ooi.price,
+           (${rangeFilter(filters, "oo.created_at")}) AS inRange
+         FROM Online_Order_Item ooi
+         JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+       ) order_usage ON order_usage.menuItemId = i.menu_item_id
        GROUP BY i.inventory_item_name
 
        UNION ALL
@@ -240,8 +479,12 @@ async function getBackOfficeData(range) {
   );
 
   const inventoryUpdateStatsPromise = db.query(
-    `SELECT MAX(created_at) AS lastOrderAt
-     FROM Orders`
+    `SELECT MAX(createdAt) AS lastOrderAt
+     FROM (
+       SELECT created_at AS createdAt FROM Orders
+       UNION ALL
+       SELECT created_at AS createdAt FROM Online_Orders
+     ) all_orders`
   );
 
   const laborRowsPromise = db.query(
@@ -260,8 +503,23 @@ async function getBackOfficeData(range) {
      ORDER BY es.scheduled_start DESC, u.name ASC`
   );
 
+  const weeklyLaborRowsPromise = db.query(
+    `SELECT
+       u.user_id AS userId,
+       u.name,
+       u.role,
+       es.clock_in AS clockIn,
+       es.clock_out AS clockOut
+     FROM Employee_Shift es
+     JOIN Users u ON u.user_id = es.user_id
+     WHERE ${currentWeekFilter("es.scheduled_start")}
+     ORDER BY u.name ASC, es.scheduled_start DESC`
+  );
+
   const menuItemsPromise = db.query(
-    `SELECT menu_item_id AS menuItemId, name, COALESCE(category, 'Uncategorized') AS category, base_price AS basePrice, is_active AS isActive
+    `SELECT menu_item_id AS menuItemId, name, COALESCE(category, 'Uncategorized') AS category,
+            base_price AS basePrice, description, photo_url AS photoUrl,
+            common_allergens AS commonAllergens, is_active AS isActive
      FROM Menu_Item
      ORDER BY is_active DESC, name ASC`
   );
@@ -273,36 +531,88 @@ async function getBackOfficeData(range) {
   );
 
   const recentOrdersPromise = db.query(
-    `SELECT
-       o.order_id AS orderId,
-       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
-       dt.table_number AS tableNumber,
-       u.name AS employeeName,
-       o.total,
-       o.status,
-       o.created_at AS createdAt
-     FROM Orders o
-     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
-     LEFT JOIN Users u ON u.user_id = o.created_by
-     WHERE ${rangeFilter(filters, "o.created_at")}
-     ORDER BY o.created_at DESC
+    `SELECT *
+     FROM (
+       SELECT
+         o.order_id AS orderId,
+         COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+         dt.table_number AS tableNumber,
+         u.name AS employeeName,
+         o.total,
+         o.status,
+         NULL AS customerStatus,
+         NULL AS paymentStatus,
+         o.created_at AS createdAt,
+         'In Store' AS channel
+       FROM Orders o
+       LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+       LEFT JOIN Users u ON u.user_id = o.created_by
+       WHERE ${rangeFilter(filters, "o.created_at")}
+
+       UNION ALL
+
+       SELECT
+         oo.online_order_id AS orderId,
+         CONCAT('Online #', oo.online_order_id) AS receiptNumber,
+         'Online' AS tableNumber,
+         CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
+         oo.total,
+         CASE
+           WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
+           WHEN oo.payment_status = 'paid' THEN 'Paid Online'
+           ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
+         END AS status,
+         oo.customer_status AS customerStatus,
+         oo.payment_status AS paymentStatus,
+         oo.created_at AS createdAt,
+         'Online' AS channel
+       FROM Online_Orders oo
+       WHERE ${rangeFilter(filters, "oo.created_at")}
+     ) combined_orders
+     ORDER BY createdAt DESC
      LIMIT 12`
   );
 
   const activeOrdersPromise = db.query(
-    `SELECT
-       o.order_id AS orderId,
-       COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
-       dt.table_number AS tableNumber,
-       u.name AS employeeName,
-       o.total,
-       o.status,
-       o.created_at AS createdAt
-     FROM Orders o
-     LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
-     LEFT JOIN Users u ON u.user_id = o.created_by
-     WHERE o.status IN ('Open', 'Sent', 'Completed')
-     ORDER BY o.created_at DESC`
+    `SELECT *
+     FROM (
+       SELECT
+         o.order_id AS orderId,
+         COALESCE(o.receipt_number, CONCAT('Order #', o.order_id)) AS receiptNumber,
+         dt.table_number AS tableNumber,
+         u.name AS employeeName,
+         o.total,
+         o.status,
+         NULL AS customerStatus,
+         NULL AS paymentStatus,
+         o.created_at AS createdAt,
+         'In Store' AS channel
+       FROM Orders o
+       LEFT JOIN Dining_Tables dt ON dt.table_id = o.table_id
+       LEFT JOIN Users u ON u.user_id = o.created_by
+       WHERE o.status IN ('Open', 'Sent', 'Completed')
+
+       UNION ALL
+
+       SELECT
+         oo.online_order_id AS orderId,
+         CONCAT('Online #', oo.online_order_id) AS receiptNumber,
+         'Online' AS tableNumber,
+         CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
+         oo.total,
+         CASE
+           WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
+           WHEN oo.payment_status = 'paid' THEN 'Paid Online'
+           ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
+         END AS status,
+         oo.customer_status AS customerStatus,
+         oo.payment_status AS paymentStatus,
+         oo.created_at AS createdAt,
+         'Online' AS channel
+       FROM Online_Orders oo
+       WHERE oo.customer_status <> 'picked_up'
+     ) active_orders
+     ORDER BY createdAt DESC`
   );
 
   const refundCountsPromise = db.query(
@@ -328,12 +638,13 @@ async function getBackOfficeData(range) {
      GROUP BY role`
   );
 
-  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
+  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, weeklyLaborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
     await Promise.all([
       inventoryRowsPromise,
       inventoryUsagePromise,
       inventoryUpdateStatsPromise,
       laborRowsPromise,
+      weeklyLaborRowsPromise,
       menuItemsPromise,
       modifiersPromise,
       recentOrdersPromise,
@@ -346,7 +657,7 @@ async function getBackOfficeData(range) {
   const stockRows = inventoryRows.map((row) => ({
     inventoryItemName: row.inventoryItemName,
     linkedMenuItem: row.linkedMenuItem ?? "Unlinked",
-    category: row.category,
+    category: normalizeCategory(row.category),
     amountAvailable: Number(row.amountAvailable ?? 0),
     basePrice: Number(row.basePrice ?? 0),
     status: getInventoryStatus(Number(row.amountAvailable ?? 0), Boolean(row.availabilityStatus)),
@@ -376,10 +687,31 @@ async function getBackOfficeData(range) {
       currentOnHand: row.amountAvailable,
       suggestedOrder: Math.max(12 - row.amountAvailable, 1),
       linkedMenuItem: row.linkedMenuItem,
+      category: normalizeCategory(row.category),
       priority: row.status,
       estimatedCost: Number((Math.max(12 - row.amountAvailable, 1) * Math.max(row.basePrice || 1, 1)).toFixed(2)),
     }))
     .sort((a, b) => a.currentOnHand - b.currentOnHand);
+
+  const weeklyHoursByEmployee = new Map();
+  for (const row of weeklyLaborRows) {
+    const existing = weeklyHoursByEmployee.get(row.userId) ?? {
+      userId: row.userId,
+      name: row.name,
+      role: row.role,
+      hoursWorkedThisWeek: 0,
+    };
+    const workedHours = row.clockIn ? hoursBetween(row.clockIn, row.clockOut ?? new Date().toISOString()) : 0;
+    existing.hoursWorkedThisWeek += workedHours;
+    weeklyHoursByEmployee.set(row.userId, existing);
+  }
+
+  const weeklyHourRows = [...weeklyHoursByEmployee.values()]
+    .map((row) => ({
+      ...row,
+      hoursWorkedThisWeek: Number(row.hoursWorkedThisWeek.toFixed(1)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const laborByEmployee = new Map();
   for (const row of laborRows) {
@@ -391,6 +723,9 @@ async function getBackOfficeData(range) {
       shiftsClocked: 0,
       currentlyClockedIn: false,
       tipsDeclared: 0,
+      hoursWorkedThisWeek: weeklyHoursByEmployee.get(row.userId)?.hoursWorkedThisWeek
+        ? Number(weeklyHoursByEmployee.get(row.userId).hoursWorkedThisWeek.toFixed(1))
+        : 0,
     };
 
     existing.shiftsScheduled += 1;
@@ -404,6 +739,7 @@ async function getBackOfficeData(range) {
 
   const laborEmployees = [...laborByEmployee.values()].sort((a, b) => a.name.localeCompare(b.name));
   const activeStaff = laborEmployees.filter((row) => row.currentlyClockedIn).length;
+  const hoursWorkedThisWeek = weeklyHourRows.reduce((sum, row) => sum + row.hoursWorkedThisWeek, 0);
   const scheduledToday = laborRows.filter((row) => {
     const scheduled = new Date(row.scheduledStart);
     const now = new Date();
@@ -415,7 +751,7 @@ async function getBackOfficeData(range) {
   }).length;
   const tipsPending = laborRows.filter((row) => row.clockOut && Number(row.tipDeclaredAmount ?? 0) === 0).length;
 
-  const paidOrders = recentOrders.filter((row) => row.status === "Paid").length;
+  const paidOrders = recentOrders.filter((row) => row.status === "Paid" || row.status === "Paid Online").length;
   const voidOrders = recentOrders.filter((row) => row.status === "Void").length;
 
   const userRoleCounts = Object.fromEntries(userCountsRows.map((row) => [row.role, Number(row.count ?? 0)]));
@@ -462,9 +798,11 @@ async function getBackOfficeData(range) {
         { title: "Scheduled This Range", value: String(laborRows.length) },
         { title: "Active Staff", value: String(activeStaff) },
         { title: "Scheduled Today", value: String(scheduledToday) },
+        { title: "Hours This Week", value: hoursWorkedThisWeek.toFixed(1) },
         { title: "Tips Pending", value: String(tipsPending) },
       ],
       employees: laborEmployees,
+      weeklyHours: weeklyHourRows,
     },
     menu: {
       summaryCards: [
@@ -476,8 +814,11 @@ async function getBackOfficeData(range) {
       items: menuItems.map((row) => ({
         menuItemId: row.menuItemId,
         name: row.name,
-        category: row.category,
+        category: normalizeCategory(row.category),
         basePrice: Number(row.basePrice ?? 0),
+        description: row.description ?? "",
+        photoUrl: row.photoUrl ?? "",
+        commonAllergens: row.commonAllergens ?? "",
         status: row.isActive ? "Active" : "Inactive",
       })),
       modifiers: modifiers.map((row) => ({
@@ -501,6 +842,9 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        customerStatus: row.customerStatus,
+        paymentStatus: row.paymentStatus,
+        channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
       recentOrders: recentOrders.map((row) => ({
@@ -510,6 +854,9 @@ async function getBackOfficeData(range) {
         employeeName: row.employeeName ?? "Unknown",
         total: Number(row.total ?? 0),
         status: row.status,
+        customerStatus: row.customerStatus,
+        paymentStatus: row.paymentStatus,
+        channel: row.channel,
         createdAt: formatDateTime(row.createdAt),
       })),
     },
@@ -543,4 +890,11 @@ async function getBackOfficeData(range) {
   };
 }
 
-export { getBackOfficeDashboard, getBackOfficeData };
+export {
+  createInventoryItem,
+  deleteInventoryItem,
+  getBackOfficeDashboard,
+  getBackOfficeData,
+  receivePurchasingStock,
+  updateInventoryItemAmount,
+};

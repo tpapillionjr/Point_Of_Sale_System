@@ -2,45 +2,86 @@ import "@/styles/globals.css";
 import AppChrome from "@/components/AppChrome";
 import {
   canAccessManagerRoutes,
-  getStoredEmployee,
-  hasStoredEmployee,
   isManagerRoute,
   isPublicRoute,
 } from "@/lib/session";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useRouter } from "next/router";
+
+const EMPTY_SESSION_SNAPSHOT = JSON.stringify({ token: null, employee: null });
+
+function subscribeToSession(listener) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", listener);
+  window.addEventListener("pos-session-change", listener);
+  return () => {
+    window.removeEventListener("storage", listener);
+    window.removeEventListener("pos-session-change", listener);
+  };
+}
+
+function getSessionSnapshot() {
+  if (typeof window === "undefined") {
+    return EMPTY_SESSION_SNAPSHOT;
+  }
+
+  return JSON.stringify({
+    token: window.localStorage.getItem("authToken"),
+    employee: window.localStorage.getItem("currentEmployee"),
+  });
+}
+
+function parseSession(snapshot) {
+  try {
+    const parsed = JSON.parse(snapshot);
+    return {
+      token: parsed.token,
+      employee: parsed.employee ? JSON.parse(parsed.employee) : null,
+    };
+  } catch {
+    return { token: null, employee: null };
+  }
+}
+
+function subscribeToClientReady() {
+  return () => {};
+}
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
-  const showChrome = !isPublicRoute(router.pathname);
-  const [isAuthorized, setIsAuthorized] = useState(true);
+  const pathname = router.pathname;
+  const isPublic = isPublicRoute(pathname);
+  const showChrome = !isPublic;
+  const isClientReady = useSyncExternalStore(subscribeToClientReady, () => true, () => false);
+  const sessionSnapshot = useSyncExternalStore(subscribeToSession, getSessionSnapshot, () => EMPTY_SESSION_SNAPSHOT);
+  const session = useMemo(() => parseSession(sessionSnapshot), [sessionSnapshot]);
+
+  const hasStaffSession = Boolean(session.token && session.employee);
+  const isAuthorized =
+    isPublic ||
+    (isClientReady && hasStaffSession && (!isManagerRoute(pathname) || canAccessManagerRoutes(session.employee)));
 
   useEffect(() => {
-    if (isPublicRoute(router.pathname)) {
-      setIsAuthorized(true);
+    if (!isClientReady) {
       return;
     }
 
-    if (!hasStoredEmployee()) {
-      setIsAuthorized(false);
-      router.replace("/clock-in");
+    if (isPublic) {
       return;
     }
 
-    if (!isManagerRoute(router.pathname)) {
-      setIsAuthorized(true);
+    if (!hasStaffSession) {
+      router.replace("/login");
       return;
     }
 
-    const employee = getStoredEmployee();
-    if (canAccessManagerRoutes(employee)) {
-      setIsAuthorized(true);
-      return;
+    if (isManagerRoute(pathname) && !canAccessManagerRoutes(session.employee)) {
+      router.replace("/tables");
     }
-
-    setIsAuthorized(false);
-    router.replace("/tables");
-  }, [router.pathname, router]);
+  }, [hasStaffSession, isClientReady, isPublic, pathname, router, session.employee]);
 
   if (!showChrome) {
     return <Component {...pageProps} />;

@@ -27,8 +27,37 @@ export function hasStoredEmployee() {
   return Boolean(getStoredEmployee() && getStoredAuthToken());
 }
 
+export function notifyStaffSessionChange() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event("pos-session-change"));
+}
+
+export function saveStaffSession(token, employee) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem("authToken", token);
+  window.localStorage.setItem("currentEmployee", JSON.stringify(employee));
+  notifyStaffSessionChange();
+}
+
+export function clearStaffSession() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem("currentEmployee");
+  window.localStorage.removeItem("currentOrder");
+  window.localStorage.removeItem("authToken");
+  notifyStaffSessionChange();
+}
+
 export function isPublicRoute(pathname) {
-  return pathname === "/" || pathname === "/clock-in" || pathname.startsWith("/customer");
+  return pathname === "/" || pathname === "/login" || pathname.startsWith("/customer");
 }
 
 export function isManagerRoute(pathname) {
