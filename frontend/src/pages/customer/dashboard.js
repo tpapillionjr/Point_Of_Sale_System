@@ -17,7 +17,7 @@ export default function CustomerDashboardPage() {
     if (!stored) { router.replace("/customer/login"); return; }
     const parsed = JSON.parse(stored);
     startTransition(() => {
-      setLastOrderId(localStorage.getItem("lastOrderId"));
+      setLastOrderId(localStorage.getItem(`lastOrderId:${parsed.customerId}`));
       setCustomer(parsed);
     });
 
