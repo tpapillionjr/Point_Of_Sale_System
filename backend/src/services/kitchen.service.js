@@ -8,6 +8,7 @@ async function getActiveTickets() {
       kt.order_id AS orderId,
       kt.online_order_id AS onlineOrderId,
       CASE WHEN kt.online_order_id IS NOT NULL THEN 'Online' ELSE dt.table_number END AS tableNumber,
+      o.takeout_name AS takeoutName,
       kt.status,
       kt.created_at AS createdAt,
       kt.updated_at AS updatedAt,
@@ -25,7 +26,7 @@ async function getActiveTickets() {
      LEFT JOIN Online_Order_Item ooi ON ooi.online_order_id = kt.online_order_id AND kt.online_order_id IS NOT NULL
      LEFT JOIN Menu_Item mi ON mi.menu_item_id = COALESCE(oi.menu_item_id, ooi.menu_item_id)
      WHERE kt.status IN ('new', 'in_progress')
-     GROUP BY kt.ticket_id, kt.order_id, kt.online_order_id, tableNumber, kt.status, kt.created_at, kt.updated_at
+     GROUP BY kt.ticket_id, kt.order_id, kt.online_order_id, tableNumber, o.takeout_name, kt.status, kt.created_at, kt.updated_at
      ORDER BY kt.created_at ASC`
   );
 }

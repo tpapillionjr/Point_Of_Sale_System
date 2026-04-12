@@ -66,7 +66,7 @@ export default function CheckoutPage() {
         <div style={{ textAlign: "center" }}>
           <p style={{ color: "#6b7280", marginBottom: "16px" }}>No active order found.</p>
           <button
-            onClick={() => router.push("/server-order")}
+            onClick={() => router.back()}
             style={{ padding: "10px 24px", borderRadius: "10px", border: "none", backgroundColor: "#111827", color: "white", fontWeight: "600", cursor: "pointer" }}
           >
             ← Back to Order
@@ -76,7 +76,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const subtotal = order.cart.reduce(
+  const subtotal = (order.cart ?? []).reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
   );
@@ -258,7 +258,7 @@ export default function CheckoutPage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
           <button
-            onClick={() => router.push(`/server-order?table=${order.tableNumber}`)}
+            onClick={() => router.back()}
             style={{
               padding: "8px 16px",
               borderRadius: "10px",
@@ -351,7 +351,7 @@ export default function CheckoutPage() {
             <span style={{ textAlign: "right" }}>Total</span>
           </div>
 
-          {order.cart.map((item) => (
+          {(order.cart ?? []).map((item) => (
             <div
               key={item.id}
               style={{
