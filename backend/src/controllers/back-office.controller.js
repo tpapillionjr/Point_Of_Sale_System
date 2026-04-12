@@ -1,11 +1,17 @@
 import {
+  createLaborShift,
   createInventoryItem,
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
   receivePurchasingStock,
+  updateLaborShift,
   updateInventoryItemAmount,
 } from "../services/back-office.service.js";
+import {
+  getBackOfficeSettings,
+  updateBackOfficeSettings,
+} from "../services/settings.service.js";
 
 async function getDashboard(req, res) {
   try {
@@ -71,4 +77,63 @@ async function postReceivePurchasingStock(req, res) {
   }
 }
 
-export { getDashboard, getData, patchInventoryItemAmount, postInventoryItem, postReceivePurchasingStock, removeInventoryItem };
+async function getSettings(_req, res) {
+  try {
+    const result = await getBackOfficeSettings();
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to get back-office settings:", error.message);
+    res.status(error.statusCode ?? 500).json({
+      error: error.statusCode ? error.message : "Failed to get back-office settings",
+    });
+  }
+}
+
+async function patchSettings(req, res) {
+  try {
+    const result = await updateBackOfficeSettings(req.body, req.user?.userId ?? null);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to update back-office settings:", error.message);
+    res.status(error.statusCode ?? 500).json({
+      error: error.statusCode ? error.message : "Failed to update back-office settings",
+    });
+  }
+}
+
+async function postLaborShift(req, res) {
+  try {
+    const result = await createLaborShift(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Failed to create labor shift:", error.message);
+    res.status(error.statusCode ?? 500).json({
+      error: error.statusCode ? error.message : "Failed to create labor shift",
+    });
+  }
+}
+
+async function patchLaborShift(req, res) {
+  try {
+    const result = await updateLaborShift(req.params.shiftId, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to update labor shift:", error.message);
+    res.status(error.statusCode ?? 500).json({
+      error: error.statusCode ? error.message : "Failed to update labor shift",
+    });
+  }
+}
+
+export {
+  getDashboard,
+  getData,
+  getSettings,
+  patchInventoryItemAmount,
+  patchLaborShift,
+  patchSettings,
+  postInventoryItem,
+  postLaborShift,
+  postReceivePurchasingStock,
+  removeInventoryItem,
+};
