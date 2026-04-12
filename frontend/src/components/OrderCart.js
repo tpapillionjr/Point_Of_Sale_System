@@ -3,8 +3,6 @@ import React from "react";
 export default function OrderCart({
   cart,
   sentItemIds = [],
-  increaseQuantity,
-  decreaseQuantity,
   removeItem,
 }) {
   let total = 0;
@@ -45,14 +43,6 @@ export default function OrderCart({
                 </div>
 
                 <div style={{ marginTop: "8px", display: "flex", gap: "6px" }}>
-                  <button
-                    onClick={() => increaseQuantity(item.id)}
-                    style={{ padding: "2px 10px", borderRadius: "6px", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}
-                  >+</button>
-                  <button
-                    onClick={() => decreaseQuantity(item.id)}
-                    style={{ padding: "2px 10px", borderRadius: "6px", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}
-                  >-</button>
                   <button
                     onClick={() => removeItem(item.id)}
                     style={{ padding: "2px 10px", borderRadius: "6px", border: "1px solid #fca5a5", backgroundColor: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: "13px" }}

@@ -275,6 +275,10 @@ export async function fetchOnlineOrders() {
   return request("/api/customer/online-orders");
 }
 
+export async function fetchActiveTakeoutOrders() {
+  return request("/api/orders/active-takeout");
+}
+
 export async function confirmOnlineOrder(orderId) {
   return request(`/api/customer/online-orders/${orderId}/confirm`, {
     method: "PATCH",

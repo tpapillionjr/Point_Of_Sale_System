@@ -7,9 +7,7 @@ import { canAccessManagerRoutes, getStoredEmployee } from "../lib/session";
 const NAV_ITEMS = [
   { href: "/clock-in", label: "Clock In" },
   { href: "/tables", label: "Tables" },
-  { href: "/server-order", label: "Server Order" },
-  { href: "/online-orders", label: "Online Orders" },
-  { href: "/checkout", label: "Checkout" },
+  { href: "/online-orders", label: "Takeout / Online Orders" },
   { href: "/kitchen", label: "Kitchen" },
   { href: "/back-office", label: "Back Office" },
   { href: "/reports", label: "Reports" },
@@ -20,7 +18,7 @@ function isActiveRoute(pathname, href) {
     return true;
   }
 
-  if (href === "/back-office" || href === "/reports" || href === "/checkout") {
+  if (href === "/back-office" || href === "/reports") {
     return pathname.startsWith(href);
   }
 
