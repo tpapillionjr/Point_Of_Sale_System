@@ -3,7 +3,7 @@ import { upload } from "@vercel/blob/client";
 import { useEffect, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
-import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
+import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive, fetchLoyaltyRewards, createLoyaltyReward, updateLoyaltyReward, toggleLoyaltyReward } from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
@@ -1113,9 +1113,120 @@ export function OrderHistorySection() {
   );
 }
 
+const EMPTY_REWARD_FORM = { name: "", pointsCost: "", menuItemId: "" };
+
 export function CustomerLoyaltySection() {
   const { data, isLoading, error } = useBackOfficeData("30days");
   const customers = data?.customers;
+
+  const [rewards, setRewards] = useState(null);
+  const [rewardsLoading, setRewardsLoading] = useState(true);
+  const [rewardsError, setRewardsError] = useState(null);
+  const [menuItems, setMenuItems] = useState([]);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState(EMPTY_REWARD_FORM);
+  const [formError, setFormError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [actionMessage, setActionMessage] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      setRewardsLoading(true);
+      try {
+        const [rows, items] = await Promise.all([fetchLoyaltyRewards(), fetchItems()]);
+        setRewards(rows);
+        setMenuItems(items);
+        setRewardsError(null);
+      } catch (err) {
+        setRewardsError(err.message);
+      } finally {
+        setRewardsLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  function openAdd() {
+    setEditTarget(null);
+    setForm(EMPTY_REWARD_FORM);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function openEdit(reward) {
+    setEditTarget(reward);
+    setForm({
+      name: reward.name,
+      pointsCost: String(reward.points_cost),
+      menuItemId: reward.menu_item_id ? String(reward.menu_item_id) : "",
+    });
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditTarget(null);
+    setForm(EMPTY_REWARD_FORM);
+    setFormError(null);
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) { setFormError("Name is required."); return; }
+    const pointsCost = Number(form.pointsCost);
+    if (!Number.isInteger(pointsCost) || pointsCost < 1) { setFormError("Points cost must be a positive whole number."); return; }
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        pointsCost,
+        menuItemId: form.menuItemId ? Number(form.menuItemId) : null,
+      };
+
+      if (editTarget) {
+        await updateLoyaltyReward(editTarget.reward_id, payload);
+        setRewards((prev) => prev.map((r) =>
+          r.reward_id === editTarget.reward_id
+            ? { ...r, name: payload.name, points_cost: payload.pointsCost, menu_item_id: payload.menuItemId,
+                menu_item_name: menuItems.find((m) => m.menuItemId === payload.menuItemId)?.name ?? null }
+            : r
+        ));
+        setActionMessage(`"${payload.name}" updated.`);
+      } else {
+        const created = await createLoyaltyReward(payload);
+        setRewards((prev) => [...prev, {
+          reward_id: created.rewardId,
+          name: payload.name,
+          points_cost: payload.pointsCost,
+          menu_item_id: payload.menuItemId,
+          menu_item_name: menuItems.find((m) => m.menuItemId === payload.menuItemId)?.name ?? null,
+          is_active: true,
+        }]);
+        setActionMessage(`"${payload.name}" added.`);
+      }
+      closeForm();
+    } catch (err) {
+      setFormError(err.message || "Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggle(reward) {
+    try {
+      await toggleLoyaltyReward(reward.reward_id);
+      setRewards((prev) => prev.map((r) =>
+        r.reward_id === reward.reward_id ? { ...r, is_active: !r.is_active } : r
+      ));
+      setActionMessage(`"${reward.name}" ${reward.is_active ? "deactivated" : "activated"}.`);
+    } catch (err) {
+      setActionMessage(`Error: ${err.message}`);
+    }
+  }
 
   return (
     <>
@@ -1142,6 +1253,129 @@ export function CustomerLoyaltySection() {
           <EmptyState message={isLoading ? "Loading customer records..." : "No customer records are available."} />
         )}
       </ReportSection>
+
+      {actionMessage && (
+        <p className="mb-4 rounded bg-green-50 px-4 py-2 text-sm font-medium text-green-700">{actionMessage}</p>
+      )}
+
+      <ReportSection
+        title="Loyalty Rewards Catalog"
+        action={
+          <button
+            onClick={openAdd}
+            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            + Add Reward
+          </button>
+        }
+      >
+        {rewardsError ? (
+          <ErrorState message={rewardsError} />
+        ) : rewardsLoading ? (
+          <EmptyState message="Loading rewards..." />
+        ) : rewards?.length ? (
+          <SimpleTable
+            headers={["ID", "Reward Name", "Points Cost", "Linked Item", "Status", "Actions"]}
+            rows={rewards}
+            renderRow={(reward) => (
+              <tr key={reward.reward_id} className="border-b last:border-b-0">
+                <td className="py-3 pr-4 font-medium text-gray-800">{reward.reward_id}</td>
+                <td className="py-3 pr-4">{reward.name}</td>
+                <td className="py-3 pr-4">{reward.points_cost} pts</td>
+                <td className="py-3 pr-4 text-gray-500">{reward.menu_item_name ?? "—"}</td>
+                <td className="py-3 pr-4">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${reward.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    {reward.is_active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="flex gap-2 py-3 pr-2">
+                  <button
+                    onClick={() => openEdit(reward)}
+                    className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleToggle(reward)}
+                    className={`rounded px-2 py-1 text-xs font-semibold ${reward.is_active ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
+                  >
+                    {reward.is_active ? "Deactivate" : "Activate"}
+                  </button>
+                </td>
+              </tr>
+            )}
+          />
+        ) : (
+          <EmptyState message="No rewards yet. Add one to get started." />
+        )}
+      </ReportSection>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+            <h3 className="mb-6 text-lg font-bold text-gray-900">{editTarget ? "Edit Reward" : "Add Reward"}</h3>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Reward Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Free Fries"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Points Cost *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.pointsCost}
+                  onChange={(e) => setForm({ ...form, pointsCost: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. 100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Linked Menu Item (optional)</label>
+                <select
+                  value={form.menuItemId}
+                  onChange={(e) => setForm({ ...form, menuItemId: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— None —</option>
+                  {menuItems.map((item) => (
+                    <option key={item.menuItemId} value={item.menuItemId}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {formError && <p className="text-sm text-red-600">{formError}</p>}
+
+              <div className="mt-2 flex justify-end gap-3">
+                <button
+                  onClick={closeForm}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Reward"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
