@@ -2,8 +2,37 @@
 // Max 5 requests per minute per IP
 
 const loginAttempts = new Map(); // { ip: { count, resetTime } }
+const reportRequests = new Map(); // { ip: { count, resetTime } }
 const MAX_REQUESTS = 5;
 const TIME_WINDOW = 60 * 1000; // 1 minute in milliseconds
+const REPORT_MAX_REQUESTS = 120;
+const REPORT_TIME_WINDOW = 60 * 1000;
+
+function fixedWindowRateLimit(store, maxRequests, timeWindow, message) {
+  return (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    const attempt = store.get(ip);
+
+    if (!attempt || now > attempt.resetTime) {
+      store.set(ip, {
+        count: 1,
+        resetTime: now + timeWindow,
+      });
+      return next();
+    }
+
+    if (attempt.count >= maxRequests) {
+      return res.status(429).json({
+        error: message,
+        retryAfter: Math.ceil((attempt.resetTime - now) / 1000),
+      });
+    }
+
+    attempt.count += 1;
+    return next();
+  };
+}
 
 export function loginRateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
@@ -41,6 +70,13 @@ export function loginRateLimit(req, res, next) {
   next();
 }
 
+export const reportsRateLimit = fixedWindowRateLimit(
+  reportRequests,
+  REPORT_MAX_REQUESTS,
+  REPORT_TIME_WINDOW,
+  "Too many report requests. Please try again after 1 minute."
+);
+
 // Optional: Get rate limit status for an IP
 export function getRateLimitStatus(ip) {
   const attempt = loginAttempts.get(ip);
@@ -61,9 +97,11 @@ export function getRateLimitStatus(ip) {
 // Cleanup: Remove old entries periodically (every 10 minutes)
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, attempt] of loginAttempts.entries()) {
-    if (now > attempt.resetTime) {
-      loginAttempts.delete(ip);
+  for (const store of [loginAttempts, reportRequests]) {
+    for (const [ip, attempt] of store.entries()) {
+      if (now > attempt.resetTime) {
+        store.delete(ip);
+      }
     }
   }
 }, 10 * 60 * 1000);

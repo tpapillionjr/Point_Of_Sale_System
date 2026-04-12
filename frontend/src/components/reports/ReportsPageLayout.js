@@ -418,6 +418,25 @@ function sectionsToCsv(metadata, sections) {
   return `\uFEFF${lines.map((line) => line.map(csvEscape).join(",")).join("\r\n")}`;
 }
 
+function sectionsToJson(metadata, sections) {
+  return JSON.stringify(
+    {
+      metadata,
+      sections: sections.map((item) => ({
+        title: item.title,
+        columns: item.columns.map((column) => column.header),
+        rows: item.rows.map((row) =>
+          Object.fromEntries(
+            item.columns.map((column) => [column.header, valueForExport(row, column)])
+          )
+        ),
+      })),
+    },
+    null,
+    2
+  );
+}
+
 function downloadBlob(content, mimeType, filename) {
   const blob = new Blob([content], { type: mimeType });
   const url = window.URL.createObjectURL(blob);
@@ -584,6 +603,11 @@ export default function ReportsPageLayout({
 
     if (exportFormat === "pdf") {
       downloadBlob(buildPdfContent(metadata, sections), "application/pdf", `${filenameBase}.pdf`);
+      return;
+    }
+
+    if (exportFormat === "json") {
+      downloadBlob(sectionsToJson(metadata, sections), "application/json;charset=utf-8", `${filenameBase}.json`);
       return;
     }
 

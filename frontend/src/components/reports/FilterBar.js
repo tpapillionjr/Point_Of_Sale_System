@@ -143,6 +143,7 @@ export default function FilterBar({
           >
             <option value="csv">Excel CSV</option>
             <option value="pdf">PDF</option>
+            <option value="json">JSON</option>
           </select>
         </FilterField>
       </div>
