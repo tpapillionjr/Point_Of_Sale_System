@@ -8,15 +8,20 @@ import {
   cancelOrder,
   confirmOnlineOrder,
   createLoyaltyReward,
+  createLaborShift,
   createMenuItem,
   fetchBackOfficeData,
+  fetchBackOfficeSettings,
   fetchItems,
   fetchLoyaltyRewards,
+  fetchUsers,
   markOnlineOrderPaid,
   markOnlineOrderPickedUp,
   receivePurchasingStock,
   toggleLoyaltyReward,
   toggleMenuItemActive,
+  updateBackOfficeSettings,
+  updateLaborShift,
   updateLoyaltyReward,
   updateMenuItem,
 } from "../../lib/api";
@@ -47,6 +52,33 @@ function ErrorState({ message }) {
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
+}
+
+function formatSettingsTimestamp(value) {
+  if (!value) {
+    return "Using default value";
+  }
+
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatLaborDateTime(value) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function toDateInputValue(date) {
@@ -999,8 +1031,79 @@ export function PurchasingSection() {
 export function LaborSection() {
   const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
   const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
-  const { data, isLoading, error } = useBackOfficeData(selectedRange);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const labor = data?.labor;
+  const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState("");
+  const [shiftForm, setShiftForm] = useState({
+    userId: "",
+    scheduledStart: "",
+    scheduledEnd: "",
+  });
+  const [laborMessage, setLaborMessage] = useState("");
+  const [isCreatingShift, setIsCreatingShift] = useState(false);
+  const [updatingShiftId, setUpdatingShiftId] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUsers() {
+      try {
+        const rows = await fetchUsers();
+        if (!isMounted) {
+          return;
+        }
+
+        setUsers(rows.filter((user) => user.is_active !== false));
+        setUsersError("");
+      } catch (loadError) {
+        if (isMounted) {
+          setUsersError(loadError.message || "Failed to load employees.");
+        }
+      }
+    }
+
+    loadUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleCreateShift() {
+    if (!shiftForm.userId || !shiftForm.scheduledStart || !shiftForm.scheduledEnd) {
+      setLaborMessage("Error: Employee, start, and end are required.");
+      return;
+    }
+
+    try {
+      setIsCreatingShift(true);
+      setLaborMessage("");
+      await createLaborShift(shiftForm);
+      setShiftForm({ userId: "", scheduledStart: "", scheduledEnd: "" });
+      setRefreshToken((current) => current + 1);
+      setLaborMessage("Shift scheduled.");
+    } catch (createError) {
+      setLaborMessage(`Error: ${createError.message || "Failed to schedule shift."}`);
+    } finally {
+      setIsCreatingShift(false);
+    }
+  }
+
+  async function handleUpdateShift(shiftId, payload, successMessage) {
+    try {
+      setUpdatingShiftId(shiftId);
+      setLaborMessage("");
+      await updateLaborShift(shiftId, payload);
+      setRefreshToken((current) => current + 1);
+      setLaborMessage(successMessage);
+    } catch (updateError) {
+      setLaborMessage(`Error: ${updateError.message || "Failed to update shift."}`);
+    } finally {
+      setUpdatingShiftId(null);
+    }
+  }
 
   return (
     <>
@@ -1008,6 +1111,123 @@ export function LaborSection() {
 
       <ReportSection title="Labor Snapshot">
         <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} columns="xl:grid-cols-5" />
+      </ReportSection>
+
+      <ReportSection title="Labor Write Actions">
+        {laborMessage ? (
+          <p
+            className={`mb-4 rounded px-4 py-2 text-sm font-medium ${
+              laborMessage.startsWith("Error:")
+                ? "bg-red-50 text-red-700"
+                : "bg-green-50 text-green-700"
+            }`}
+          >
+            {laborMessage}
+          </p>
+        ) : null}
+
+        {usersError ? <ErrorState message={usersError} /> : null}
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.4fr)]">
+          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Schedule Shift</h3>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Employee</span>
+              <select
+                value={shiftForm.userId}
+                onChange={(event) => setShiftForm((current) => ({ ...current, userId: event.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Choose employee</option>
+                {users.map((user) => (
+                  <option key={user.user_id} value={user.user_id}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled Start</span>
+              <input
+                type="datetime-local"
+                value={shiftForm.scheduledStart}
+                onChange={(event) => setShiftForm((current) => ({ ...current, scheduledStart: event.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled End</span>
+              <input
+                type="datetime-local"
+                value={shiftForm.scheduledEnd}
+                onChange={(event) => setShiftForm((current) => ({ ...current, scheduledEnd: event.target.value }))}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </label>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCreateShift}
+                disabled={isCreatingShift}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isCreatingShift ? "Scheduling..." : "Schedule Shift"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Shift Attendance</h3>
+            {error ? (
+              <ErrorState message={error} />
+            ) : labor?.shifts?.length ? (
+              <SimpleTable
+                headers={["Employee", "Scheduled", "Clock In", "Clock Out", "Actions"]}
+                rows={labor.shifts}
+                renderRow={(shift) => (
+                  <tr key={shift.shiftId} className="border-b last:border-b-0">
+                    <td className="py-3 pr-4 font-medium text-gray-800">{shift.name}</td>
+                    <td className="py-3 pr-4 text-sm">
+                      {formatLaborDateTime(shift.scheduledStart)} to {formatLaborDateTime(shift.scheduledEnd)}
+                    </td>
+                    <td className="py-3 pr-4">{formatLaborDateTime(shift.clockIn)}</td>
+                    <td className="py-3 pr-4">{formatLaborDateTime(shift.clockOut)}</td>
+                    <td className="py-3 pr-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUpdateShift(shift.shiftId, { clockIn: new Date().toISOString() }, "Shift clocked in.")
+                          }
+                          disabled={updatingShiftId === shift.shiftId || Boolean(shift.clockIn)}
+                          className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
+                        >
+                          Clock In
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUpdateShift(shift.shiftId, { clockOut: new Date().toISOString() }, "Shift clocked out.")
+                          }
+                          disabled={updatingShiftId === shift.shiftId || !shift.clockIn || Boolean(shift.clockOut)}
+                          className="rounded bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
+                        >
+                          Clock Out
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              />
+            ) : (
+              <EmptyState message={isLoading ? "Loading shifts..." : "No shifts are scheduled for this range."} />
+            )}
+          </div>
+        </div>
       </ReportSection>
 
       <ReportSection title="Team Scheduling and Attendance">
@@ -2019,25 +2239,229 @@ export function CustomerLoyaltySection() {
 
 export function SettingsSection() {
   const { data, isLoading, error } = useBackOfficeData("7days");
-  const settings = data?.settings;
+  const settingsSummary = data?.settings;
+  const [settingsData, setSettingsData] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [form, setForm] = useState({
+    taxRate: "0.0825",
+    receiptPrefix: "POS",
+    requireManagerApprovalForVoids: true,
+    requireManagerApprovalForRefunds: true,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSettings() {
+      try {
+        setSettingsLoading(true);
+        const payload = await fetchBackOfficeSettings();
+        if (!isMounted) {
+          return;
+        }
+
+        setSettingsData(payload);
+        setForm({
+          taxRate: String(payload.settings?.taxRate ?? 0),
+          receiptPrefix: payload.settings?.receiptPrefix ?? "",
+          requireManagerApprovalForVoids: Boolean(payload.settings?.requireManagerApprovalForVoids),
+          requireManagerApprovalForRefunds: Boolean(payload.settings?.requireManagerApprovalForRefunds),
+        });
+        setSettingsError("");
+      } catch (loadError) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSettingsError(loadError.message || "Failed to load settings.");
+      } finally {
+        if (isMounted) {
+          setSettingsLoading(false);
+        }
+      }
+    }
+
+    loadSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleSaveSettings() {
+    const taxRate = Number(form.taxRate);
+    if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 1) {
+      setSaveMessage("Error: Tax rate must be a decimal between 0 and 1.");
+      return;
+    }
+
+    if (!form.receiptPrefix.trim() || form.receiptPrefix.trim().length > 12) {
+      setSaveMessage("Error: Receipt prefix is required and must be 12 characters or fewer.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+      const payload = await updateBackOfficeSettings({
+        taxRate,
+        receiptPrefix: form.receiptPrefix.trim(),
+        requireManagerApprovalForVoids: form.requireManagerApprovalForVoids,
+        requireManagerApprovalForRefunds: form.requireManagerApprovalForRefunds,
+      });
+
+      setSettingsData(payload);
+      setForm({
+        taxRate: String(payload.settings?.taxRate ?? 0),
+        receiptPrefix: payload.settings?.receiptPrefix ?? "",
+        requireManagerApprovalForVoids: Boolean(payload.settings?.requireManagerApprovalForVoids),
+        requireManagerApprovalForRefunds: Boolean(payload.settings?.requireManagerApprovalForRefunds),
+      });
+      setSaveMessage("Settings saved.");
+      setSettingsError("");
+    } catch (saveError) {
+      setSaveMessage(`Error: ${saveError.message || "Failed to save settings."}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <>
       <ReportSection title="System Snapshot">
-        <SummaryCards cards={settings?.summaryCards} isLoading={isLoading} error={error} />
+        <SummaryCards cards={settingsSummary?.summaryCards} isLoading={isLoading} error={error} />
       </ReportSection>
 
-      <ReportSection title="Current System Notes">
-        {error ? (
-          <ErrorState message={error} />
-        ) : settings?.notes?.length ? (
-          <div className="space-y-3 text-sm text-gray-700">
-            {settings.notes.map((note) => (
-              <p key={note}>{note}</p>
-            ))}
-          </div>
+      <ReportSection title="Manager Controls">
+        {saveMessage ? (
+          <p
+            className={`mb-4 rounded px-4 py-2 text-sm font-medium ${
+              saveMessage.startsWith("Error:")
+                ? "bg-red-50 text-red-700"
+                : "bg-green-50 text-green-700"
+            }`}
+          >
+            {saveMessage}
+          </p>
+        ) : null}
+
+        {settingsError ? (
+          <ErrorState message={settingsError} />
+        ) : settingsLoading ? (
+          <EmptyState message="Loading settings..." />
         ) : (
-          <EmptyState message={isLoading ? "Loading settings..." : "No settings notes are available."} />
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Tax Rate</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.0001"
+                    value={form.taxRate}
+                    onChange={(event) => setForm((current) => ({ ...current, taxRate: event.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">Use decimal form, like `0.0825` for 8.25%.</p>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Receipt Prefix</span>
+                  <input
+                    type="text"
+                    maxLength="12"
+                    value={form.receiptPrefix}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, receiptPrefix: event.target.value.toUpperCase() }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">Shown on receipt references and manager order views.</p>
+                </label>
+              </div>
+
+              <div className="grid gap-3">
+                {[
+                  {
+                    key: "requireManagerApprovalForVoids",
+                    label: "Require manager approval for voids",
+                    description: "Keeps sent-item removals and order voids behind manager authorization.",
+                  },
+                  {
+                    key: "requireManagerApprovalForRefunds",
+                    label: "Require manager approval for refunds",
+                    description: "Keeps refund decisions behind manager authorization.",
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form[item.key]}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, [item.key]: event.target.checked }))
+                      }
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">{item.label}</span>
+                      <span className="block text-sm text-gray-600">{item.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  disabled={isSaving}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isSaving ? "Saving..." : "Save Settings"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Persistence</h3>
+                <p className="mt-2 text-sm text-gray-700">
+                  {settingsData?.persistedCount ?? 0} setting values are currently stored in `Back_Office_Settings`.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {(settingsData?.fields ?? []).map((field) => {
+                  const metadata = settingsData?.metadata?.[field.key];
+                  return (
+                    <div key={field.key} className="rounded-xl bg-gray-50 px-4 py-3">
+                      <p className="text-sm font-semibold text-gray-900">{field.label}</p>
+                      <p className="mt-1 text-xs text-gray-500">{field.description}</p>
+                      <p className="mt-2 text-xs text-gray-600">
+                        Last updated: {formatSettingsTimestamp(metadata?.updatedAt)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {settingsSummary?.notes?.length ? (
+                <div className="space-y-2 border-t border-gray-100 pt-4 text-sm text-gray-600">
+                  {settingsSummary.notes.map((note) => (
+                    <p key={note}>{note}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
         )}
       </ReportSection>
     </>

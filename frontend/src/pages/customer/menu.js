@@ -157,14 +157,14 @@ export default function CustomerMenuPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <button onClick={() => updateQty(item.menu_item_id, inCart.quantity - 1)} style={{ width: "32px", height: "32px", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.3)", backgroundColor: "white", cursor: "pointer", fontSize: "18px", fontWeight: "700", color: "#475569" }}>−</button>
                       <span style={{ fontWeight: "700", color: "#1e3a5f", minWidth: "24px", textAlign: "center" }}>{inCart.quantity}</span>
-                      <button onClick={() => updateQty(item.menu_item_id, inCart.quantity + 1)} style={{ width: "32px", height: "32px", borderRadius: "50%", border: "none", backgroundColor: "#3b82f6", cursor: "pointer", fontSize: "18px", fontWeight: "700", color: "white" }}>+</button>
+                      <button onClick={() => updateQty(item.menu_item_id, inCart.quantity + 1)} style={{ width: "32px", height: "32px", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.3)", backgroundColor: "white", cursor: "pointer", fontSize: "18px", fontWeight: "700", color: "#111827" }}>+</button>
                       <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: "600", marginLeft: "4px" }}>Added</span>
                     </div>
                   ) : (
                     <button
                       onClick={() => addToCart(item)}
                       aria-label={`Add ${item.name} to cart`}
-                      style={{ width: "36px", height: "36px", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.25)", backgroundColor: "white", color: "#2563eb", fontSize: "22px", fontWeight: "800", lineHeight: 1, cursor: "pointer", alignSelf: "flex-start", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(15,23,42,0.08)" }}
+                      style={{ width: "36px", height: "36px", borderRadius: "50%", border: "1px solid rgba(148,163,184,0.25)", backgroundColor: "white", color: "#111827", fontSize: "22px", fontWeight: "800", lineHeight: 1, cursor: "pointer", alignSelf: "flex-start", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(15,23,42,0.08)" }}
                     >
                       +
                     </button>
@@ -217,7 +217,7 @@ export default function CustomerMenuPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <button onClick={() => updateQty(item.menu_item_id, item.quantity - 1)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#475569" }}>−</button>
                           <span style={{ fontWeight: "700", color: "#1e3a5f", minWidth: "18px", textAlign: "center", fontSize: "14px" }}>{item.quantity}</span>
-                          <button onClick={() => updateQty(item.menu_item_id, item.quantity + 1)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "none", backgroundColor: "#3b82f6", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "white" }}>+</button>
+                          <button onClick={() => updateQty(item.menu_item_id, item.quantity + 1)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#111827" }}>+</button>
                         </div>
                         <span style={{ fontWeight: "700", color: "#1e3a5f", marginLeft: "12px", minWidth: "48px", textAlign: "right" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
                       </div>

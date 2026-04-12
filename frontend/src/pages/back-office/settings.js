@@ -5,7 +5,7 @@ export default function SettingsPage() {
   return (
     <BackOfficeShell
       title="Settings"
-      description="Review the current persisted system state and configuration gaps."
+      description="Manage taxes, receipt rules, and approval controls with persisted manager-only updates."
     >
       <SettingsSection />
     </BackOfficeShell>

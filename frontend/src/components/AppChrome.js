@@ -80,7 +80,7 @@ export default function AppChrome({ children }) {
         <div className="app-shell__brand">
           <Image
             src="/lumii2.png"
-            alt="Lumi POS logo"
+            alt="Lumi logo"
             width={56}
             height={56}
             priority
@@ -88,7 +88,7 @@ export default function AppChrome({ children }) {
           />
 
           <div>
-            <h1 className="app-shell__title app-shell__title--brand">lumi POS</h1>
+            <h1 className="app-shell__title app-shell__title--brand">lumi</h1>
           </div>
         </div>
 

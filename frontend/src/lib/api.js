@@ -87,6 +87,31 @@ export async function fetchBackOfficeData(range) {
   return request(`/api/back-office/data${query ? `?${query}` : ""}`);
 }
 
+export async function fetchBackOfficeSettings() {
+  return request("/api/back-office/settings");
+}
+
+export async function updateBackOfficeSettings(payload) {
+  return request("/api/back-office/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createLaborShift(payload) {
+  return request("/api/back-office/labor/shifts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLaborShift(shiftId, payload) {
+  return request(`/api/back-office/labor/shifts/${shiftId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createInventoryItem(payload) {
   return request("/api/back-office/inventory", {
     method: "POST",
