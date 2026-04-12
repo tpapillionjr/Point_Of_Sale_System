@@ -10,7 +10,6 @@ export function loginRateLimit(req, res, next) {
   
   const now = Date.now();
   const attempt = loginAttempts.get(ip);
-
   if (!attempt) {
     // First attempt from this IP
     loginAttempts.set(ip, {
