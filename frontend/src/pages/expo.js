@@ -136,7 +136,13 @@ export default function KitchenPage() {
               <div className="expo-ticket__top">
                 <div>
                   <p className="expo-ticket__source">{ticket.status.replace("_", " ")}</p>
-                  <h3 className="expo-ticket__id">Table {ticket.tableNumber}</h3>
+                  <h3 className="expo-ticket__id">
+                    {String(ticket.tableNumber) === "10000"
+                      ? `TAKEOUT${ticket.takeoutName ? ` — ${ticket.takeoutName}` : ""}`
+                      : ticket.tableNumber === "Online"
+                      ? "Online Order"
+                      : `Table ${ticket.tableNumber}`}
+                  </h3>
                 </div>
 
                 <div className={`expo-ticket__timer expo-ticket__timer--${state}`}>{ageMinutes}m</div>

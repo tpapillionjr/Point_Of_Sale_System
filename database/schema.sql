@@ -4,8 +4,13 @@ CREATE TABLE Dining_Tables (
     table_number SMALLINT NOT NULL UNIQUE,
     capacity SMALLINT NULL,
     status ENUM('available','occupied','reserved','inactive') NOT NULL DEFAULT 'available',
+<<<<<<< HEAD
     CONSTRAINT chk_table_number_range CHECK (table_number >= 1 AND table_number <= 99),
     CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 8))
+=======
+    CONSTRAINT chk_table_number_nonneg CHECK (table_number >= 0),
+    CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 99))
+>>>>>>> 472a1550fda52af52fd228c8796a890658c53092
 );
 
 CREATE TABLE Users (
@@ -123,6 +128,9 @@ CREATE TABLE Orders (
     tax DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     service_charge DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     total DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+
+    takeout_name VARCHAR(100) NULL,
+    takeout_phone VARCHAR(20) NULL,
 
     void_reason VARCHAR(100),
     voided_by INT NULL,
