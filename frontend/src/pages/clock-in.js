@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { authenticateShift, clockInShift, clockOutShift } from "../lib/api";
 
 export default function ClockinPage() {
   const router = useRouter();
-  const [pin, setPin] = useState("");
+  const [credentials, setCredentials] = useState({ identifier: "", password: "" });
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [clockedIn, setClockedIn] = useState(false);
@@ -35,31 +35,21 @@ export default function ClockinPage() {
     day: "numeric",
   });
 
-  const isPinLocked = Boolean(user);
+  async function handleAuthenticate(event) {
+    event?.preventDefault();
+    if (user) return;
+    if (!credentials.identifier.trim() || !credentials.password) {
+      setMessage({ type: "error", text: "Username/email and password are required." });
+      return;
+    }
 
-  const pressNum = useCallback((num) => {
-    if (isPinLocked) return;
-    if (pin.length >= 4) return;
-    setPin(pin + num);
-    setMessage(null);
-  }, [isPinLocked, pin]);
-
-  const pressBackspace = useCallback(() => {
-    if (isPinLocked) return;
-    setPin(pin.slice(0, -1));
-    setMessage(null);
-  }, [isPinLocked, pin]);
-
-  const pressEnter = useCallback(async () => {
-    if (isPinLocked) return;
-    if (pin.length !== 4) return;
-
-    const enteredPin = pin;
-    setPin("");
     setIsLoading(true);
 
     try {
-      const session = await authenticateShift(enteredPin);
+      const session = await authenticateShift({
+        identifier: credentials.identifier.trim(),
+        password: credentials.password,
+      });
       setAuthToken(session.token);
       localStorage.setItem("authToken", session.token);
       setUser({
@@ -71,6 +61,7 @@ export default function ClockinPage() {
       setRole(session.roles[0] ?? null);
       setClockedIn(session.clockedIn);
       setTipDeclaredAmount("");
+      setCredentials({ identifier: "", password: "" });
 
       if (session.clockedIn) {
         setMessage({
@@ -98,18 +89,7 @@ export default function ClockinPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [isPinLocked, pin]);
-
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if (e.key >= "0" && e.key <= "9") pressNum(e.key);
-      if (e.key === "Backspace") pressBackspace();
-      if (e.key === "Enter") pressEnter();
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [pressNum, pressBackspace, pressEnter]);
+  }
 
   async function handleClockInOut() {
     if (!user || !authToken) return;
@@ -182,25 +162,7 @@ export default function ClockinPage() {
     router.push("/tables");
   }
 
-  const pinDots = [];
-  for (let i = 0; i < 4; i++) {
-    const filled = i < pin.length;
-    pinDots.push(
-      <div key={i} className={filled ? "ci-dot ci-dot--filled" : "ci-dot"} />
-    );
-  }
-
-  const numButtons = [];
-  for (let n = 1; n <= 9; n++) {
-    const label = String(n);
-    numButtons.push(
-      <button key={label} className="ci-btn" onClick={() => pressNum(label)} disabled={isPinLocked}>
-        {label}
-      </button>
-    );
-  }
-
-  let headerLabel = "Enter your employee PIN";
+  let headerLabel = "Employee Login";
   if (user) {
     headerLabel = user.name;
   }
@@ -218,10 +180,48 @@ export default function ClockinPage() {
 
         <p className="ci-sub">{headerLabel}</p>
 
-        <div className="ci-dots">{pinDots}</div>
-
         {message && (
           <p className={"ci-status ci-status--" + message.type}>{message.text}</p>
+        )}
+
+        {!user && (
+          <form onSubmit={handleAuthenticate} style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" }}>
+            <input
+              type="text"
+              value={credentials.identifier}
+              onChange={(event) => {
+                setCredentials({ ...credentials, identifier: event.target.value });
+                setMessage(null);
+              }}
+              placeholder="Username or email"
+              style={{
+                padding: "12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(148, 163, 184, 0.4)",
+                backgroundColor: "#ffffff",
+                color: "#0f172a",
+              }}
+            />
+            <input
+              type="password"
+              value={credentials.password}
+              onChange={(event) => {
+                setCredentials({ ...credentials, password: event.target.value });
+                setMessage(null);
+              }}
+              placeholder="Password"
+              style={{
+                padding: "12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(148, 163, 184, 0.4)",
+                backgroundColor: "#ffffff",
+                color: "#0f172a",
+              }}
+            />
+            <button className="ci-login-btn" type="submit" disabled={isLoading}>
+              {isLoading ? "Checking..." : "Continue"}
+            </button>
+          </form>
         )}
 
         {user && role && (
@@ -258,13 +258,6 @@ export default function ClockinPage() {
           </div>
         )}
 
-        <div className="ci-grid">
-          {numButtons}
-          <button className="ci-btn ci-btn--ghost" onClick={pressBackspace} disabled={isPinLocked}>⌫</button>
-          <button className="ci-btn" onClick={() => pressNum("0")} disabled={isPinLocked}>0</button>
-          <button className="ci-btn ci-btn--enter" onClick={pressEnter} disabled={isPinLocked}>✓</button>
-        </div>
-
         <div className="ci-clock">
           <span className="ci-clock__time">{timeStr}</span>
           <span className="ci-clock__date">{dateStr}</span>
@@ -282,4 +275,3 @@ export default function ClockinPage() {
     </div>
   );
 }
-

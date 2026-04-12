@@ -33,9 +33,9 @@ INSERT INTO Dining_Tables (table_id, table_number, capacity, status) VALUES
 -- USERS
 -- =========================
 INSERT INTO Users (user_id, name, email, pin_code, password_hash, role, is_active) VALUES
-(1, 'Theron Papillion', 'theron.manager@pos.local', '1234', 'hash_manager_demo', 'manager', TRUE),
-(2, 'Ava Carter', 'ava.employee@pos.local', '5678', 'hash_employee_demo', 'employee', TRUE),
-(3, 'Leo Nguyen', 'leo.kitchen@pos.local', '9012', 'hash_kitchen_demo', 'kitchen', TRUE);
+(1, 'Theron Papillion', 'theron.manager@pos.local', '1234', 'manager123', 'manager', TRUE),
+(2, 'Ava Carter', 'ava.employee@pos.local', '5678', 'employee123', 'employee', TRUE),
+(3, 'Leo Nguyen', 'leo.kitchen@pos.local', '9012', 'kitchen123', 'kitchen', TRUE);
 
 -- =========================
 -- EMPLOYEE SHIFTS

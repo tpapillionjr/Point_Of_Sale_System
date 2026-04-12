@@ -3,7 +3,17 @@ import { upload } from "@vercel/blob/client";
 import { useEffect, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
-import { cancelOrder, fetchBackOfficeData, fetchItems, createMenuItem, updateMenuItem, toggleMenuItemActive } from "../../lib/api";
+import {
+  cancelOrder,
+  createInventoryItem,
+  deleteInventoryItem,
+  fetchBackOfficeData,
+  fetchItems,
+  createMenuItem,
+  updateInventoryItemAmount,
+  updateMenuItem,
+  toggleMenuItemActive,
+} from "../../lib/api";
 import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
@@ -195,6 +205,14 @@ function buildInventorySummaries(stockRows, usageRows, lastActivityLabel) {
   };
 }
 
+const EMPTY_INVENTORY_FORM = {
+  inventoryItemName: "",
+  amountAvailable: "",
+  menuItemId: "",
+  reorderThreshold: "10",
+  availabilityStatus: true,
+};
+
 function useBackOfficeData(range = createDefaultDateRange(), refreshToken = 0) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -240,39 +258,261 @@ export function InventorySection() {
   const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
   const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
   const [selectedType, setSelectedType] = useState("menu");
-  const { data, isLoading, error } = useBackOfficeData(selectedRange);
+  const [selectedInventoryFilter, setSelectedInventoryFilter] = useState("All");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [menuItemOptions, setMenuItemOptions] = useState([]);
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
+  const [inventoryForm, setInventoryForm] = useState(EMPTY_INVENTORY_FORM);
+  const [inventoryFormError, setInventoryFormError] = useState("");
+  const [inventoryActionMessage, setInventoryActionMessage] = useState("");
+  const [savingInventory, setSavingInventory] = useState(false);
+  const [deletingInventoryItem, setDeletingInventoryItem] = useState("");
+  const [inventorySearchTerm, setInventorySearchTerm] = useState("");
+  const [menuItemSearchTerm, setMenuItemSearchTerm] = useState("");
+  const [countDrafts, setCountDrafts] = useState({});
+  const [savingCountItem, setSavingCountItem] = useState("");
+  const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const inventory = data?.inventory;
   const isUtensils = selectedType === "utensils";
-  const stockRows = (inventory?.stockRows ?? []).filter((item) =>
+
+  useEffect(() => {
+    setSelectedInventoryFilter("All");
+  }, [selectedType]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadMenuItems() {
+      try {
+        const rows = await fetchItems();
+        if (isMounted) {
+          setMenuItemOptions(rows);
+        }
+      } catch {
+        if (isMounted) {
+          setMenuItemOptions([]);
+        }
+      }
+    }
+
+    loadMenuItems();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const typeStockRows = (inventory?.stockRows ?? []).filter((item) =>
     isUtensils ? item.category === "Utensils" : item.category !== "Utensils"
   );
-  const reorderRows = (inventory?.reorderRows ?? []).filter((item) =>
-    isUtensils ? item.linkedMenuItem === "Utensil Stock" : item.linkedMenuItem !== "Utensil Stock"
+  const inventoryFilterOptions = [...new Set(typeStockRows.map((item) => item.category || "Uncategorized"))].sort();
+  const stockRows = typeStockRows.filter((item) =>
+    (selectedInventoryFilter === "All" ? true : (item.category || "Uncategorized") === selectedInventoryFilter) &&
+    (inventorySearchTerm.trim()
+      ? [
+          item.inventoryItemName,
+          item.linkedMenuItem,
+          item.category,
+          item.status,
+        ].some((value) => String(value ?? "").toLowerCase().includes(inventorySearchTerm.trim().toLowerCase()))
+      : true)
   );
+  const stockRowNames = new Set(stockRows.map((item) => item.inventoryItemName));
+  const reorderRows = (inventory?.reorderRows ?? []).filter((item) => stockRowNames.has(item.inventoryItemName));
   const usageRows = (inventory?.usageRows ?? []).filter((item) =>
-    isUtensils
-      ? (inventory?.stockRows ?? []).some(
-          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category === "Utensils"
-        )
-      : (inventory?.stockRows ?? []).some(
-          (stockItem) => stockItem.inventoryItemName === item.inventoryItemName && stockItem.category !== "Utensils"
-        )
+    stockRowNames.has(item.inventoryItemName)
   );
   const menuCoverageRows = (inventory?.menuCoverageRows ?? []).filter((item) =>
-    isUtensils ? item.category === "Utensils" : item.category !== "Utensils"
+    isUtensils
+      ? item.category === "Utensils" && (selectedInventoryFilter === "All" || item.category === selectedInventoryFilter)
+      : item.category !== "Utensils" && (selectedInventoryFilter === "All" || item.category === selectedInventoryFilter)
   );
   const filteredSummaries = buildInventorySummaries(
     stockRows,
     usageRows,
     inventory?.countSummary?.find((card) => card.title === "Last Inventory Activity")?.value
   );
+  const filteredMenuItemOptions = menuItemOptions.filter((item) =>
+    menuItemSearchTerm.trim()
+      ? [item.name, item.category, item.menuItemId].some((value) =>
+          String(value ?? "").toLowerCase().includes(menuItemSearchTerm.trim().toLowerCase())
+        )
+      : true
+  );
+
+  function openInventoryForm() {
+    setInventoryForm(EMPTY_INVENTORY_FORM);
+    setInventoryFormError("");
+    setInventoryActionMessage("");
+    setShowInventoryForm(true);
+  }
+
+  function closeInventoryForm() {
+    setInventoryForm(EMPTY_INVENTORY_FORM);
+    setInventoryFormError("");
+    setShowInventoryForm(false);
+  }
+
+  async function handleCreateInventoryItem() {
+    if (!inventoryForm.inventoryItemName.trim()) {
+      setInventoryFormError("Inventory item name is required.");
+      return;
+    }
+
+    const amountAvailable = Number(inventoryForm.amountAvailable);
+    if (!Number.isInteger(amountAvailable) || amountAvailable < 0) {
+      setInventoryFormError("Amount available must be a non-negative whole number.");
+      return;
+    }
+
+    if (!isUtensils && !inventoryForm.menuItemId) {
+      setInventoryFormError("Choose the menu item this inventory supports.");
+      return;
+    }
+
+    const reorderThreshold = Number(inventoryForm.reorderThreshold);
+    if (isUtensils && (!Number.isInteger(reorderThreshold) || reorderThreshold < 0)) {
+      setInventoryFormError("Reorder threshold must be a non-negative whole number.");
+      return;
+    }
+
+    setSavingInventory(true);
+    setInventoryFormError("");
+    try {
+      await createInventoryItem({
+        type: selectedType,
+        inventoryItemName: inventoryForm.inventoryItemName.trim(),
+        amountAvailable,
+        menuItemId: isUtensils ? undefined : Number(inventoryForm.menuItemId),
+        reorderThreshold: isUtensils ? reorderThreshold : undefined,
+        availabilityStatus: inventoryForm.availabilityStatus,
+      });
+
+      setInventoryActionMessage(`"${inventoryForm.inventoryItemName.trim()}" added.`);
+      closeInventoryForm();
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setInventoryFormError(actionError.message || "Failed to add inventory item.");
+    } finally {
+      setSavingInventory(false);
+    }
+  }
+
+  async function handleDeleteInventoryItem(item) {
+    if (!window.confirm(`Delete "${item.inventoryItemName}" from inventory?`)) {
+      return;
+    }
+
+    setDeletingInventoryItem(item.inventoryItemName);
+    setInventoryActionMessage("");
+    try {
+      await deleteInventoryItem(selectedType, item.inventoryItemName);
+      setInventoryActionMessage(`"${item.inventoryItemName}" deleted.`);
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setInventoryActionMessage(`Error: ${actionError.message}`);
+    } finally {
+      setDeletingInventoryItem("");
+    }
+  }
+
+  async function handleUpdateInventoryCount(item) {
+    const draftValue = countDrafts[item.inventoryItemName] ?? String(item.amountAvailable);
+    const amountAvailable = Number(draftValue);
+    if (!Number.isInteger(amountAvailable) || amountAvailable < 0) {
+      setInventoryActionMessage("Error: Amount available must be a non-negative whole number.");
+      return;
+    }
+
+    setSavingCountItem(item.inventoryItemName);
+    setInventoryActionMessage("");
+    try {
+      await updateInventoryItemAmount(selectedType, item.inventoryItemName, amountAvailable);
+      setInventoryActionMessage(`"${item.inventoryItemName}" count updated.`);
+      setCountDrafts((current) => {
+        const next = { ...current };
+        delete next[item.inventoryItemName];
+        return next;
+      });
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setInventoryActionMessage(`Error: ${actionError.message}`);
+    } finally {
+      setSavingCountItem("");
+    }
+  }
 
   return (
     <>
       <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
       <InventoryTypeTabs selectedType={selectedType} onChange={setSelectedType} />
 
-      <ReportSection title="Inventory Snapshot">
+      {inventoryActionMessage ? (
+        <p
+          className={`mb-4 rounded px-4 py-2 text-sm font-medium ${
+            inventoryActionMessage.startsWith("Error:")
+              ? "bg-red-50 text-red-700"
+              : "bg-green-50 text-green-700"
+          }`}
+        >
+          {inventoryActionMessage}
+        </p>
+      ) : null}
+
+      <ReportSection
+        title="Inventory Snapshot"
+        action={
+          <button
+            type="button"
+            onClick={openInventoryForm}
+            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            + Add {isUtensils ? "Utensil" : "Inventory Item"}
+          </button>
+        }
+      >
+        {typeStockRows.length ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedInventoryFilter("All")}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                selectedInventoryFilter === "All"
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              All ({typeStockRows.length})
+            </button>
+            {inventoryFilterOptions.map((category) => {
+              const count = typeStockRows.filter((item) => (item.category || "Uncategorized") === category).length;
+              return (
+                <button
+                  type="button"
+                  key={category}
+                  onClick={() => setSelectedInventoryFilter(category)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                    selectedInventoryFilter === category
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {category} ({count})
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-semibold text-gray-700">Search Stock Items</label>
+          <input
+            type="search"
+            value={inventorySearchTerm}
+            onChange={(event) => setInventorySearchTerm(event.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Search by stock item, linked menu item, category, or status"
+          />
+        </div>
         <SummaryCards
           cards={filteredSummaries.summaryCards}
           isLoading={isLoading}
@@ -326,15 +566,47 @@ export function InventorySection() {
             <ErrorState message={error} />
           ) : stockRows.length ? (
             <SimpleTable
-              headers={["Inventory Item", "Linked Menu Item", "Category", "Available", "Status"]}
-              rows={stockRows.slice(0, 10)}
+              headers={["Inventory Item", "Linked Menu Item", "Category", "Available", "Status", "Actions"]}
+              rows={stockRows}
               renderRow={(item) => (
                 <tr key={item.inventoryItemName} className="border-b last:border-b-0">
                   <td className="py-3 pr-4 font-medium text-gray-800">{item.inventoryItemName}</td>
                   <td className="py-3 pr-4">{item.linkedMenuItem}</td>
                   <td className="py-3 pr-4">{item.category}</td>
-                  <td className="py-3 pr-4">{item.amountAvailable}</td>
+                  <td className="py-3 pr-4">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={countDrafts[item.inventoryItemName] ?? String(item.amountAvailable)}
+                      onChange={(event) =>
+                        setCountDrafts((current) => ({
+                          ...current,
+                          [item.inventoryItemName]: event.target.value,
+                        }))
+                      }
+                      className="w-24 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="py-3 pr-4">{item.status}</td>
+                  <td className="flex gap-2 py-3 pr-4">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateInventoryCount(item)}
+                      disabled={savingCountItem === item.inventoryItemName}
+                      className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      {savingCountItem === item.inventoryItemName ? "Saving..." : "Save Count"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteInventoryItem(item)}
+                      disabled={deletingInventoryItem === item.inventoryItemName}
+                      className="rounded px-2 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {deletingInventoryItem === item.inventoryItemName ? "Deleting..." : "Delete"}
+                    </button>
+                  </td>
                 </tr>
               )}
             />
@@ -405,6 +677,110 @@ export function InventorySection() {
           />
         )}
       </ReportSection>
+
+      {showInventoryForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl">
+            <h3 className="mb-6 text-lg font-bold text-gray-900">
+              Add {isUtensils ? "Utensil" : "Inventory Item"}
+            </h3>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Name *</label>
+                <input
+                  type="text"
+                  value={inventoryForm.inventoryItemName}
+                  onChange={(event) => setInventoryForm({ ...inventoryForm, inventoryItemName: event.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={isUtensils ? "e.g. To-Go Cup Lids" : "e.g. Burger Buns"}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Amount Available *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={inventoryForm.amountAvailable}
+                  onChange={(event) => setInventoryForm({ ...inventoryForm, amountAvailable: event.target.value })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0"
+                />
+              </div>
+
+              {isUtensils ? (
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Reorder Threshold</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={inventoryForm.reorderThreshold}
+                    onChange={(event) => setInventoryForm({ ...inventoryForm, reorderThreshold: event.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="10"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Search Menu Items</label>
+                  <input
+                    type="search"
+                    value={menuItemSearchTerm}
+                    onChange={(event) => setMenuItemSearchTerm(event.target.value)}
+                    className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Type to narrow the menu item list"
+                  />
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Linked Menu Item *</label>
+                  <select
+                    value={inventoryForm.menuItemId}
+                    onChange={(event) => setInventoryForm({ ...inventoryForm, menuItemId: event.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select menu item</option>
+                    {filteredMenuItemOptions.map((item) => (
+                      <option key={item.menuItemId} value={item.menuItemId}>
+                        {item.name} ({item.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={inventoryForm.availabilityStatus}
+                  onChange={(event) => setInventoryForm({ ...inventoryForm, availabilityStatus: event.target.checked })}
+                />
+                Available for ordering
+              </label>
+            </div>
+
+            {inventoryFormError ? <p className="mt-3 text-sm text-red-600">{inventoryFormError}</p> : null}
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleCreateInventoryItem}
+                disabled={savingInventory}
+                className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingInventory ? "Saving..." : "Add Item"}
+              </button>
+              <button
+                type="button"
+                onClick={closeInventoryForm}
+                className="flex-1 rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

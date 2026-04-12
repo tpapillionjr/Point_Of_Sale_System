@@ -13,7 +13,7 @@ export default function CreateEmployeesPage() {
     firstName: "",
     lastName: "",
     email: "",
-    pin_code: "",
+    password: "",
     role: "employee",
   });
 
@@ -41,9 +41,9 @@ export default function CreateEmployeesPage() {
 
     try {
       const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
-      await createUser({ name: fullName, email: form.email, pin_code: form.pin_code, role: form.role, requestingUserId: employee?.userId });
+      await createUser({ name: fullName, email: form.email, password: form.password, role: form.role, requestingUserId: employee?.userId });
       setMessage(`Account created for ${fullName}.`);
-      setForm({ firstName: "", lastName: "", email: "", pin_code: "", role: "employee" });
+      setForm({ firstName: "", lastName: "", email: "", password: "", role: "employee" });
       loadUsers();
     } catch (err) {
       setError(err.message);
@@ -116,13 +116,12 @@ export default function CreateEmployeesPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">PIN (4 digits)</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
               <input
                 type="password"
-                value={form.pin_code}
-                onChange={(e) => setForm({ ...form, pin_code: e.target.value.slice(0, 4) })}
-                placeholder="••••"
-                maxLength={4}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="At least 6 characters"
                 required
                 className="w-full rounded-lg border px-3 py-2 text-sm"
               />
@@ -169,7 +168,6 @@ export default function CreateEmployeesPage() {
                 <div>
                   <p className="text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-gray-500">{user.email} · {user.role}</p>
-                  <p className="text-xs text-gray-400">PIN: {user.pin_code}</p>
                 </div>
 
                 {user.is_active ? (
