@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import MenuButton from "../components/MenuButton";
 import OrderCart from "../components/OrderCart";
 import { verifyManager, createOrder, addItemsToOrder, fetchActiveOrderByTable, fetchTables, fetchItems } from "../lib/api";
+import { MENU_CATEGORIES, normalizeMenuCategory, isBeverageCategory } from "../lib/menuCategories";
 
 export default function ServerOrderPage() {
   const router = useRouter();
@@ -32,8 +33,13 @@ export default function ServerOrderPage() {
   const [selectedMenuItem, setSelectedMenuItem] = useState(null);
 
   const [menuItems, setMenuItems] = useState([]);
+  const selectedItemIsDrink = isBeverageCategory(selectedMenuItem?.category);
+  const employeeUserId = Number(employee?.userId ?? employee?.user_id ?? 0);
 
-  const categories = useMemo(() => [...new Set(menuItems.map((i) => i.category))], [menuItems]);
+  const categories = useMemo(
+    () => MENU_CATEGORIES.filter((category) => menuItems.some((item) => item.category === category)),
+    [menuItems]
+  );
 
   useEffect(() => {
     if (categories.length > 0 && !selectedCategory) {
@@ -80,19 +86,21 @@ export default function ServerOrderPage() {
         setMenuItems(rows.map((item) => ({
           id: item.menuItemId,
           name: item.name,
-          category: item.category,
+          category: normalizeMenuCategory(item.category),
           price: Number(item.basePrice),
           description: item.description ?? "",
           commonAllergens: item.commonAllergens ?? "",
           photoUrl: item.photoUrl ?? "",
         })));
       } catch {
-        // non-fatal — menu stays empty
       }
     }
 
     loadTables();
     loadMenu();
+
+    const menuRefreshTimer = setInterval(loadMenu, 30000);
+    return () => clearInterval(menuRefreshTimer);
   }, [router.isReady, router.query.table, router.query.guests, router.query.takeoutName, router.query.takeoutPhone]);
 
   useEffect(() => {
@@ -127,7 +135,6 @@ export default function ServerOrderPage() {
   const addToCart = (item) => {
     const qty = pendingQty;
 
-    // If this item was already sent, keep it as a separate pending entry
     if (sentItemIds.includes(item.id)) {
       const pendingId = `${item.id}_pending`;
       setCart((prev) => {
@@ -141,7 +148,6 @@ export default function ServerOrderPage() {
       return;
     }
 
-    // Normal merge for unsent items
     let found = false;
     const newCart = [];
     for (let i = 0; i < cart.length; i += 1) {
@@ -239,7 +245,7 @@ export default function ServerOrderPage() {
   }, [pendingRemoveId, handleManagerApproval]);
 
   async function handleSubmitOrder() {
-    if (!employee?.userId) {
+    if (!Number.isInteger(employeeUserId) || employeeUserId <= 0) {
       setMessage({ type: "error", text: "Clock in and log in before sending an order." });
       return;
     }
@@ -258,7 +264,7 @@ export default function ServerOrderPage() {
     const isTakeoutTable = String(tableNumber) === "10000";
     const payload = {
       tableId: selectedTable.tableId,
-      createdBy: employee.userId,
+      createdBy: employeeUserId,
       guestCount: Number(guestCount),
       orderType: isTakeoutTable ? "Takeout" : "Dine_in",
       orderChannel: isTakeoutTable ? "Phone" : "In_Store",
@@ -290,15 +296,14 @@ export default function ServerOrderPage() {
         order = await addItemsToOrder(
           submittedOrder.orderId,
           newItems.map((item) => ({ menuItemId: item.menuItemId ?? item.id, quantity: item.quantity, price: Number(item.price) })),
-          employee.userId
+          employeeUserId
         );
         order.orderId = submittedOrder.orderId;
 
-        // Merge pending entries into their sent counterparts and turn them green
         setCart((prev) => {
           const merged = prev.map((c) => {
             if (!String(c.id).endsWith("_pending")) return c;
-            return null; // remove pending entry
+            return null;
           });
           return merged
             .filter(Boolean)
@@ -521,7 +526,12 @@ export default function ServerOrderPage() {
             }}
           >
             {filteredMenu.map((item) => (
-              <MenuButton key={item.id} item={item} addToCart={() => setSelectedMenuItem(item)} />
+              <MenuButton
+                key={item.id}
+                item={item}
+                addToCart={() => setSelectedMenuItem(item)}
+                showDetails
+              />
             ))}
           </div>
         </div>
@@ -673,13 +683,15 @@ export default function ServerOrderPage() {
                 </p>
               </div>
 
-              <p style={{ margin: "16px 0 0", fontSize: "15px", lineHeight: 1.55, color: "#4b5563" }}>
-                {selectedMenuItem.description || "No description is available for this item."}
-              </p>
+              {!selectedItemIsDrink && selectedMenuItem.description?.trim() ? (
+                <p style={{ margin: "16px 0 0", fontSize: "15px", lineHeight: 1.55, color: "#4b5563" }}>
+                  {selectedMenuItem.description.trim()}
+                </p>
+              ) : null}
 
-              {selectedMenuItem.commonAllergens ? (
+              {!selectedItemIsDrink && selectedMenuItem.commonAllergens?.trim() ? (
                 <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#92400e", fontWeight: "700" }}>
-                  Allergens: {selectedMenuItem.commonAllergens}
+                  Allergens: {selectedMenuItem.commonAllergens.trim()}
                 </p>
               ) : null}
 
