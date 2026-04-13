@@ -2,7 +2,16 @@ import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic } from "../../lib/api";
+import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic, fetchCustomerOrderHistory } from "../../lib/api";
+
+const ORDER_STATUS_LABEL = {
+  placed: { label: "Placed", color: "#f97316" },
+  confirmed: { label: "Confirmed", color: "#3b82f6" },
+  preparing: { label: "Preparing", color: "#8b5cf6" },
+  ready: { label: "Ready", color: "#22c55e" },
+  picked_up: { label: "Picked Up", color: "#64748b" },
+  denied: { label: "Denied", color: "#dc2626" },
+};
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
@@ -11,6 +20,8 @@ export default function CustomerDashboardPage() {
   const [loyaltyInfo, setLoyaltyInfo] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");
@@ -35,6 +46,10 @@ export default function CustomerDashboardPage() {
 
       fetchLoyaltyRewardsPublic()
         .then(setRewards)
+        .catch(() => {});
+
+      fetchCustomerOrderHistory(token)
+        .then(setOrderHistory)
         .catch(() => {});
     }
   }, [router]);
@@ -192,6 +207,54 @@ export default function CustomerDashboardPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Order history */}
+        {orderHistory.length > 0 && (
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", marginBottom: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showOrderHistory ? "16px" : "0" }}>
+              <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", margin: 0 }}>
+                Order History ({orderHistory.length})
+              </p>
+              <button
+                onClick={() => setShowOrderHistory((v) => !v)}
+                style={{ fontSize: "12px", fontWeight: "600", color: "#3b82f6", background: "none", border: "none", cursor: "pointer" }}
+              >
+                {showOrderHistory ? "Hide" : "Show"}
+              </button>
+            </div>
+            {showOrderHistory && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {orderHistory.map((order) => {
+                  const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status, color: "#64748b" };
+                  return (
+                    <div key={order.online_order_id} style={{ borderRadius: "10px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: "#1e3a5f" }}>Order #{order.online_order_id}</p>
+                          <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>{new Date(order.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: "700", padding: "3px 10px", borderRadius: "999px", backgroundColor: "#f1f5f9", color: statusMeta.color }}>
+                            {statusMeta.label}
+                          </span>
+                          <span style={{ fontSize: "13px", fontWeight: "800", color: "#1e3a5f" }}>${Number(order.total).toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {order.items.map((item, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                            <span style={{ color: "#374151" }}>{item.quantity}× {item.name}</span>
+                            <span style={{ color: "#64748b" }}>${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
