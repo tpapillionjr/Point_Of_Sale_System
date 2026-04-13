@@ -662,7 +662,6 @@ async function getCustomerOrderHistory(req, res) {
   }
 }
 
-<<<<<<< HEAD
 async function createCustomerReservation(req, res) {
   try {
     const customerId = Number(req.customer?.customerId);
@@ -755,8 +754,6 @@ async function deactivateCustomer(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation, deactivateCustomer };
-=======
 export {
   getCustomerMenu,
   createCustomerOrder,
@@ -770,6 +767,8 @@ export {
   getOnlineOrderById,
   markOnlineOrderPaid,
   markOrderPickedUp,
+  deleteOnlineOrder,
   getCustomerOrderHistory,
+  createCustomerReservation,
+  deactivateCustomer,
 };
->>>>>>> 04bdb56 (Fix manager ticket permissions and update negative number validation copy)

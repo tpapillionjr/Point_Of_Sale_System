@@ -86,8 +86,6 @@ async function updateTicketStatus(payload) {
       [status, ticketId]
     );
 
-<<<<<<< HEAD
-=======
     if (ticketRows[0].online_order_id) {
       const customerStatusMap = { in_progress: "preparing", done: "ready", canceled: "denied" };
       const newCustomerStatus = customerStatusMap[status];
@@ -99,7 +97,6 @@ async function updateTicketStatus(payload) {
       }
     }
 
->>>>>>> 04bdb56 (Fix manager ticket permissions and update negative number validation copy)
     if (status === "done") {
       await connection.execute(
         `UPDATE Orders
