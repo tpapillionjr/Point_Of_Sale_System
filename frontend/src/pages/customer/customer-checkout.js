@@ -46,6 +46,7 @@ export default function CustomerOrderPage() {
       firstName: customer.firstName ?? prev.firstName,
       lastName: customer.lastName ?? prev.lastName,
       email: customer.email ?? prev.email,
+      phone: customer.phone ?? prev.phone,
     })));
 
     if ((customer.pointsBalance ?? 0) >= 100) {
