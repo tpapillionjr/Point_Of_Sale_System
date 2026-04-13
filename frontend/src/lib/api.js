@@ -446,6 +446,10 @@ export async function fetchCustomerOrdersBackOffice(customerId) {
   return request(`/api/back-office/customers/${customerId}/orders`);
 }
 
+export async function toggleCustomerActive(customerId) {
+  return request(`/api/customer/accounts/${customerId}/deactivate`, { method: "PATCH" });
+}
+
 export async function adjustLoyaltyPoints(customerId, payload) {
   return request(`/api/loyalty/manage/customers/${customerId}/points`, {
     method: "POST",
@@ -461,7 +465,12 @@ export async function fetchCustomerOrderHistory(customerToken) {
       Authorization: `Bearer ${customerToken}`,
     },
   });
-  if (!res.ok) throw new Error("Failed to fetch order history.");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const err = new Error(data.error || "Failed to fetch order history.");
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
@@ -472,7 +481,12 @@ export async function fetchCustomerLoyaltyInfo(customerToken) {
       Authorization: `Bearer ${customerToken}`,
     },
   });
-  if (!res.ok) throw new Error("Failed to fetch loyalty info.");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const err = new Error(data.error || "Failed to fetch loyalty info.");
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 

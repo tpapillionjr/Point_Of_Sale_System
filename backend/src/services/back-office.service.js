@@ -768,9 +768,10 @@ async function getBackOfficeData(range) {
        last_name AS lastName,
        email,
        phone_number AS phoneNumber,
-       points_balance AS pointsBalance
+       points_balance AS pointsBalance,
+       is_active AS isActive
      FROM Customer
-     ORDER BY points_balance DESC, customer_num_id ASC`
+     ORDER BY is_active DESC, points_balance DESC, customer_num_id ASC`
   );
 
   const userCountsPromise = db.query(
@@ -1060,6 +1061,7 @@ async function getBackOfficeData(range) {
         email: row.email,
         phoneNumber: row.phoneNumber,
         pointsBalance: Number(row.pointsBalance ?? 0),
+        isActive: row.isActive,
       })),
     },
     settings: {
