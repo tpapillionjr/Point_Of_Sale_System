@@ -136,18 +136,6 @@ export default function CustomerHomePage() {
           }}>
             Order Online
           </Link>
-          <Link href="/customer/login" style={{
-            padding: "13px 32px",
-            borderRadius: "999px",
-            backgroundColor: "rgba(255,255,255,0.85)",
-            border: "1px solid rgba(100,116,139,0.25)",
-            color: "#334e6e",
-            fontSize: "15px",
-            fontWeight: "700",
-            textDecoration: "none",
-          }}>
-            Dine In
-          </Link>
         </div>
       </section>
 

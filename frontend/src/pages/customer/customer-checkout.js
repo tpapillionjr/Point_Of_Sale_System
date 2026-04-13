@@ -9,13 +9,23 @@ const TAX_RATE = 0.0825;
 
 export default function CustomerOrderPage() {
   const router = useRouter();
-  const { customer } = useCustomerSession();
+  const { customer, loaded } = useCustomerSession();
   const [cart, setCart] = useState([]);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerCart");
     if (stored) startTransition(() => setCart(JSON.parse(stored)));
   }, []);
+
+  function updateCartQty(id, qty) {
+    setCart((prev) => {
+      const next = qty <= 0
+        ? prev.filter((c) => c.menu_item_id !== id)
+        : prev.map((c) => c.menu_item_id === id ? { ...c, quantity: qty } : c);
+      localStorage.setItem("customerCart", JSON.stringify(next));
+      return next;
+    });
+  }
 
   const [paymentPreference, setPaymentPreference] = useState("in_store");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,6 +54,11 @@ export default function CustomerOrderPage() {
         .catch(() => {});
     }
   }, [customer]);
+
+  if (loaded && !customer) {
+    router.replace("/customer/login?redirect=/customer/customer-checkout");
+    return null;
+  }
 
   if (cart.length === 0) {
     return (
@@ -394,9 +409,14 @@ export default function CustomerOrderPage() {
 
               <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
                 {cart.map((item) => (
-                  <div key={item.menu_item_id} style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
-                    <span style={{ color: "#374151", fontWeight: "500" }}>{item.quantity}× {item.name}</span>
-                    <span style={{ fontWeight: "600", color: "#1e3a5f" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
+                  <div key={item.menu_item_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "14px", gap: "8px" }}>
+                    <span style={{ color: "#374151", fontWeight: "500", flex: 1 }}>{item.name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button onClick={() => updateCartQty(item.menu_item_id, item.quantity - 1)} style={{ width: "24px", height: "24px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#475569", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                      <span style={{ fontWeight: "700", color: "#1e3a5f", minWidth: "16px", textAlign: "center" }}>{item.quantity}</span>
+                      <button onClick={() => updateCartQty(item.menu_item_id, item.quantity + 1)} style={{ width: "24px", height: "24px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#111827", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                    </div>
+                    <span style={{ fontWeight: "600", color: "#1e3a5f", minWidth: "44px", textAlign: "right" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
                 {selectedRewardId && (

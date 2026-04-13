@@ -13,8 +13,18 @@ export default function CustomerMenuPage() {
   const [menu, setMenu] = useState({});
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem("customerCart");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
   const [showCart, setShowCart] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("customerCart", JSON.stringify(cart));
+  }, [cart]);
 
   useEffect(() => {
     async function loadMenu() {
