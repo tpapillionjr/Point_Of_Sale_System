@@ -14,6 +14,8 @@ const ORDER_STATUS_LABEL = {
   canceled: { label: "Canceled", color: "#dc2626" },
 };
 
+const ACTIVE_ORDER_STATUSES = new Set(["placed", "confirmed", "preparing", "ready"]);
+
 export default function CustomerDashboardPage() {
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
@@ -81,6 +83,10 @@ export default function CustomerDashboardPage() {
   const progressPct = nextReward
     ? Math.min(100, Math.round((pointsBalance / nextReward.points_cost) * 100))
     : rewards.length > 0 ? 100 : 0;
+  const activeOrders = orderHistory.filter((order) => ACTIVE_ORDER_STATUSES.has(order.customer_status));
+  const activeOrderSelectValue = activeOrders.some((order) => String(order.online_order_id) === String(lastOrderId))
+    ? String(lastOrderId)
+    : "";
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -165,6 +171,37 @@ export default function CustomerDashboardPage() {
             </div>
           )}
         </div>
+
+        {activeOrders.length > 0 && (
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "20px 24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", marginBottom: "24px" }}>
+            <label htmlFor="active-order-select" style={{ display: "block", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "10px" }}>
+              Active Orders ({activeOrders.length}/3)
+            </label>
+            <select
+              id="active-order-select"
+              value={activeOrderSelectValue}
+              onChange={(event) => {
+                if (event.target.value) {
+                  router.push(`/customer/order-tracking?orderId=${event.target.value}`);
+                }
+              }}
+              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "12px 14px", color: "#1e3a5f", fontSize: "14px", fontWeight: "700", backgroundColor: "white" }}
+            >
+              <option value="">Choose an order to track</option>
+              {activeOrders.map((order) => {
+                const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status };
+                return (
+                  <option key={order.online_order_id} value={order.online_order_id}>
+                    Order #{order.online_order_id} - {statusMeta.label} - ${Number(order.total).toFixed(2)}
+                  </option>
+                );
+              })}
+            </select>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: "10px 0 0" }}>
+              You can keep up to three orders active at the same time.
+            </p>
+          </div>
+        )}
 
         {/* Rewards catalog */}
         {rewards.length > 0 && (
