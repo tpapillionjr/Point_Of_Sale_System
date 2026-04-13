@@ -170,9 +170,11 @@ export default function KitchenPage() {
                     Mark In Progress
                   </button>
                 )}
-                <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
-                  Mark Ready
-                </button>
+                {ticket.status === "in_progress" && (
+                  <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
+                    Mark Ready
+                  </button>
+                )}
               </div>
             </article>
           );
