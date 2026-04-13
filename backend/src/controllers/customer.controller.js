@@ -86,6 +86,7 @@ async function registerCustomer(req, res) {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: normalizedEmail,
+      phone: normalizedPhone,
     });
   } catch (error) {
     console.error("registerCustomer error:", error);
@@ -106,7 +107,7 @@ async function loginCustomer(req, res) {
     }
 
     const rows = await db.query(
-      `SELECT customer_num_id, first_name, last_name, email, password_hash, points_balance
+      `SELECT customer_num_id, first_name, last_name, email, phone_number, password_hash, points_balance
        FROM Customer WHERE email = ? LIMIT 1`,
       [email.trim().toLowerCase()]
     );
@@ -134,6 +135,7 @@ async function loginCustomer(req, res) {
       firstName: customer.first_name,
       lastName: customer.last_name,
       email: customer.email,
+      phone: customer.phone_number,
       pointsBalance: customer.points_balance,
     });
   } catch (error) {
