@@ -6,6 +6,7 @@ import ReportSection from "../reports/ReportSection";
 import {
   adjustLoyaltyPoints,
   cancelOrder,
+  fetchCustomerOrdersBackOffice,
   confirmOnlineOrder,
   createLoyaltyReward,
   createLaborShift,
@@ -1886,6 +1887,113 @@ export function OrderHistorySection() {
 
 const EMPTY_REWARD_FORM = { name: "", pointsCost: "", menuItemId: "" };
 
+function CustomerDetailPanel({ customer, onPointsAdjusted }) {
+  const [orders, setOrders] = useState(null);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [pointsDelta, setPointsDelta] = useState("");
+  const [reason, setReason] = useState("");
+  const [adjustError, setAdjustError] = useState(null);
+  const [adjusting, setAdjusting] = useState(false);
+
+  useEffect(() => {
+    setOrdersLoading(true);
+    fetchCustomerOrdersBackOffice(customer.customerId)
+      .then((data) => setOrders(data.orders))
+      .catch(() => setOrders([]))
+      .finally(() => setOrdersLoading(false));
+  }, [customer.customerId]);
+
+  async function handleAdjust(e) {
+    e.preventDefault();
+    const delta = Number(pointsDelta);
+    if (!Number.isInteger(delta) || delta === 0) { setAdjustError("Enter a non-zero whole number."); return; }
+    setAdjusting(true);
+    setAdjustError(null);
+    try {
+      const result = await adjustLoyaltyPoints(customer.customerId, { pointsDelta: delta, reason });
+      setPointsDelta("");
+      setReason("");
+      onPointsAdjusted(result.newBalance);
+    } catch (err) {
+      setAdjustError(err.message || "Failed to adjust points.");
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
+  const STATUS_COLOR = {
+    placed: "bg-yellow-100 text-yellow-700",
+    confirmed: "bg-blue-100 text-blue-700",
+    ready: "bg-purple-100 text-purple-700",
+    picked_up: "bg-green-100 text-green-700",
+    denied: "bg-red-100 text-red-600",
+  };
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {/* Order History */}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Order History</p>
+        {ordersLoading ? (
+          <p className="text-sm text-gray-400">Loading...</p>
+        ) : orders?.length ? (
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+            {orders.map((order) => (
+              <div key={order.orderId} className="rounded-lg border bg-white p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-500">Order #{order.orderId}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLOR[order.status] ?? "bg-gray-100 text-gray-500"}`}>
+                    {order.status}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mb-1">{new Date(order.createdAt).toLocaleDateString()}</p>
+                {order.items.map((item, i) => (
+                  <p key={i} className="text-xs text-gray-600">{item.quantity}× {item.name}</p>
+                ))}
+                <p className="mt-1 text-sm font-semibold text-gray-800">${order.total.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">No orders yet.</p>
+        )}
+      </div>
+
+      {/* Adjust Points */}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          Adjust Points · Current: <span className="text-blue-600">{customer.pointsBalance} pts</span>
+        </p>
+        {adjustError && <p className="mb-2 text-sm text-red-600">{adjustError}</p>}
+        <form onSubmit={handleAdjust} className="flex flex-col gap-2">
+          <input
+            type="number"
+            step="1"
+            value={pointsDelta}
+            onChange={(e) => setPointsDelta(e.target.value)}
+            placeholder="+50 or -25"
+            className="rounded-lg border px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (service recovery, correction...)"
+            className="rounded-lg border px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={adjusting}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
+          >
+            {adjusting ? "Saving..." : "Adjust Points"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function CustomerLoyaltySection() {
   const [refreshToken, setRefreshToken] = useState(0);
   const { data, isLoading, error } = useBackOfficeData("30days", refreshToken);
@@ -1902,9 +2010,18 @@ export function CustomerLoyaltySection() {
   const [formError, setFormError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
-  const [adjustForm, setAdjustForm] = useState({ customerId: "", pointsDelta: "", reason: "" });
-  const [adjustError, setAdjustError] = useState(null);
-  const [adjusting, setAdjusting] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  const filteredCustomers = (customers?.customers ?? []).filter((c) => {
+    if (!customerSearch) return true;
+    const q = customerSearch.toLowerCase();
+    return (
+      `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.phoneNumber?.includes(q)
+    );
+  });
 
   useEffect(() => {
     async function load() {
@@ -2003,39 +2120,6 @@ export function CustomerLoyaltySection() {
     }
   }
 
-  async function handleAdjustPoints(event) {
-    event.preventDefault();
-    const customerId = Number(adjustForm.customerId);
-    const pointsDelta = Number(adjustForm.pointsDelta);
-
-    if (!Number.isInteger(customerId) || customerId <= 0) {
-      setAdjustError("Choose a customer.");
-      return;
-    }
-
-    if (!Number.isInteger(pointsDelta) || pointsDelta === 0) {
-      setAdjustError("Enter a non-zero whole number of points.");
-      return;
-    }
-
-    setAdjusting(true);
-    setAdjustError(null);
-    setActionMessage(null);
-
-    try {
-      const result = await adjustLoyaltyPoints(customerId, {
-        pointsDelta,
-        reason: adjustForm.reason,
-      });
-      setActionMessage(`Customer #${customerId} now has ${result.newBalance} points.`);
-      setAdjustForm({ customerId: "", pointsDelta: "", reason: "" });
-      setRefreshToken((value) => value + 1);
-    } catch (err) {
-      setAdjustError(err.message || "Failed to adjust points.");
-    } finally {
-      setAdjusting(false);
-    }
-  }
 
   return (
     <>
@@ -2044,72 +2128,53 @@ export function CustomerLoyaltySection() {
       </ReportSection>
 
       <ReportSection title="Customer Records">
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search by name, email, or phone..."
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm md:w-80"
+          />
+        </div>
         {error ? (
           <ErrorState message={error} />
-        ) : customers?.customers?.length ? (
+        ) : filteredCustomers.length ? (
           <SimpleTable
-            headers={["Customer ID", "Phone Number", "Points Balance"]}
-            rows={customers.customers}
+            headers={["Name", "Email", "Phone", "Points", ""]}
+            rows={filteredCustomers}
             renderRow={(item) => (
-              <tr key={item.customerId} className="border-b last:border-b-0">
-                <td className="py-3 pr-4 font-medium text-gray-800">{item.customerId}</td>
-                <td className="py-3 pr-4">{item.phoneNumber}</td>
-                <td className="py-3 pr-4">{item.pointsBalance}</td>
-              </tr>
+              <>
+                <tr
+                  key={item.customerId}
+                  className="cursor-pointer border-b last:border-b-0 hover:bg-gray-50"
+                  onClick={() => setSelectedCustomer(selectedCustomer?.customerId === item.customerId ? null : item)}
+                >
+                  <td className="py-3 pr-4 font-medium text-gray-800">{item.firstName} {item.lastName}</td>
+                  <td className="py-3 pr-4 text-gray-600">{item.email}</td>
+                  <td className="py-3 pr-4 text-gray-600">{item.phoneNumber}</td>
+                  <td className="py-3 pr-4 font-semibold text-blue-600">{item.pointsBalance} pts</td>
+                  <td className="py-3 pr-2 text-xs text-gray-400">{selectedCustomer?.customerId === item.customerId ? "▲" : "▼"}</td>
+                </tr>
+                {selectedCustomer?.customerId === item.customerId && (
+                  <tr key={`${item.customerId}-detail`}>
+                    <td colSpan={5} className="bg-gray-50 px-4 pb-4 pt-2">
+                      <CustomerDetailPanel
+                        customer={item}
+                        onPointsAdjusted={(newBalance) => {
+                          setRefreshToken((v) => v + 1);
+                          setActionMessage(`${item.firstName}'s balance updated to ${newBalance} pts.`);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </>
             )}
           />
         ) : (
-          <EmptyState message={isLoading ? "Loading customer records..." : "No customer records are available."} />
+          <EmptyState message={isLoading ? "Loading customer records..." : "No customers found."} />
         )}
-      </ReportSection>
-
-      <ReportSection title="Adjust Customer Points">
-        {adjustError ? <p className="mb-4 text-sm text-red-600">{adjustError}</p> : null}
-        <form onSubmit={handleAdjustPoints} className="grid gap-3 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Customer</label>
-            <select
-              value={adjustForm.customerId}
-              onChange={(event) => setAdjustForm((current) => ({ ...current, customerId: event.target.value }))}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            >
-              <option value="">Select customer</option>
-              {(customers?.customers ?? []).map((customer) => (
-                <option key={customer.customerId} value={customer.customerId}>
-                  #{customer.customerId} · {customer.phoneNumber} · {customer.pointsBalance} pts
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Point Change</label>
-            <input
-              type="number"
-              step="1"
-              value={adjustForm.pointsDelta}
-              onChange={(event) => setAdjustForm((current) => ({ ...current, pointsDelta: event.target.value }))}
-              placeholder="+50 or -25"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Reason</label>
-            <input
-              type="text"
-              value={adjustForm.reason}
-              onChange={(event) => setAdjustForm((current) => ({ ...current, reason: event.target.value }))}
-              placeholder="Service recovery, correction, promotion..."
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={adjusting}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
-          >
-            {adjusting ? "Saving..." : "Adjust"}
-          </button>
-        </form>
       </ReportSection>
 
       {actionMessage && (

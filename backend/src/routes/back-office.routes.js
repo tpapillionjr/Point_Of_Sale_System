@@ -6,6 +6,7 @@ import {
 import {
   getDashboard,
   getData,
+  getCustomerOrderHistory,
   getSettings,
   patchInventoryItemAmount,
   patchLaborShift,
@@ -28,5 +29,6 @@ router.delete("/inventory/:type/:name", requireAuth, requireManager, removeInven
 router.post("/labor/shifts", requireAuth, requireManager, postLaborShift);
 router.patch("/labor/shifts/:shiftId", requireAuth, requireManager, patchLaborShift);
 router.post("/purchasing/receive", requireAuth, requireManager, postReceivePurchasingStock);
+router.get("/customers/:customerId/orders", requireAuth, requireManager, getCustomerOrderHistory);
 
 export default router;

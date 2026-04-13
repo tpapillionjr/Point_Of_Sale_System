@@ -4,6 +4,7 @@ import {
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
+  getCustomerOrders,
   receivePurchasingStock,
   updateLaborShift,
   updateInventoryItemAmount,
@@ -13,7 +14,7 @@ import {
   updateBackOfficeSettings,
 } from "../services/settings.service.js";
 
-async function getDashboard(req, res) {
+async function getDashboard(_req, res) {
   try {
     const dashboard = await getBackOfficeDashboard();
     res.json(dashboard);
@@ -125,9 +126,19 @@ async function patchLaborShift(req, res) {
   }
 }
 
+async function getCustomerOrderHistory(req, res) {
+  try {
+    const result = await getCustomerOrders(req.params.customerId);
+    res.json(result);
+  } catch (error) {
+    res.status(error.status ?? 500).json({ error: error.message ?? "Failed to fetch customer orders." });
+  }
+}
+
 export {
   getDashboard,
   getData,
+  getCustomerOrderHistory,
   getSettings,
   patchInventoryItemAmount,
   patchLaborShift,

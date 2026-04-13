@@ -423,6 +423,10 @@ export async function toggleLoyaltyReward(id) {
   });
 }
 
+export async function fetchCustomerOrdersBackOffice(customerId) {
+  return request(`/api/back-office/customers/${customerId}/orders`);
+}
+
 export async function adjustLoyaltyPoints(customerId, payload) {
   return request(`/api/loyalty/manage/customers/${customerId}/points`, {
     method: "POST",
