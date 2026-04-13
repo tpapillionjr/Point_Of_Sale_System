@@ -55,7 +55,10 @@ export default function CustomerLoginPage() {
     setError("");
     setMessage("");
 
-    if (!loginForm.email || !loginForm.password) { setError("All fields are required."); return; }
+    if (!loginForm.email || !loginForm.password) { 
+      setError("All fields are required."); 
+      return; 
+    }
 
     setIsSubmitting(true);
     try {
@@ -74,8 +77,8 @@ export default function CustomerLoginPage() {
         });
         routeStaffUser(staffData.user);
       }
-    } catch {
-      setError("Invalid email or password.");
+    } catch (err) {
+      setError(err.message || "Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }
