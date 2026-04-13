@@ -331,33 +331,48 @@ export async function cancelOnlineOrder(orderId) {
 
 // Customer auth — no employee token attached
 export async function customerRegister(payload) {
-  const res = await fetch(`${API_URL}/api/customer/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/customer/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to register.");
   return data;
 }
 
 export async function customerLogin(payload) {
-  const res = await fetch(`${API_URL}/api/customer/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/customer/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to login.");
   return data;
 }
 
 export async function staffLogin(payload) {
-  const res = await fetch(`${API_URL}/api/users/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api/users/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Cannot reach backend at ${API_URL}. Make sure the backend server is running.`);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Failed to login.");
   return data;

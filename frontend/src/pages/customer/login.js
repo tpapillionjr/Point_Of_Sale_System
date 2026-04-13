@@ -90,6 +90,12 @@ export default function CustomerLoginPage() {
           setError("Account has been deactivated. Call the restaurant for any questions.");
           return;
         }
+
+        if (!customerError.message?.toLowerCase().includes("invalid email or password")) {
+          setError(customerError.message || "Customer login failed.");
+          return;
+        }
+
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
         saveStaffSession(staffData.token, {
           userId: staffData.user.userId,
@@ -99,8 +105,8 @@ export default function CustomerLoginPage() {
         });
         routeStaffUser(staffData.user);
       }
-    } catch {
-      setError("Invalid email or password.");
+    } catch (error) {
+      setError(error.message || "Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }
