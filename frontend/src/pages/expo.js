@@ -192,9 +192,11 @@ export default function KitchenPage() {
                     Mark In Progress
                   </button>
                 )}
-                <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
-                  Mark Ready
-                </button>
+                {ticket.status === "in_progress" && (
+                  <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
+                    Mark Ready
+                  </button>
+                )}
                 <button
                   className="expo-ticket__button expo-ticket__button--secondary"
                   type="button"
@@ -202,11 +204,6 @@ export default function KitchenPage() {
                 >
                   Remove Ticket
                 </button>
-                {ticket.status === "in_progress" && (
-                  <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
-                    Mark Ready
-                  </button>
-                )}
               </div>
             </article>
           );
