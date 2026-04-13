@@ -296,10 +296,10 @@ export async function resetUserPassword(payload) {
   });
 }
 
-export async function verifyManager(pin) {
+export async function verifyManager(email, password) {
   return request("/api/users/verify-manager", {
     method: "POST",
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({ email, password }),
   });
 }
 
