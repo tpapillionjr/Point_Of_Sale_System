@@ -85,7 +85,7 @@ export default function CustomerLoginPage() {
       try {
         const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
         localStorage.setItem("customerAuthToken", data.token);
-        localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
+        localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, pointsBalance: data.pointsBalance }));
         router.push(getCustomerRedirect());
       } catch (customerError) {
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
@@ -123,7 +123,7 @@ export default function CustomerLoginPage() {
     try {
       const data = await customerRegister({ firstName, lastName, email, phone, password });
       localStorage.setItem("customerAuthToken", data.token);
-      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email }));
+      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone }));
       router.push(getCustomerRedirect());
     } catch (err) {
       setError(err.message);

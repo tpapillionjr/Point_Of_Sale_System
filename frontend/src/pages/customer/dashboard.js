@@ -290,6 +290,7 @@ export default function CustomerDashboardPage() {
             {[
               ["Name", `${customer.firstName} ${customer.lastName}`],
               ["Email", customer.email],
+              ...(customer.phone ? [["Phone", customer.phone]] : []),
             ].map(([label, value]) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", paddingBottom: "12px", borderBottom: "1px solid #f1f5f9" }}>
                 <span style={{ color: "#64748b", fontWeight: "600" }}>{label}</span>
