@@ -4,7 +4,7 @@ async function postOrder(req, res) {
   try {
     const order = await createOrder({
       ...req.body,
-      createdBy: req.user?.sub,
+      createdBy: req.user?.sub ?? req.user?.userId ?? req.body?.createdBy,
     });
     res.status(201).json(order);
   } catch (error) {
@@ -49,7 +49,7 @@ async function postAddItems(req, res) {
   try {
     const { orderId } = req.params;
     const { items, userId } = req.body;
-    const result = await addItemsToOrder(orderId, items, userId);
+    const result = await addItemsToOrder(orderId, items, req.user?.sub ?? req.user?.userId ?? userId);
     res.status(201).json(result);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;
