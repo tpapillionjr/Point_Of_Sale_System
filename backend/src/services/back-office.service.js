@@ -1,4 +1,5 @@
 import db from "../db/index.js";
+import { getBackOfficeSettings } from "./settings.service.js";
 
 const LEGACY_RANGE_DAYS = {
   today: 1,
@@ -227,6 +228,138 @@ function normalizeNonNegativeInteger(value, label) {
   return number;
 }
 
+function normalizeOptionalDateTime(value, label) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    const error = new Error(`${label} must be a valid date/time.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return parsed.toISOString().slice(0, 19).replace("T", " ");
+}
+
+function normalizeOptionalNonNegativeNumber(value, label) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    const error = new Error(`${label} must be a non-negative number.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return Number(parsed.toFixed(2));
+}
+
+async function createLaborShift(payload = {}) {
+  const userId = Number(payload.userId);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    const error = new Error("userId must be a positive integer.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const scheduledStart = normalizeOptionalDateTime(payload.scheduledStart, "scheduledStart");
+  const scheduledEnd = normalizeOptionalDateTime(payload.scheduledEnd, "scheduledEnd");
+  if (!scheduledStart || !scheduledEnd || scheduledEnd <= scheduledStart) {
+    const error = new Error("scheduledStart and scheduledEnd are required and scheduledEnd must be after scheduledStart.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [userRows] = await db.pool.execute(
+    `SELECT user_id FROM Users WHERE user_id = ? AND is_active = true LIMIT 1`,
+    [userId]
+  );
+  if (userRows.length === 0) {
+    const error = new Error("User not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [result] = await db.pool.execute(
+    `INSERT INTO Employee_Shift (user_id, scheduled_start, scheduled_end, tip_declared_amount)
+     VALUES (?, ?, ?, 0.00)`,
+    [userId, scheduledStart, scheduledEnd]
+  );
+
+  return {
+    shiftId: result.insertId,
+    userId,
+    scheduledStart,
+    scheduledEnd,
+  };
+}
+
+async function updateLaborShift(shiftIdInput, payload = {}) {
+  const shiftId = Number(shiftIdInput);
+  if (!Number.isInteger(shiftId) || shiftId <= 0) {
+    const error = new Error("shiftId must be a positive integer.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updates = [];
+  const params = [];
+
+  if (Object.hasOwn(payload, "scheduledStart")) {
+    updates.push("scheduled_start = ?");
+    params.push(normalizeOptionalDateTime(payload.scheduledStart, "scheduledStart"));
+  }
+
+  if (Object.hasOwn(payload, "scheduledEnd")) {
+    updates.push("scheduled_end = ?");
+    params.push(normalizeOptionalDateTime(payload.scheduledEnd, "scheduledEnd"));
+  }
+
+  if (Object.hasOwn(payload, "clockIn")) {
+    updates.push("clock_in = ?");
+    params.push(normalizeOptionalDateTime(payload.clockIn, "clockIn"));
+  }
+
+  if (Object.hasOwn(payload, "clockOut")) {
+    updates.push("clock_out = ?");
+    params.push(normalizeOptionalDateTime(payload.clockOut, "clockOut"));
+  }
+
+  if (Object.hasOwn(payload, "tipDeclaredAmount")) {
+    const tipDeclaredAmount = normalizeOptionalNonNegativeNumber(payload.tipDeclaredAmount, "tipDeclaredAmount") ?? 0;
+    updates.push("tip_declared_amount = ?");
+    params.push(tipDeclaredAmount);
+    updates.push("tip_declared_at = CASE WHEN ? IS NULL THEN NULL ELSE CURRENT_TIMESTAMP END");
+    params.push(payload.tipDeclaredAmount == null || payload.tipDeclaredAmount === "" ? null : tipDeclaredAmount);
+  }
+
+  if (updates.length === 0) {
+    const error = new Error("At least one labor field is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  params.push(shiftId);
+  const [result] = await db.pool.execute(
+    `UPDATE Employee_Shift
+     SET ${updates.join(", ")}
+     WHERE shift_id = ?`,
+    params
+  );
+
+  if (result.affectedRows === 0) {
+    const error = new Error("Labor shift not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return { shiftId, status: "updated" };
+}
+
 async function createInventoryItem(payload = {}) {
   const type = normalizeInventoryType(payload.type);
   const amountAvailable = normalizeNonNegativeInteger(payload.amountAvailable, "amountAvailable");
@@ -404,6 +537,7 @@ async function receivePurchasingStock(payload = {}) {
 
 async function getBackOfficeData(range) {
   const filters = normalizeBackOfficeFilters(range);
+  const settingsPromise = getBackOfficeSettings();
   const inventoryRowsPromise = db.query(
     `SELECT *
      FROM (
@@ -489,6 +623,7 @@ async function getBackOfficeData(range) {
 
   const laborRowsPromise = db.query(
     `SELECT
+       es.shift_id AS shiftId,
        u.user_id AS userId,
        u.name,
        u.role,
@@ -638,8 +773,9 @@ async function getBackOfficeData(range) {
      GROUP BY role`
   );
 
-  const [inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, weeklyLaborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
+  const [settingsData, inventoryRows, inventoryUsageRows, inventoryUpdateStatsRows, laborRows, weeklyLaborRows, menuItems, modifiers, recentOrders, activeOrders, refundCountsRows, customerRows, userCountsRows] =
     await Promise.all([
+      settingsPromise,
       inventoryRowsPromise,
       inventoryUsagePromise,
       inventoryUpdateStatsPromise,
@@ -803,6 +939,17 @@ async function getBackOfficeData(range) {
       ],
       employees: laborEmployees,
       weeklyHours: weeklyHourRows,
+      shifts: laborRows.map((row) => ({
+        shiftId: row.shiftId,
+        userId: row.userId,
+        name: row.name,
+        role: row.role,
+        scheduledStart: row.scheduledStart,
+        scheduledEnd: row.scheduledEnd,
+        clockIn: row.clockIn,
+        clockOut: row.clockOut,
+        tipDeclaredAmount: Number(row.tipDeclaredAmount ?? 0),
+      })),
     },
     menu: {
       summaryCards: [
@@ -878,23 +1025,22 @@ async function getBackOfficeData(range) {
         { title: "Manager Accounts", value: String(userRoleCounts.manager ?? 0) },
         { title: "Kitchen Accounts", value: String(userRoleCounts.kitchen ?? 0) },
         { title: "Server Accounts", value: String(userRoleCounts.employee ?? 0) },
-        { title: "Persisted Settings", value: "0" },
+        { title: "Persisted Settings", value: String(settingsData.persistedCount) },
       ],
-      notes: [
-        "No dedicated settings table exists yet; current behavior is driven by schema defaults and backend rules.",
-        "Manager-only access to Back Office and Reports is enforced in the frontend route guard.",
-        "Kitchen tickets can be closed by kitchen staff or managers.",
-        "To persist taxes, receipt prefixes, and approval rules, add a configuration table and manager-only update endpoints.",
-      ],
+      values: settingsData.settings,
+      metadata: settingsData.metadata,
+      notes: ["Configuration values are manager-managed via Back_Office_Settings."],
     },
   };
 }
 
 export {
+  createLaborShift,
   createInventoryItem,
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
   receivePurchasingStock,
+  updateLaborShift,
   updateInventoryItemAmount,
 };

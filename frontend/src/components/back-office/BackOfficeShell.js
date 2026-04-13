@@ -22,7 +22,7 @@ export default function BackOfficeShell({ title, description, children }) {
       <aside className="w-72 shrink-0 border-r bg-slate-950 px-6 py-8 text-white">
         <div className="mb-10">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-            Restaurant POS
+            lumi POS
           </p>
           <h1 className="mt-3 text-2xl font-bold">Back Office</h1>
         </div>

@@ -16,6 +16,7 @@ export default function OrderTrackingPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const currentStepRef = useRef(1);
   const [estimatedPoints, setEstimatedPoints] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("estimatedPoints");
@@ -24,7 +25,7 @@ export default function OrderTrackingPage() {
     const orderId = router.query.orderId;
     if (!orderId) return;
 
-    const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4 };
+    const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4, denied: -1 };
 
     async function poll() {
       try {
@@ -32,14 +33,15 @@ export default function OrderTrackingPage() {
         const step = STATUS_MAP[status] ?? 1;
         currentStepRef.current = step;
         setCurrentStep(step);
-      } catch {
-        // silently ignore — keep showing last known step
+        setTrackingError("");
+      } catch (error) {
+        setTrackingError(error.message || "Unable to access this order.");
       }
     }
 
     poll();
     const interval = setInterval(() => {
-      if (currentStepRef.current >= 4) {
+      if (currentStepRef.current >= 4 || currentStepRef.current === -1) {
         clearInterval(interval);
         return;
       }
@@ -72,8 +74,14 @@ export default function OrderTrackingPage() {
           <p style={{ color: "#64748b", fontSize: "15px", margin: 0 }}>We&apos;ll keep you updated every step of the way.</p>
         </div>
 
+        {trackingError ? (
+          <div style={{ backgroundColor: "#fef2f2", borderRadius: "14px", padding: "16px 20px", border: "1px solid #fecaca", marginBottom: "24px", color: "#991b1b", fontSize: "14px", fontWeight: "700" }}>
+            {trackingError}
+          </div>
+        ) : null}
+
         {/* Points earned banner */}
-        {estimatedPoints > 0 && (
+        {!trackingError && estimatedPoints > 0 && (
           <div style={{ backgroundColor: "#f0fdf4", borderRadius: "14px", padding: "16px 24px", border: "1px solid #bbf7d0", marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "24px" }}>⭐</span>
             <p style={{ margin: 0, fontSize: "14px", color: "#166534", fontWeight: "600" }}>
@@ -82,7 +90,20 @@ export default function OrderTrackingPage() {
           </div>
         )}
 
+        {/* Denied state */}
+        {!trackingError && currentStep === -1 && (
+          <div style={{ backgroundColor: "#fef2f2", borderRadius: "20px", padding: "40px 32px", border: "1px solid #fecaca", textAlign: "center", marginBottom: "24px" }}>
+            <div style={{ fontSize: "48px", marginBottom: "12px" }}>❌</div>
+            <p style={{ fontSize: "20px", fontWeight: "800", color: "#991b1b", margin: "0 0 8px" }}>Order Denied</p>
+            <p style={{ fontSize: "14px", color: "#b91c1c", margin: "0 0 24px" }}>We&apos;re sorry, we were unable to fulfill your order at this time.</p>
+            <Link href="/customer/menu" style={{ padding: "12px 28px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none", fontSize: "14px" }}>
+              Order Again
+            </Link>
+          </div>
+        )}
+
         {/* Progress bar */}
+        {!trackingError && currentStep !== -1 && (
         <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "40px 32px 32px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)", marginBottom: "24px" }}>
 
           {/* Steps row */}
@@ -158,7 +179,7 @@ export default function OrderTrackingPage() {
             )}
           </div>
         </div>
-
+        )}
 
       </div>
     </div>

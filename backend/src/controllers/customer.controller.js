@@ -5,19 +5,38 @@ import jwt from "jsonwebtoken";
 const CUSTOMER_JWT_SECRET = process.env.JWT_SECRET;
 const CUSTOMER_JWT_EXPIRES_IN = "7d";
 
+function getCustomerFromAuthHeader(req) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const decoded = jwt.verify(authHeader.slice(7), CUSTOMER_JWT_SECRET);
+  if (!decoded.customerId) {
+    const error = new Error("Invalid customer token.");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  return decoded;
+}
+
 async function registerCustomer(req, res) {
   try {
     const { firstName, lastName, email, phone, password } = req.body;
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const normalizedPhone = typeof phone === "string" ? phone.replace(/\D/g, "") : "";
 
     if (!firstName || !lastName || !email || !phone || !password) {
       return res.status(400).json({ error: "All fields are required." });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return res.status(400).json({ error: "Valid email required." });
     }
 
-    if (!/^\d{10}$/.test(phone)) {
+    if (!/^\d{10}$/.test(normalizedPhone)) {
       return res.status(400).json({ error: "10-digit phone number required." });
     }
 
@@ -25,13 +44,20 @@ async function registerCustomer(req, res) {
       return res.status(400).json({ error: "Password must be at least 6 characters." });
     }
 
-    const existing = await db.query(
-      `SELECT customer_num_id FROM Customer WHERE email = ? LIMIT 1`,
-      [email]
+    const existingRows = await db.query(
+      `SELECT email, phone_number AS phoneNumber
+       FROM Customer
+       WHERE LOWER(email) = LOWER(?) OR phone_number = ?
+       LIMIT 1`,
+      [normalizedEmail, normalizedPhone]
     );
 
-    if (existing.length > 0) {
-      return res.status(409).json({ error: "An account with this email already exists." });
+    if (existingRows.length > 0) {
+      if (String(existingRows[0].email).toLowerCase() === normalizedEmail) {
+        return res.status(409).json({ error: "An account with this email already exists." });
+      }
+
+      return res.status(409).json({ error: "An account with this phone number already exists." });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -39,15 +65,25 @@ async function registerCustomer(req, res) {
     const result = await db.query(
       `INSERT INTO Customer (first_name, last_name, email, password_hash, phone_number)
        VALUES (?, ?, ?, ?, ?)`,
-      [firstName.trim(), lastName.trim(), email.trim().toLowerCase(), passwordHash, phone]
+      [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, normalizedPhone]
     );
 
     const customerId = result.insertId;
-    const token = jwt.sign({ customerId, email }, CUSTOMER_JWT_SECRET, { expiresIn: CUSTOMER_JWT_EXPIRES_IN });
+    const token = jwt.sign({ customerId, email: normalizedEmail }, CUSTOMER_JWT_SECRET, { expiresIn: CUSTOMER_JWT_EXPIRES_IN });
 
-    res.status(201).json({ token, customerId, firstName, lastName, email });
+    res.status(201).json({
+      token,
+      customerId,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: normalizedEmail,
+    });
   } catch (error) {
     console.error("registerCustomer error:", error);
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "An account with this email or phone number already exists." });
+    }
+
     res.status(500).json({ error: "Failed to register." });
   }
 }
@@ -108,6 +144,12 @@ async function createCustomerOrder(req, res) {
   try {
 
     const { firstName, lastName, email, phone, note, cart, paymentPreference, customerId, rewardId } = req.body;
+    const authenticatedCustomer = getCustomerFromAuthHeader(req);
+    const orderCustomerId = authenticatedCustomer?.customerId ?? null;
+
+    if (!authenticatedCustomer && (customerId || rewardId)) {
+      return res.status(401).json({ error: "Customer login required for account orders and rewards." });
+    }
 
     if (!firstName || !lastName || !email || !phone || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: "Missing required fields." });
@@ -121,7 +163,7 @@ async function createCustomerOrder(req, res) {
       const [orderResult] = await connection.execute(
         `INSERT INTO Online_Orders (customer_num_id, first_name, last_name, email, phone, order_note, customer_status, payment_preference, subtotal, tax, total)
          VALUES (?, ?, ?, ?, ?, ?, 'placed', ?, ?, ?, ?)`,
-        [customerId ?? null, firstName.trim(), lastName.trim(), email.trim(), phone.trim(), note ?? null, paymentPreference ?? "in_store", subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
+        [orderCustomerId, firstName.trim(), lastName.trim(), email.trim(), phone.trim(), note ?? null, paymentPreference ?? "in_store", subtotal.toFixed(2), tax.toFixed(2), total.toFixed(2)]
       );
 
       const onlineOrderId = orderResult.insertId;
@@ -140,7 +182,7 @@ async function createCustomerOrder(req, res) {
       );
 
       // If paying online, mark as paid immediately — triggers loyalty points award
-      if (paymentPreference === "online" && customerId) {
+      if (paymentPreference === "online" && orderCustomerId) {
         await connection.execute(
           `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
           [onlineOrderId]
@@ -148,7 +190,7 @@ async function createCustomerOrder(req, res) {
       }
 
       // If a reward was selected, deduct points and log the transaction now that we have the order ID
-      if (rewardId && customerId) {
+      if (rewardId && orderCustomerId) {
         const [rewardRows] = await connection.execute(
           `SELECT reward_id, name, points_cost, is_active FROM Loyalty_Rewards WHERE reward_id = ? LIMIT 1`,
           [rewardId]
@@ -158,18 +200,18 @@ async function createCustomerOrder(req, res) {
           const reward = rewardRows[0];
           const [customerRows] = await connection.execute(
             `SELECT points_balance FROM Customer WHERE customer_num_id = ? LIMIT 1`,
-            [customerId]
+            [orderCustomerId]
           );
 
           if (customerRows.length > 0 && customerRows[0].points_balance >= reward.points_cost) {
             await connection.execute(
               `UPDATE Customer SET points_balance = points_balance - ? WHERE customer_num_id = ?`,
-              [reward.points_cost, customerId]
+              [reward.points_cost, orderCustomerId]
             );
             await connection.execute(
               `INSERT INTO Loyalty_Transactions (customer_num_id, online_order_id, type, points, description)
                VALUES (?, ?, 'redeemed', ?, ?)`,
-              [customerId, onlineOrderId, reward.points_cost, `Redeemed: ${reward.name}`]
+              [orderCustomerId, onlineOrderId, reward.points_cost, `Redeemed: ${reward.name}`]
             );
           }
         }
@@ -181,6 +223,14 @@ async function createCustomerOrder(req, res) {
     res.status(201).json({ orderId: result });
   } catch (error) {
     console.error("createCustomerOrder error:", error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired customer token." });
+    }
+
     res.status(500).json({ error: "Failed to place order." });
   }
 }
@@ -188,17 +238,30 @@ async function createCustomerOrder(req, res) {
 async function getCustomerOrderStatus(req, res) {
   try {
     const orderId = Number(req.params.orderId);
+    const customerId = Number(req.customer?.customerId);
+
     if (!Number.isInteger(orderId) || orderId <= 0) {
       return res.status(400).json({ error: "Invalid order ID." });
     }
 
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(401).json({ error: "Customer login required." });
+    }
+
     const rows = await db.query(
-      `SELECT customer_status FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
+      `SELECT customer_status, customer_num_id AS customerId
+       FROM Online_Orders
+       WHERE online_order_id = ?
+       LIMIT 1`,
       [orderId]
     );
 
     if (rows.length === 0) {
       return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (Number(rows[0].customerId) !== customerId) {
+      return res.status(403).json({ error: "You do not have access to this order." });
     }
 
     res.json({ orderId, status: rows[0].customer_status });
@@ -329,6 +392,24 @@ async function getOnlineOrderById(req, res) {
   }
 }
 
+async function denyOnlineOrder(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    await db.query(
+      `UPDATE Online_Orders SET customer_status = 'denied' WHERE online_order_id = ? AND customer_status = 'placed'`,
+      [orderId]
+    );
+
+    res.json({ orderId, customer_status: "denied" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to deny order." });
+  }
+}
+
 async function markOnlineOrderPaid(req, res) {
   try {
     const orderId = Number(req.params.orderId);
@@ -361,4 +442,4 @@ async function markOnlineOrderPaid(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };
