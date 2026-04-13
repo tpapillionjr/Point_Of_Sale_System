@@ -78,8 +78,33 @@ export default function CustomerOrderPage() {
   const total = subtotal + tax;
   const estimatedPoints = Math.floor(total) * 10;
 
+  function getCardExpiryError(expiryDate) {
+    if (!expiryDate.trim() || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
+      return "Format: MM/YY";
+    }
+
+    const [monthText, yearText] = expiryDate.split("/");
+    const month = Number(monthText);
+    const year = 2000 + Number(yearText);
+
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return "Enter a valid month";
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (year < currentYear || (year === currentYear && month < currentMonth)) {
+      return "Card is expired";
+    }
+
+    return null;
+  }
+
   function validate() {
     const errs = {};
+    const cardErrs = {};
     if (!form.firstName.trim()) errs.firstName = "Required";
     if (!form.lastName.trim()) errs.lastName = "Required";
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Valid email required";
@@ -87,25 +112,22 @@ export default function CustomerOrderPage() {
     
     // Validate card if paying online
     if (paymentPreference === "online") {
-      const cardErrs = {};
       if (!cardForm.cardNumber.trim() || cardForm.cardNumber.replace(/\s/g, "").length < 13) cardErrs.cardNumber = "Valid card number required";
       if (!cardForm.cardName.trim()) cardErrs.cardName = "Cardholder name required";
-      if (!cardForm.expiryDate.trim() || !/^\d{2}\/\d{2}$/.test(cardForm.expiryDate)) cardErrs.expiryDate = "Format: MM/YY";
+      const expiryError = getCardExpiryError(cardForm.expiryDate);
+      if (expiryError) cardErrs.expiryDate = expiryError;
       if (!cardForm.cvv.trim() || !/^\d{3,4}$/.test(cardForm.cvv)) cardErrs.cvv = "3-4 digits required";
-      
-      if (Object.keys(cardErrs).length > 0) {
-        setCardErrors(cardErrs);
-        return errs;
-      }
     }
+
+    setCardErrors(cardErrs);
     
-    return errs;
+    return { errs, cardErrs };
   }
 
   async function handlePlaceOrder() {
-    const errs = validate();
+    const { errs, cardErrs } = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    if (Object.keys(cardErrors).length > 0) { return; }
+    if (Object.keys(cardErrs).length > 0) { return; }
     setErrors({});
     setCardErrors({});
     setOrderError(null);
