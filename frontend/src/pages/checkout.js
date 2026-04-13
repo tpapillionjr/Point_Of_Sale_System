@@ -90,7 +90,7 @@ export default function CheckoutPage() {
     if (!isNaN(parsed)) tipAmount = parsed;
   }
 
-  const total = subtotal + tax + tipAmount;
+  const total = Math.round((subtotal + tax + tipAmount) * 100) / 100;
   const cashTendered = parseFloat(cashInput) || 0;
   const changeDue = cashTendered - total;
 
@@ -680,7 +680,7 @@ export default function CheckoutPage() {
 
           <button
             onClick={handleCloseCheck}
-            disabled={isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))}
+            disabled={isClosing || isCanceling || !paymentMethod || (paymentMethod === "CASH" && cashTendered < total)}
             style={{
               width: "100%",
               padding: "16px",

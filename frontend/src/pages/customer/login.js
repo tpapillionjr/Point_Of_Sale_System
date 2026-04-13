@@ -76,7 +76,7 @@ export default function CustomerLoginPage() {
         const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
         localStorage.setItem("customerAuthToken", data.token);
         localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
-        router.push("/customer/dashboard");
+        router.push(router.query.redirect || "/customer/dashboard");
       } catch (customerError) {
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
         saveStaffSession(staffData.token, {
@@ -114,7 +114,7 @@ export default function CustomerLoginPage() {
       const data = await customerRegister({ firstName, lastName, email, phone, password });
       localStorage.setItem("customerAuthToken", data.token);
       localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email }));
-      router.push("/customer/dashboard");
+      router.push(router.query.redirect || "/customer/dashboard");
     } catch (err) {
       setError(err.message);
     } finally {
