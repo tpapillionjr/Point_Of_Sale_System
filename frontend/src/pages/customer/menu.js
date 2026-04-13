@@ -175,7 +175,13 @@ export default function CustomerMenuPage() {
                     <img
                       src={item.photo_url}
                       alt={item.name}
-                      style={{ width: "100%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: "10px", backgroundColor: "#f1f5f9" }}
+                      style={{
+                        width: "100%",
+                        aspectRatio: isDrink ? "1 / 1" : "16 / 9",
+                        objectFit: "cover",
+                        borderRadius: "10px",
+                        backgroundColor: "#f1f5f9",
+                      }}
                     />
                   ) : null}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

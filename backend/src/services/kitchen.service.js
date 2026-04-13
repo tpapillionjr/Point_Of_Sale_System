@@ -138,4 +138,43 @@ async function updateTicketStatus(payload) {
   });
 }
 
-export { getActiveTickets, updateTicketStatus };
+async function removeTicket(payload) {
+  const ticketId = Number.parseInt(payload?.ticketId, 10);
+  const userId = Number.parseInt(payload?.userId, 10);
+
+  if (!Number.isInteger(ticketId) || ticketId <= 0) {
+    throw createValidationError("ticketId must be a positive integer.");
+  }
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw createValidationError("userId must be a positive integer.");
+  }
+
+  return db.withTransaction(async (connection) => {
+    const [userRows] = await connection.execute(
+      "SELECT role, is_active FROM Users WHERE user_id = ? LIMIT 1",
+      [userId]
+    );
+
+    if (userRows.length === 0 || !userRows[0].is_active) {
+      throw createValidationError("Active user required.");
+    }
+
+    if (!["kitchen", "manager"].includes(userRows[0].role)) {
+      throw createValidationError("Only kitchen staff or managers can remove tickets.");
+    }
+
+    const [result] = await connection.execute(
+      "DELETE FROM Kitchen_Ticket WHERE ticket_id = ?",
+      [ticketId]
+    );
+
+    if (result.affectedRows === 0) {
+      throw createValidationError("Ticket not found.");
+    }
+
+    return { ticketId, removed: true };
+  });
+}
+
+export { getActiveTickets, updateTicketStatus, removeTicket };

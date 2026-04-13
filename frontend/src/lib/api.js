@@ -154,6 +154,13 @@ export async function updateKitchenTicket(ticketId, payload) {
   });
 }
 
+export async function deleteKitchenTicket(ticketId, payload) {
+  return request(`/api/kitchen/tickets/${ticketId}`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateTableStatus(tableId, status) {
   return request(`/api/tables/${tableId}/status`, {
     method: "PATCH",

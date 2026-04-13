@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, startTransition } from "react";
-import { fetchKitchenTickets, updateKitchenTicket } from "../lib/api";
+import { deleteKitchenTicket, fetchKitchenTickets, updateKitchenTicket } from "../lib/api";
 
 function getTicketState(ticket, now) {
   const baseAgeSeconds = Number(ticket.ageSeconds ?? 0);
@@ -90,6 +90,28 @@ export default function KitchenPage() {
     }
   }
 
+  async function removeTicket(ticketId) {
+    if (!employee?.userId) {
+      setMessage("Kitchen login required.");
+      return;
+    }
+
+    if (!["kitchen", "manager"].includes(employee.role)) {
+      setMessage("Only kitchen staff or managers can remove tickets.");
+      return;
+    }
+
+    try {
+      await deleteKitchenTicket(ticketId, {
+        userId: employee.userId,
+      });
+      setTickets((current) => current.filter((ticket) => ticket.ticketId !== ticketId));
+      setMessage(null);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <section className="expo-screen">
       <header className="expo-header">
@@ -172,6 +194,13 @@ export default function KitchenPage() {
                 )}
                 <button className="expo-ticket__button" type="button" onClick={() => updateTicket(ticket.ticketId, "done")}>
                   Mark Ready
+                </button>
+                <button
+                  className="expo-ticket__button expo-ticket__button--secondary"
+                  type="button"
+                  onClick={() => removeTicket(ticket.ticketId)}
+                >
+                  Remove Ticket
                 </button>
               </div>
             </article>
