@@ -269,7 +269,7 @@ export default function CustomerOrderPage() {
                     <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Cardholder Name *</label>
                     <input
                       type="text"
-                      placeholder="Jane Doe"
+                      placeholder="Alex Johnson"
                       value={cardForm.cardName}
                       onChange={(e) => setCardForm({ ...cardForm, cardName: e.target.value })}
                       style={{

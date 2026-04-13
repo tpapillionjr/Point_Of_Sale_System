@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useCustomerSession } from "../../lib/useCustomerSession";
+import { MENU_CATEGORIES, normalizeMenuCategory, isBeverageCategory } from "../../lib/menuCategories";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -27,12 +28,36 @@ export default function CustomerMenuPage() {
   }, [cart]);
 
   useEffect(() => {
+    function normalizeMenuResponse(data) {
+      const grouped = MENU_CATEGORIES.reduce((acc, category) => ({ ...acc, [category]: [] }), {});
+
+      Object.entries(data ?? {}).forEach(([rawCategory, rows]) => {
+        const normalizedCategory = normalizeMenuCategory(rawCategory);
+        for (const item of rows ?? []) {
+          grouped[normalizedCategory].push({
+            ...item,
+            category: normalizedCategory,
+          });
+        }
+      });
+
+      const ordered = {};
+      for (const category of MENU_CATEGORIES) {
+        if (grouped[category].length > 0) {
+          ordered[category] = grouped[category];
+        }
+      }
+
+      return ordered;
+    }
+
     async function loadMenu() {
       try {
         const res = await fetch(`${API_BASE}/api/customer/menu`);
         const data = await res.json();
-        setMenu(data);
-        setSelectedCategory(Object.keys(data)[0] ?? null);
+        const normalized = normalizeMenuResponse(data);
+        setMenu(normalized);
+        setSelectedCategory(Object.keys(normalized)[0] ?? null);
       } catch {
         // keep menu empty
       } finally {
@@ -143,6 +168,7 @@ export default function CustomerMenuPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "14px" }}>
             {(menu[selectedCategory] ?? []).map((item) => {
               const inCart = cart.find((c) => c.menu_item_id === item.menu_item_id);
+              const isDrink = isBeverageCategory(item.category);
               return (
                 <div key={item.menu_item_id} style={{ backgroundColor: "rgba(255,255,255,0.75)", borderRadius: "14px", padding: "20px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 2px 8px rgba(15,23,42,0.05)", display: "flex", flexDirection: "column", gap: "12px" }}>
                   {item.photo_url ? (
@@ -156,10 +182,10 @@ export default function CustomerMenuPage() {
                     <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>{item.name}</h3>
                     <span style={{ fontSize: "15px", fontWeight: "700", color: "#111827", whiteSpace: "nowrap", marginLeft: "8px" }}>${Number(item.base_price).toFixed(2)}</span>
                   </div>
-                  {item.description ? (
+                  {!isDrink && item.description ? (
                     <p style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5, margin: 0 }}>{item.description}</p>
                   ) : null}
-                  {item.common_allergens ? (
+                  {!isDrink && item.common_allergens ? (
                     <p style={{ fontSize: "12px", color: "#92400e", fontWeight: "700", margin: 0 }}>Allergens: {item.common_allergens}</p>
                   ) : null}
 

@@ -184,13 +184,6 @@ async function createCustomerOrder(req, res) {
         );
       }
 
-      await connection.execute(
-        `INSERT INTO Kitchen_Ticket (order_id, online_order_id, table_id, status, created_at, updated_at)
-         VALUES (NULL, ?, 1, 'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [onlineOrderId]
-      );
-
-      // If paying online, mark as paid immediately — triggers loyalty points award
       if (paymentPreference === "online" && orderCustomerId) {
         await connection.execute(
           `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
@@ -198,7 +191,6 @@ async function createCustomerOrder(req, res) {
         );
       }
 
-      // If a reward was selected, deduct points and log the transaction now that we have the order ID
       if (rewardId && orderCustomerId) {
         const [rewardRows] = await connection.execute(
           `SELECT reward_id, name, points_cost, is_active FROM Loyalty_Rewards WHERE reward_id = ? LIMIT 1`,
@@ -451,6 +443,47 @@ async function markOnlineOrderPaid(req, res) {
   }
 }
 
+async function deleteOnlineOrder(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    const deleted = await db.withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        `SELECT online_order_id FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
+        [orderId]
+      );
+
+      if (rows.length === 0) {
+        return false;
+      }
+
+      await connection.execute(
+        `DELETE FROM Kitchen_Ticket WHERE online_order_id = ?`,
+        [orderId]
+      );
+
+      await connection.execute(
+        `DELETE FROM Online_Orders WHERE online_order_id = ?`,
+        [orderId]
+      );
+
+      return true;
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    res.json({ orderId, deleted: true });
+  } catch (error) {
+    console.error("deleteOnlineOrder error:", error);
+    res.status(500).json({ error: "Failed to delete online order." });
+  }
+}
+
 async function getCustomerOrderHistory(req, res) {
   try {
     const customerId = req.customer.customerId;
@@ -543,4 +576,4 @@ async function createCustomerReservation(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, getCustomerOrderHistory, createCustomerReservation };
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation };

@@ -413,6 +413,10 @@ export async function markOnlineOrderPickedUp(orderId) {
   return request(`/api/customer/online-orders/${orderId}/pickup`, { method: "PATCH" });
 }
 
+export async function deleteOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}`, { method: "DELETE" });
+}
+
 // Loyalty rewards — back-office (uses staff auth token via request())
 export async function fetchLoyaltyRewards() {
   return request("/api/loyalty/manage/rewards");

@@ -21,11 +21,16 @@ async function getActiveTickets() {
       END AS items
      FROM Kitchen_Ticket kt
      LEFT JOIN Orders o ON o.order_id = kt.order_id
+     LEFT JOIN Online_Orders oo ON oo.online_order_id = kt.online_order_id
      LEFT JOIN Dining_Tables dt ON dt.table_id = kt.table_id
      LEFT JOIN Order_Item oi ON oi.order_id = o.order_id AND kt.online_order_id IS NULL
      LEFT JOIN Online_Order_Item ooi ON ooi.online_order_id = kt.online_order_id AND kt.online_order_id IS NOT NULL
      LEFT JOIN Menu_Item mi ON mi.menu_item_id = COALESCE(oi.menu_item_id, ooi.menu_item_id)
      WHERE kt.status IN ('new', 'in_progress')
+       AND (
+         kt.online_order_id IS NULL
+         OR oo.customer_status IN ('confirmed', 'preparing', 'ready')
+       )
      GROUP BY kt.ticket_id, kt.order_id, kt.online_order_id, tableNumber, o.takeout_name, kt.status, kt.created_at, kt.updated_at
      ORDER BY kt.created_at ASC`
   );
@@ -80,17 +85,6 @@ async function updateTicketStatus(payload) {
        WHERE ticket_id = ?`,
       [status, ticketId]
     );
-
-    if (ticketRows[0].online_order_id) {
-      const customerStatusMap = { in_progress: "preparing", done: "ready" };
-      const newCustomerStatus = customerStatusMap[status];
-      if (newCustomerStatus) {
-        await connection.execute(
-          `UPDATE Online_Orders SET customer_status = ? WHERE online_order_id = ?`,
-          [newCustomerStatus, ticketRows[0].online_order_id]
-        );
-      }
-    }
 
     if (status === "done") {
       await connection.execute(
