@@ -25,10 +25,20 @@ export default function CustomerLoginPage() {
 
   const mode = ["signup", "forgot"].includes(router.query.mode) ? router.query.mode : "login";
 
+  function getCustomerRedirect() {
+    const redirect = Array.isArray(router.query.redirect) ? router.query.redirect[0] : router.query.redirect;
+    return typeof redirect === "string" && redirect.startsWith("/customer") ? redirect : "/customer/dashboard";
+  }
+
   function handleModeSwitch(next) {
     setError("");
     setMessage("");
-    const path = next === "login" ? "/customer/login" : `/customer/login?mode=${next}`;
+    const redirect = Array.isArray(router.query.redirect) ? router.query.redirect[0] : router.query.redirect;
+    const params = new URLSearchParams();
+    if (next !== "login") params.set("mode", next);
+    if (typeof redirect === "string" && redirect) params.set("redirect", redirect);
+    const query = params.toString();
+    const path = `/customer/login${query ? `?${query}` : ""}`;
     router.push(path, undefined, { shallow: true });
   }
 
@@ -76,7 +86,7 @@ export default function CustomerLoginPage() {
         const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
         localStorage.setItem("customerAuthToken", data.token);
         localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, pointsBalance: data.pointsBalance }));
-        router.push(router.query.redirect || "/customer/dashboard");
+        router.push(getCustomerRedirect());
       } catch (customerError) {
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
         saveStaffSession(staffData.token, {
@@ -114,7 +124,7 @@ export default function CustomerLoginPage() {
       const data = await customerRegister({ firstName, lastName, email, phone, password });
       localStorage.setItem("customerAuthToken", data.token);
       localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email }));
-      router.push(router.query.redirect || "/customer/dashboard");
+      router.push(getCustomerRedirect());
     } catch (err) {
       setError(err.message);
     } finally {

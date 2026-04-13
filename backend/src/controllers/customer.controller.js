@@ -481,4 +481,66 @@ async function getCustomerOrderHistory(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, getCustomerOrderHistory };
+async function createCustomerReservation(req, res) {
+  try {
+    const customerId = Number(req.customer?.customerId);
+    const { date, time, partySize, phone, occasion, notes } = req.body;
+    const normalizedPhone = typeof phone === "string" && phone.trim() ? phone.replace(/\D/g, "") : null;
+    const normalizedOccasion = typeof occasion === "string" && occasion.trim() ? occasion.trim().slice(0, 100) : null;
+    const normalizedNotes = typeof notes === "string" && notes.trim() ? notes.trim().slice(0, 255) : null;
+    const parsedPartySize = Number(partySize);
+
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(401).json({ error: "Customer login required." });
+    }
+
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: "Reservation date is required." });
+    }
+
+    if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
+      return res.status(400).json({ error: "Reservation time is required." });
+    }
+
+    if (!Number.isInteger(parsedPartySize) || parsedPartySize < 1 || parsedPartySize > 8) {
+      return res.status(400).json({ error: "Party size must be between 1 and 8." });
+    }
+
+    if (!normalizedPhone || !/^\d{10}$/.test(normalizedPhone)) {
+      return res.status(400).json({ error: "Phone number must be exactly 10 digits." });
+    }
+
+    const reservationDateTime = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(reservationDateTime.getTime())) {
+      return res.status(400).json({ error: "Choose a valid reservation date and time." });
+    }
+
+    const result = await db.query(
+      `INSERT INTO Customer_Reservation
+       (customer_num_id, reservation_date, reservation_time, party_size, phone, occasion, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [customerId, date, time, parsedPartySize, normalizedPhone, normalizedOccasion, normalizedNotes]
+    );
+
+    const rows = await db.query(
+      `SELECT cr.reservation_id AS reservationId,
+              DATE_FORMAT(cr.reservation_date, '%Y-%m-%d') AS date,
+              TIME_FORMAT(cr.reservation_time, '%H:%i') AS time,
+              cr.party_size AS partySize, cr.phone, cr.occasion, cr.notes,
+              cr.status, cr.created_at AS createdAt,
+              c.first_name AS firstName, c.last_name AS lastName, c.email
+       FROM Customer_Reservation cr
+       JOIN Customer c ON c.customer_num_id = cr.customer_num_id
+       WHERE cr.reservation_id = ?
+       LIMIT 1`,
+      [result.insertId]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error("createCustomerReservation error:", error);
+    res.status(500).json({ error: "Failed to create reservation." });
+  }
+}
+
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, getCustomerOrderHistory, createCustomerReservation };

@@ -136,6 +136,19 @@ export default function CustomerHomePage() {
           }}>
             Order Online
           </Link>
+          <Link href={customer ? "/customer/reservation" : "/customer/login?redirect=/customer/reservation"} style={{
+            padding: "13px 32px",
+            borderRadius: "999px",
+            backgroundColor: "rgba(255,255,255,0.85)",
+            border: "1px solid rgba(100,116,139,0.25)",
+            color: "#334e6e",
+            fontSize: "15px",
+            fontWeight: "700",
+            textDecoration: "none",
+            boxShadow: "0 4px 14px rgba(15,23,42,0.08)",
+          }}>
+            Make Reservation
+          </Link>
         </div>
       </section>
 
@@ -189,7 +202,7 @@ export default function CustomerHomePage() {
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>{item.name}</h3>
-                <span style={{ fontSize: "16px", fontWeight: "700", color: "#3b82f6", whiteSpace: "nowrap", marginLeft: "12px" }}>
+                <span style={{ fontSize: "16px", fontWeight: "700", color: "#111827", whiteSpace: "nowrap", marginLeft: "12px" }}>
                   ${item.price.toFixed(2)}
                 </span>
               </div>
