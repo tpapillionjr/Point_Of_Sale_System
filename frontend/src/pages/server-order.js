@@ -42,7 +42,7 @@ export default function ServerOrderPage() {
   );
 
   useEffect(() => {
-    if (categories.length > 0 && !selectedCategory) {
+    if (categories.length > 0 && (!selectedCategory || !categories.includes(selectedCategory))) {
       setSelectedCategory(categories[0]);
     }
   }, [categories, selectedCategory]);
@@ -83,15 +83,19 @@ export default function ServerOrderPage() {
     async function loadMenu() {
       try {
         const rows = await fetchItems();
-        setMenuItems(rows.map((item) => ({
-          id: item.menuItemId,
-          name: item.name,
-          category: normalizeMenuCategory(item.category),
-          price: Number(item.basePrice),
-          description: item.description ?? "",
-          commonAllergens: item.commonAllergens ?? "",
-          photoUrl: item.photoUrl ?? "",
-        })));
+        setMenuItems(
+          rows
+            .filter((item) => item.isActive !== false)
+            .map((item) => ({
+              id: item.menuItemId,
+              name: item.name,
+              category: normalizeMenuCategory(item.category),
+              price: Number(item.basePrice),
+              description: item.description ?? "",
+              commonAllergens: item.commonAllergens ?? "",
+              photoUrl: item.photoUrl ?? "",
+            }))
+        );
       } catch {
       }
     }
