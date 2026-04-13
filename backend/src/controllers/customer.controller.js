@@ -451,4 +451,34 @@ async function markOnlineOrderPaid(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };
+async function getCustomerOrderHistory(req, res) {
+  try {
+    const customerId = req.customer.customerId;
+
+    const orders = await db.query(
+      `SELECT online_order_id, customer_status, payment_status, payment_preference,
+              subtotal, tax, total, created_at
+       FROM Online_Orders
+       WHERE customer_num_id = ?
+       ORDER BY created_at DESC`,
+      [customerId]
+    );
+
+    const ordersWithItems = await Promise.all(orders.map(async (order) => {
+      const items = await db.query(
+        `SELECT mi.name, oi.quantity, oi.price
+         FROM Online_Order_Item oi
+         JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+         WHERE oi.online_order_id = ?`,
+        [order.online_order_id]
+      );
+      return { ...order, items };
+    }));
+
+    res.json(ordersWithItems);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch order history." });
+  }
+}
+
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, getCustomerOrderHistory };

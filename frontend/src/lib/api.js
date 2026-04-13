@@ -431,6 +431,17 @@ export async function adjustLoyaltyPoints(customerId, payload) {
 }
 
 // Loyalty — customer-facing (uses customer auth token)
+export async function fetchCustomerOrderHistory(customerToken) {
+  const res = await fetch(`${API_URL}/api/customer/orders/history`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerToken}`,
+    },
+  });
+  if (!res.ok) throw new Error("Failed to fetch order history.");
+  return res.json();
+}
+
 export async function fetchCustomerLoyaltyInfo(customerToken) {
   const res = await fetch(`${API_URL}/api/loyalty/balance`, {
     headers: {
