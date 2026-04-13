@@ -25,7 +25,9 @@ export default function CustomerOrderPage() {
   const [selectedRewardId, setSelectedRewardId] = useState(null);
 
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", note: "" });
+  const [cardForm, setCardForm] = useState({ cardNumber: "", cardName: "", expiryDate: "", cvv: "" });
   const [errors, setErrors] = useState({});
+  const [cardErrors, setCardErrors] = useState({});
 
   useEffect(() => {
     if (!customer) return;
@@ -67,13 +69,30 @@ export default function CustomerOrderPage() {
     if (!form.lastName.trim()) errs.lastName = "Required";
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Valid email required";
     if (!form.phone.trim() || !/^\d{10}$/.test(form.phone)) errs.phone = "10-digit phone required";
+    
+    // Validate card if paying online
+    if (paymentPreference === "online") {
+      const cardErrs = {};
+      if (!cardForm.cardNumber.trim() || cardForm.cardNumber.replace(/\s/g, "").length < 13) cardErrs.cardNumber = "Valid card number required";
+      if (!cardForm.cardName.trim()) cardErrs.cardName = "Cardholder name required";
+      if (!cardForm.expiryDate.trim() || !/^\d{2}\/\d{2}$/.test(cardForm.expiryDate)) cardErrs.expiryDate = "Format: MM/YY";
+      if (!cardForm.cvv.trim() || !/^\d{3,4}$/.test(cardForm.cvv)) cardErrs.cvv = "3-4 digits required";
+      
+      if (Object.keys(cardErrs).length > 0) {
+        setCardErrors(cardErrs);
+        return errs;
+      }
+    }
+    
     return errs;
   }
 
   async function handlePlaceOrder() {
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(cardErrors).length > 0) { return; }
     setErrors({});
+    setCardErrors({});
     setOrderError(null);
     setIsSubmitting(true);
 
@@ -86,6 +105,12 @@ export default function CustomerOrderPage() {
         note: form.note,
         cart,
         paymentPreference,
+        paymentData: paymentPreference === "online" ? {
+          cardNumber: cardForm.cardNumber.replace(/\s/g, ""),
+          cardName: cardForm.cardName,
+          expiryDate: cardForm.expiryDate,
+          cvv: cardForm.cvv,
+        } : null,
         customerId: customer?.customerId ?? null,
         rewardId: selectedRewardId ?? null,
       });
@@ -181,7 +206,7 @@ export default function CustomerOrderPage() {
                 ].map(({ value, label, sub }) => (
                   <label key={value} style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "14px", borderRadius: "10px", border: `2px solid ${paymentPreference === value ? "#3b82f6" : "#e2e8f0"}`, backgroundColor: paymentPreference === value ? "#eff6ff" : "white", cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <input type="radio" name="paymentPreference" value={value} checked={paymentPreference === value} onChange={() => setPaymentPreference(value)} style={{ accentColor: "#3b82f6" }} />
+                      <input type="radio" name="paymentPreference" value={value} checked={paymentPreference === value} onChange={() => { setPaymentPreference(value); setCardErrors({}); }} style={{ accentColor: "#3b82f6" }} />
                       <span style={{ fontSize: "14px", fontWeight: "700", color: "#1e3a5f" }}>{label}</span>
                     </div>
                     <span style={{ fontSize: "12px", color: "#64748b", paddingLeft: "22px" }}>{sub}</span>
@@ -189,6 +214,123 @@ export default function CustomerOrderPage() {
                 ))}
               </div>
             </div>
+
+            {/* Card payment form - only show when paying online */}
+            {paymentPreference === "online" && (
+              <div style={{ backgroundColor: "rgba(255,255,255,0.8)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)" }}>
+                <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "20px" }}>💳 Card Details</p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Card Number *</label>
+                    <input
+                      type="text"
+                      placeholder="4532 1234 5678 9010"
+                      value={cardForm.cardNumber}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 16);
+                        const formatted = val.replace(/(\d{4})(?=\d)/g, "$1 ");
+                        setCardForm({ ...cardForm, cardNumber: formatted });
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "11px 14px",
+                        borderRadius: "8px",
+                        border: `1px solid ${cardErrors.cardNumber ? "#fca5a5" : "#d1d5db"}`,
+                        fontSize: "14px",
+                        color: "#1e3a5f",
+                        backgroundColor: cardErrors.cardNumber ? "#fef2f2" : "white",
+                        boxSizing: "border-box",
+                        outline: "none",
+                        fontFamily: "monospace",
+                      }}
+                    />
+                    {cardErrors.cardNumber && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cardNumber}</p>}
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Cardholder Name *</label>
+                    <input
+                      type="text"
+                      placeholder="Jane Doe"
+                      value={cardForm.cardName}
+                      onChange={(e) => setCardForm({ ...cardForm, cardName: e.target.value })}
+                      style={{
+                        width: "100%",
+                        padding: "11px 14px",
+                        borderRadius: "8px",
+                        border: `1px solid ${cardErrors.cardName ? "#fca5a5" : "#d1d5db"}`,
+                        fontSize: "14px",
+                        color: "#1e3a5f",
+                        backgroundColor: cardErrors.cardName ? "#fef2f2" : "white",
+                        boxSizing: "border-box",
+                        outline: "none",
+                      }}
+                    />
+                    {cardErrors.cardName && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cardName}</p>}
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Expires *</label>
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        value={cardForm.expiryDate}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          if (val.length >= 2) {
+                            setCardForm({ ...cardForm, expiryDate: `${val.slice(0, 2)}/${val.slice(2)}` });
+                          } else {
+                            setCardForm({ ...cardForm, expiryDate: val });
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "11px 14px",
+                          borderRadius: "8px",
+                          border: `1px solid ${cardErrors.expiryDate ? "#fca5a5" : "#d1d5db"}`,
+                          fontSize: "14px",
+                          color: "#1e3a5f",
+                          backgroundColor: cardErrors.expiryDate ? "#fef2f2" : "white",
+                          boxSizing: "border-box",
+                          outline: "none",
+                          fontFamily: "monospace",
+                        }}
+                      />
+                      {cardErrors.expiryDate && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.expiryDate}</p>}
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>CVV *</label>
+                      <input
+                        type="text"
+                        placeholder="123"
+                        value={cardForm.cvv}
+                        onChange={(e) => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                        style={{
+                          width: "100%",
+                          padding: "11px 14px",
+                          borderRadius: "8px",
+                          border: `1px solid ${cardErrors.cvv ? "#fca5a5" : "#d1d5db"}`,
+                          fontSize: "14px",
+                          color: "#1e3a5f",
+                          backgroundColor: cardErrors.cvv ? "#fef2f2" : "white",
+                          boxSizing: "border-box",
+                          outline: "none",
+                          fontFamily: "monospace",
+                        }}
+                      />
+                      {cardErrors.cvv && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cvv}</p>}
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: "12px", color: "#64748b", margin: "8px 0 0", paddingTop: "8px", borderTop: "1px solid #e2e8f0" }}>
+                    ✓ Your card information is secure and used for this order only.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Points balance + reward redemption (logged-in only) */}
             {customer && (
