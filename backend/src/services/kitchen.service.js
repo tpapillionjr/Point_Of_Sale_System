@@ -86,17 +86,6 @@ async function updateTicketStatus(payload) {
       [status, ticketId]
     );
 
-    if (ticketRows[0].online_order_id) {
-      const customerStatusMap = { in_progress: "preparing", done: "ready" };
-      const newCustomerStatus = customerStatusMap[status];
-      if (newCustomerStatus) {
-        await connection.execute(
-          `UPDATE Online_Orders SET customer_status = ? WHERE online_order_id = ?`,
-          [newCustomerStatus, ticketRows[0].online_order_id]
-        );
-      }
-    }
-
     if (status === "done") {
       await connection.execute(
         `UPDATE Orders
