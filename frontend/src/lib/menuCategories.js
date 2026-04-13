@@ -1,4 +1,4 @@
-export const MENU_CATEGORIES = ["Beverages", "Entrees", "Sandwiches", "Waffles", "Bowls", "Sides"];
+export const MENU_CATEGORIES = ["Entrees", "Waffles", "Bowls", "Sandwiches", "Sides", "Beverages"];
 
 const CATEGORY_ALIASES = {
   beverages: "Beverages",

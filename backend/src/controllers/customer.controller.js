@@ -143,10 +143,33 @@ async function loginCustomer(req, res) {
 }
 
 const TAX_RATE = 0.0825;
+const MENU_CATEGORIES = ["Entrees", "Waffles", "Bowls", "Sandwiches", "Sides", "Beverages"];
+const CATEGORY_ALIASES = {
+  beverages: "Beverages",
+  beverage: "Beverages",
+  drinks: "Beverages",
+  drink: "Beverages",
+  entrees: "Entrees",
+  entree: "Entrees",
+  sandwiches: "Sandwiches",
+  sandwich: "Sandwiches",
+  waffles: "Waffles",
+  waffle: "Waffles",
+  bowls: "Bowls",
+  bowl: "Bowls",
+  sides: "Sides",
+  side: "Sides",
+  appetizers: "Sides",
+  appetizer: "Sides",
+};
 
 function normalizeCategory(value) {
-  const category = value || "Other";
-  return String(category).toLowerCase() === "entree" ? "Entrees" : category;
+  const key = String(value ?? "").trim().toLowerCase();
+  if (!key) {
+    return "Entrees";
+  }
+
+  return CATEGORY_ALIASES[key] || "Entrees";
 }
 
 async function createCustomerOrder(req, res) {
@@ -281,14 +304,20 @@ async function getCustomerMenu(req, res) {
        ORDER BY category ASC, name ASC`
     );
 
-    const grouped = {};
+    const grouped = MENU_CATEGORIES.reduce((acc, category) => ({ ...acc, [category]: [] }), {});
     for (const item of rows) {
       const cat = normalizeCategory(item.category);
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(item);
+      grouped[cat].push({ ...item, category: cat });
     }
 
-    res.json(grouped);
+    const ordered = {};
+    for (const category of MENU_CATEGORIES) {
+      if (grouped[category].length > 0) {
+        ordered[category] = grouped[category];
+      }
+    }
+
+    res.json(ordered);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch menu." });
   }
