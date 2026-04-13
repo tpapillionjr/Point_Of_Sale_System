@@ -4,13 +4,8 @@ CREATE TABLE Dining_Tables (
     table_number SMALLINT NOT NULL UNIQUE,
     capacity SMALLINT NULL,
     status ENUM('available','occupied','reserved','inactive') NOT NULL DEFAULT 'available',
-<<<<<<< HEAD
     CONSTRAINT chk_table_number_range CHECK (table_number >= 1 AND table_number <= 99),
     CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 8))
-=======
-    CONSTRAINT chk_table_number_nonneg CHECK (table_number >= 0),
-    CONSTRAINT chk_table_capacity_range CHECK (capacity IS NULL OR (capacity >= 1 AND capacity <= 99))
->>>>>>> 472a1550fda52af52fd228c8796a890658c53092
 );
 
 CREATE TABLE Users (
@@ -581,33 +576,29 @@ BEGIN
     END IF;
 END$$
 
-CREATE TRIGGER trg_create_kitchen_ticket_on_online_confirm
-AFTER UPDATE ON Online_Orders
+-- When a kitchen ticket moves to in_progress, mark the linked online order as 'preparing'
+CREATE TRIGGER trg_order_preparing
+AFTER UPDATE ON Kitchen_Ticket
 FOR EACH ROW
 BEGIN
-    IF OLD.customer_status <> 'confirmed'
-       AND NEW.customer_status = 'confirmed'
-       AND NOT EXISTS (
-           SELECT 1
-           FROM Kitchen_Ticket kt
-           WHERE kt.online_order_id = NEW.online_order_id
-       )
-    THEN
-        INSERT INTO Kitchen_Ticket (
-            order_id,
-            online_order_id,
-            table_id,
-            status,
-            created_at,
-            updated_at
-        ) VALUES (
-            NULL,
-            NEW.online_order_id,
-            1,
-            'new',
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-        );
+    IF NEW.status = 'in_progress' AND OLD.status != 'in_progress' THEN
+        UPDATE Online_Orders
+        SET customer_status = 'preparing'
+        WHERE online_order_id = NEW.online_order_id
+          AND customer_status = 'confirmed';
+    END IF;
+END$$
+
+-- When a kitchen ticket moves to done, mark the linked online order as 'ready'
+CREATE TRIGGER trg_order_ready
+AFTER UPDATE ON Kitchen_Ticket
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'done' AND OLD.status != 'done' THEN
+        UPDATE Online_Orders
+        SET customer_status = 'ready'
+        WHERE online_order_id = NEW.online_order_id
+          AND customer_status = 'preparing';
     END IF;
 END$$
 
