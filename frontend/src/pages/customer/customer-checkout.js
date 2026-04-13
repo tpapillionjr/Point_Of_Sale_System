@@ -116,7 +116,9 @@ export default function CustomerOrderPage() {
       });
 
       localStorage.removeItem("customerCart");
-      localStorage.setItem("lastOrderId", orderId);
+      if (customer?.customerId) {
+        localStorage.setItem(`lastOrderId:${customer.customerId}`, orderId);
+      }
       localStorage.setItem("estimatedPoints", estimatedPoints);
       router.push(`/customer/order-tracking?orderId=${orderId}`);
     } catch (err) {

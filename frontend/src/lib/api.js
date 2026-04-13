@@ -87,6 +87,31 @@ export async function fetchBackOfficeData(range) {
   return request(`/api/back-office/data${query ? `?${query}` : ""}`);
 }
 
+export async function fetchBackOfficeSettings() {
+  return request("/api/back-office/settings");
+}
+
+export async function updateBackOfficeSettings(payload) {
+  return request("/api/back-office/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createLaborShift(payload) {
+  return request("/api/back-office/labor/shifts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLaborShift(shiftId, payload) {
+  return request(`/api/back-office/labor/shifts/${shiftId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createInventoryItem(payload) {
   return request("/api/back-office/inventory", {
     method: "POST",
@@ -285,6 +310,12 @@ export async function confirmOnlineOrder(orderId) {
   });
 }
 
+export async function denyOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/deny`, {
+    method: "PATCH",
+  });
+}
+
 // Customer auth — no employee token attached
 export async function customerRegister(payload) {
   const res = await fetch(`${API_URL}/api/customer/register`, {
@@ -319,11 +350,15 @@ export async function staffLogin(payload) {
   return data;
 }
 
-// Customer-facing endpoints — no auth token attached
+// Customer-facing endpoints attach the customer token when a shopper is logged in.
 export async function placeCustomerOrder(payload) {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
   const res = await fetch(`${API_URL}/api/customer/orders`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -334,8 +369,19 @@ export async function placeCustomerOrder(payload) {
 }
 
 export async function fetchCustomerOrderStatus(orderId) {
-  const res = await fetch(`${API_URL}/api/customer/orders/${orderId}/status`);
-  if (!res.ok) throw new Error("Failed to fetch order status.");
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const res = await fetch(`${API_URL}/api/customer/orders/${orderId}/status`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to fetch order status.");
+  }
+
   return res.json();
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { fetchOnlineOrders, confirmOnlineOrder, markOnlineOrderPickedUp, fetchActiveTakeoutOrders } from "../lib/api";
+import { fetchOnlineOrders, confirmOnlineOrder, denyOnlineOrder, markOnlineOrderPickedUp, fetchActiveTakeoutOrders } from "../lib/api";
 
 const TAKEOUT_STATUS_META = {
   Open:      { label: "Pending",    color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
@@ -77,6 +77,15 @@ export default function OnlineOrdersPage() {
     }
   }
 
+  async function handleDeny(orderId) {
+    try {
+      await denyOnlineOrder(orderId);
+      setOrders((prev) => prev.filter((o) => o.order_id !== orderId));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   const newOrders = orders.filter((o) => o.customer_status === "placed");
   const activeOrders = orders.filter((o) => o.customer_status !== "placed");
 
@@ -136,7 +145,7 @@ export default function OnlineOrdersPage() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {newOrders.map((order) => (
-                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} onPickup={handlePickup} />
+                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onDeny={handleDeny} onCheckout={handleCheckout} onPickup={handlePickup} />
                 ))}
               </div>
             </div>
@@ -212,7 +221,7 @@ function TakeoutCard({ order, onCheckout }) {
   );
 }
 
-function OrderCard({ order, onConfirm, onCheckout, onPickup }) {
+function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
   const meta = STATUS_META[order.customer_status] ?? STATUS_META.placed;
   const note = order.order_note || "";
   // Parse contact info from order_note: "FirstName LastName | phone | note"
@@ -266,12 +275,20 @@ function OrderCard({ order, onConfirm, onCheckout, onPickup }) {
       {/* Action buttons */}
       <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
         {order.customer_status === "placed" && (
-          <button
-            onClick={() => onConfirm(order.order_id)}
-            style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#f97316", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
-          >
-            Confirm Order
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              onClick={() => onConfirm(order.order_id)}
+              style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#f97316", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => onDeny(order.order_id)}
+              style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#dc2626", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
+            >
+              Deny
+            </button>
+          </div>
         )}
         {order.customer_status !== "placed" && (
           <>

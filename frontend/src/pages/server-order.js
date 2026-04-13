@@ -29,6 +29,7 @@ export default function ServerOrderPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showGuestPad, setShowGuestPad] = useState(false);
   const [guestInput, setGuestInput] = useState("");
+  const [selectedMenuItem, setSelectedMenuItem] = useState(null);
 
   const [menuItems, setMenuItems] = useState([]);
 
@@ -76,7 +77,15 @@ export default function ServerOrderPage() {
     async function loadMenu() {
       try {
         const rows = await fetchItems();
-        setMenuItems(rows.map((item) => ({ id: item.menuItemId, name: item.name, category: item.category, price: Number(item.basePrice) })));
+        setMenuItems(rows.map((item) => ({
+          id: item.menuItemId,
+          name: item.name,
+          category: item.category,
+          price: Number(item.basePrice),
+          description: item.description ?? "",
+          commonAllergens: item.commonAllergens ?? "",
+          photoUrl: item.photoUrl ?? "",
+        })));
       } catch {
         // non-fatal — menu stays empty
       }
@@ -149,6 +158,15 @@ export default function ServerOrderPage() {
     }
     setCart(newCart);
     setPendingQty(1);
+  };
+
+  const handleConfirmMenuItem = () => {
+    if (!selectedMenuItem) {
+      return;
+    }
+
+    addToCart(selectedMenuItem);
+    setSelectedMenuItem(null);
   };
 
   const handleQtyDigit = (digit) => {
@@ -503,7 +521,7 @@ export default function ServerOrderPage() {
             }}
           >
             {filteredMenu.map((item) => (
-              <MenuButton key={item.id} item={item} addToCart={addToCart} />
+              <MenuButton key={item.id} item={item} addToCart={() => setSelectedMenuItem(item)} />
             ))}
           </div>
         </div>
@@ -611,6 +629,112 @@ export default function ServerOrderPage() {
           </button>
         </div>
       </div>
+
+      {selectedMenuItem && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="menu-item-confirm-title"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backgroundColor: "rgba(15,23,42,0.45)",
+          }}
+          onClick={() => setSelectedMenuItem(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              borderRadius: "12px",
+              backgroundColor: "white",
+              boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+              overflow: "hidden",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ padding: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" }}>
+                <div>
+                  <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "800", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    {selectedMenuItem.category}
+                  </p>
+                  <h2 id="menu-item-confirm-title" style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: "#111827" }}>
+                    {selectedMenuItem.name}
+                  </h2>
+                </div>
+                <p style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#166534" }}>
+                  ${selectedMenuItem.price.toFixed(2)}
+                </p>
+              </div>
+
+              <p style={{ margin: "16px 0 0", fontSize: "15px", lineHeight: 1.55, color: "#4b5563" }}>
+                {selectedMenuItem.description || "No description is available for this item."}
+              </p>
+
+              {selectedMenuItem.commonAllergens ? (
+                <p style={{ margin: "12px 0 0", fontSize: "13px", color: "#92400e", fontWeight: "700" }}>
+                  Allergens: {selectedMenuItem.commonAllergens}
+                </p>
+              ) : null}
+
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "12px",
+                  borderRadius: "10px",
+                  backgroundColor: "#f8fafc",
+                  color: "#334155",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                }}
+              >
+                Quantity to add: {pendingQty}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMenuItem(null)}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    backgroundColor: "white",
+                    color: "#374151",
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmMenuItem}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: "8px",
+                    border: "none",
+                    backgroundColor: "#2563eb",
+                    color: "white",
+                    fontSize: "14px",
+                    fontWeight: "800",
+                    cursor: "pointer",
+                  }}
+                >
+                  Confirm Add
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingRemoveId !== null && (
         <div

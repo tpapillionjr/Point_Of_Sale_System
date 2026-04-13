@@ -618,7 +618,7 @@ export default function ReportsPageLayout({
     <div className="min-h-screen bg-slate-100 px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Restaurant POS</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">lumi POS</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">{title}</h1>
           <p className="mt-3 max-w-3xl text-base text-slate-600">{description}</p>
         </div>
