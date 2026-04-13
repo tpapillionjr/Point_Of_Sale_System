@@ -18,6 +18,7 @@ import {
   fetchUsers,
   markOnlineOrderPaid,
   markOnlineOrderPickedUp,
+  deleteOnlineOrder,
   receivePurchasingStock,
   toggleLoyaltyReward,
   toggleMenuItemActive,
@@ -27,6 +28,7 @@ import {
   updateLoyaltyReward,
   updateMenuItem,
 } from "../../lib/api";
+import { MENU_CATEGORIES, normalizeMenuCategory } from "../../lib/menuCategories";
 import { getStoredEmployee } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
@@ -1315,18 +1317,18 @@ export function MenuManagementSection() {
   const [actionMessage, setActionMessage] = useState(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
 
-  const categoryOptions = [...new Set((items ?? []).map((item) => item.category || "Uncategorized"))].sort();
+  const categoryOptions = MENU_CATEGORIES;
   const filteredItems =
     selectedCategoryFilter === "All"
       ? items ?? []
-      : (items ?? []).filter((item) => (item.category || "Uncategorized") === selectedCategoryFilter);
+      : (items ?? []).filter((item) => item.category === selectedCategoryFilter);
 
   useEffect(() => {
     async function load() {
       setItemsLoading(true);
       try {
         const rows = await fetchItems();
-        setItems(rows);
+        setItems(rows.map((item) => ({ ...item, category: normalizeMenuCategory(item.category) })));
         setItemsError(null);
       } catch (err) {
         setItemsError(err.message);
@@ -1348,7 +1350,7 @@ export function MenuManagementSection() {
     setEditTarget(item);
     setForm({
       name: item.name,
-      category: item.category === "Uncategorized" ? "" : item.category,
+      category: normalizeMenuCategory(item.category),
       basePrice: String(item.basePrice),
       description: item.description ?? "",
       photoUrl: item.photoUrl ?? "",
@@ -1402,6 +1404,17 @@ export function MenuManagementSection() {
     setFormError(null);
   }
 
+  function handleRemovePhoto() {
+    setForm((current) => ({
+      ...current,
+      photoUrl: "",
+      photoFile: null,
+      photoPreviewUrl: "",
+      photoFileName: "",
+    }));
+    setFormError(null);
+  }
+
   async function uploadPhotoIfNeeded() {
     if (!form.photoFile) {
       return form.photoUrl.trim();
@@ -1417,6 +1430,7 @@ export function MenuManagementSection() {
 
   async function handleSave() {
     if (!form.name.trim()) { setFormError("Name is required."); return; }
+    if (!form.category.trim()) { setFormError("Category is required."); return; }
     const price = Number(form.basePrice);
     if (isNaN(price) || price < 0) { setFormError("Base price must be a valid non-negative number."); return; }
 
@@ -1426,7 +1440,7 @@ export function MenuManagementSection() {
       const photoUrl = await uploadPhotoIfNeeded();
       const payload = {
         name: form.name.trim(),
-        category: form.category.trim() || "Uncategorized",
+        category: normalizeMenuCategory(form.category),
         basePrice: price,
         description: form.description.trim(),
         photoUrl,
@@ -1500,7 +1514,7 @@ export function MenuManagementSection() {
                 All ({items.length})
               </button>
               {categoryOptions.map((category) => {
-                const count = items.filter((item) => (item.category || "Uncategorized") === category).length;
+                const count = items.filter((item) => item.category === category).length;
                 return (
                   <button
                     type="button"
@@ -1545,7 +1559,7 @@ export function MenuManagementSection() {
                         <p className="mt-1 text-xs font-semibold text-amber-700">Allergens: {item.commonAllergens}</p>
                       ) : null}
                     </td>
-                    <td className="py-3 pr-4">{item.category}</td>
+                    <td className="py-3 pr-4">{normalizeMenuCategory(item.category)}</td>
                     <td className="py-3 pr-4">${Number(item.basePrice).toFixed(2)}</td>
                     <td className="py-3 pr-4">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
@@ -1625,7 +1639,7 @@ export function MenuManagementSection() {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— Select category —</option>
-                  {[...new Set((items ?? []).map((i) => i.category).filter(Boolean))].sort().map((cat) => (
+                  {MENU_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
@@ -1654,6 +1668,15 @@ export function MenuManagementSection() {
                   <p className="mt-2 text-xs font-medium text-gray-500">Selected: {form.photoFileName}</p>
                 ) : form.photoUrl ? (
                   <p className="mt-2 text-xs font-medium text-gray-500">Current photo saved.</p>
+                ) : null}
+                {(form.photoPreviewUrl || form.photoUrl || form.photoFile) ? (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhoto}
+                    className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                  >
+                    Remove Photo
+                  </button>
                 ) : null}
                 {form.photoPreviewUrl ? (
                   <img
@@ -1771,6 +1794,28 @@ export function OrderHistorySection() {
     }
   }
 
+  async function handleDeleteOnlineOrder(orderId) {
+    const employee = getStoredEmployee();
+    if (!employee?.userId || employee.role !== "manager") {
+      setCancelError("Only a logged-in manager can cancel online orders.");
+      return;
+    }
+
+    setOnlineActionId(`delete-${orderId}`);
+    setCancelError("");
+    setCancelMessage("");
+
+    try {
+      await deleteOnlineOrder(orderId);
+      setCancelMessage(`Online order #${orderId} was canceled.`);
+      setRefreshToken((value) => value + 1);
+    } catch (actionError) {
+      setCancelError(actionError.message || "Failed to cancel online order.");
+    } finally {
+      setOnlineActionId(null);
+    }
+  }
+
   return (
     <>
       <BackOfficeFilterBar filters={draftFilters} onChange={setDraftFilters} onApply={() => setSelectedRange(draftFilters)} />
@@ -1838,6 +1883,16 @@ export function OrderHistorySection() {
                                 className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
                               >
                                 Picked Up
+                              </button>
+                            ) : null}
+                            {getStoredEmployee()?.role === "manager" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteOnlineOrder(item.orderId)}
+                                disabled={onlineActionId === `delete-${item.orderId}`}
+                                className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+                              >
+                                {onlineActionId === `delete-${item.orderId}` ? "Canceling..." : "Cancel"}
                               </button>
                             ) : null}
                           </div>
