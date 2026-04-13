@@ -154,7 +154,7 @@ export default function CustomerMenuPage() {
                   ) : null}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>{item.name}</h3>
-                    <span style={{ fontSize: "15px", fontWeight: "700", color: "#3b82f6", whiteSpace: "nowrap", marginLeft: "8px" }}>${Number(item.base_price).toFixed(2)}</span>
+                    <span style={{ fontSize: "15px", fontWeight: "700", color: "#111827", whiteSpace: "nowrap", marginLeft: "8px" }}>${Number(item.base_price).toFixed(2)}</span>
                   </div>
                   {item.description ? (
                     <p style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.5, margin: 0 }}>{item.description}</p>
@@ -222,14 +222,14 @@ export default function CustomerMenuPage() {
                       <div key={item.menu_item_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "10px" }}>
                         <div style={{ flex: 1 }}>
                           <p style={{ fontSize: "14px", fontWeight: "600", color: "#1e3a5f", margin: "0 0 2px" }}>{item.name}</p>
-                          <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>${Number(item.base_price).toFixed(2)} each</p>
+                          <p style={{ fontSize: "12px", color: "#111827", margin: 0 }}>${Number(item.base_price).toFixed(2)} each</p>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <button onClick={() => updateQty(item.menu_item_id, item.quantity - 1)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#475569" }}>−</button>
                           <span style={{ fontWeight: "700", color: "#1e3a5f", minWidth: "18px", textAlign: "center", fontSize: "14px" }}>{item.quantity}</span>
                           <button onClick={() => updateQty(item.menu_item_id, item.quantity + 1)} style={{ width: "26px", height: "26px", borderRadius: "50%", border: "1px solid #d1d5db", backgroundColor: "white", cursor: "pointer", fontSize: "14px", fontWeight: "700", color: "#111827" }}>+</button>
                         </div>
-                        <span style={{ fontWeight: "700", color: "#1e3a5f", marginLeft: "12px", minWidth: "48px", textAlign: "right" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
+                        <span style={{ fontWeight: "700", color: "#111827", marginLeft: "12px", minWidth: "48px", textAlign: "right" }}>${(Number(item.base_price) * item.quantity).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>

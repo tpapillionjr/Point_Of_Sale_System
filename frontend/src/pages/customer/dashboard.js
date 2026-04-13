@@ -22,6 +22,7 @@ export default function CustomerDashboardPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [orderHistory, setOrderHistory] = useState([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");
@@ -230,9 +231,16 @@ export default function CustomerDashboardPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {orderHistory.map((order) => {
                   const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status, color: "#64748b" };
+                  const isSelected = selectedOrderId === order.online_order_id;
+                  const itemCount = order.items.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
                   return (
                     <div key={order.online_order_id} style={{ borderRadius: "10px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderId((current) => current === order.online_order_id ? null : order.online_order_id)}
+                        aria-expanded={isSelected}
+                        style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", backgroundColor: isSelected ? "#eff6ff" : "#f8fafc", border: "none", cursor: "pointer", textAlign: "left" }}
+                      >
                         <div>
                           <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: "#1e3a5f" }}>Order #{order.online_order_id}</p>
                           <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>{new Date(order.created_at).toLocaleDateString()}</p>
@@ -242,16 +250,31 @@ export default function CustomerDashboardPage() {
                             {statusMeta.label}
                           </span>
                           <span style={{ fontSize: "13px", fontWeight: "800", color: "#1e3a5f" }}>${Number(order.total).toFixed(2)}</span>
+                          <span style={{ fontSize: "14px", fontWeight: "800", color: "#64748b" }}>{isSelected ? "−" : "+"}</span>
                         </div>
-                      </div>
-                      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                        {order.items.map((item, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-                            <span style={{ color: "#374151" }}>{item.quantity}× {item.name}</span>
-                            <span style={{ color: "#64748b" }}>${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                      </button>
+                      {isSelected && (
+                        <div style={{ margin: "12px 14px 14px", padding: "14px", borderRadius: "10px", border: "1px solid #dbeafe", backgroundColor: "white", boxShadow: "0 6px 18px rgba(15,23,42,0.06)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+                            <div>
+                              <p style={{ margin: 0, fontSize: "12px", fontWeight: "800", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>Order Summary</p>
+                              <p style={{ margin: "4px 0 0", fontSize: "13px", fontWeight: "700", color: "#1e3a5f" }}>{itemCount} item{itemCount !== 1 ? "s" : ""}</p>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontWeight: "600" }}>{statusMeta.label}</p>
+                              <p style={{ margin: "4px 0 0", fontSize: "18px", fontWeight: "900", color: "#111827" }}>${Number(order.total).toFixed(2)}</p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid #f1f5f9", paddingTop: "10px" }}>
+                            {order.items.map((item, i) => (
+                              <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: "12px", fontSize: "13px" }}>
+                                <span style={{ color: "#374151", fontWeight: "600" }}>{item.quantity}× {item.name}</span>
+                                <span style={{ color: "#111827", fontWeight: "700", whiteSpace: "nowrap" }}>${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

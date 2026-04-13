@@ -385,6 +385,21 @@ export async function fetchCustomerOrderStatus(orderId) {
   return res.json();
 }
 
+export async function createCustomerReservation(payload) {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const res = await fetch(`${API_URL}/api/customer/reservations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Failed to create reservation.");
+  return data;
+}
+
 // Online order checkout (POS staff)
 export async function fetchOnlineOrderById(orderId) {
   return request(`/api/customer/online-orders/${orderId}`);

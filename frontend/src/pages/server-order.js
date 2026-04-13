@@ -432,7 +432,7 @@ export default function ServerOrderPage() {
               boxSizing: "border-box",
             }}
           >
-            <option>Dine In</option>
+            <option value="Dine In">Make Reservation</option>
             <option>Takeout</option>
           </select>
         </div>
@@ -668,7 +668,7 @@ export default function ServerOrderPage() {
                     {selectedMenuItem.name}
                   </h2>
                 </div>
-                <p style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#166534" }}>
+                <p style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#111827" }}>
                   ${selectedMenuItem.price.toFixed(2)}
                 </p>
               </div>
