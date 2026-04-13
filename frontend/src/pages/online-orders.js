@@ -1,18 +1,28 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { fetchOnlineOrders, confirmOnlineOrder, denyOnlineOrder, markOnlineOrderPickedUp, fetchActiveTakeoutOrders } from "../lib/api";
+import {
+  fetchOnlineOrders,
+  confirmOnlineOrder,
+  cancelOnlineOrder,
+  denyOnlineOrder,
+  markOnlineOrderPickedUp,
+  fetchActiveTakeoutOrders,
+} from "../lib/api";
+import { getStoredEmployee } from "../lib/session";
 
 const TAKEOUT_STATUS_META = {
-  Open:      { label: "Pending",    color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
-  Sent:      { label: "In Kitchen", color: "#8b5cf6", bg: "#f5f3ff", border: "#ddd6fe" },
-  Completed: { label: "Ready",      color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0" },
+  Open: { label: "Pending", color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
+  Sent: { label: "In Kitchen", color: "#8b5cf6", bg: "#f5f3ff", border: "#ddd6fe" },
+  Completed: { label: "Ready", color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0" },
 };
 
 const STATUS_META = {
-  placed:    { label: "New",       color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
+  placed: { label: "New", color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
+  denied: { label: "Canceled", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+  canceled: { label: "Canceled", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
   confirmed: { label: "Confirmed", color: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" },
   preparing: { label: "Preparing", color: "#8b5cf6", bg: "#f5f3ff", border: "#ddd6fe" },
-  ready:     { label: "Ready",     color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0" },
+  ready: { label: "Ready", color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0" },
 };
 
 export default function OnlineOrdersPage() {
@@ -21,6 +31,11 @@ export default function OnlineOrdersPage() {
   const [takeoutOrders, setTakeoutOrders] = useState([]);
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [employee, setEmployee] = useState(null);
+
+  useEffect(() => {
+    setEmployee(getStoredEmployee());
+  }, []);
 
   async function loadOrders() {
     try {
@@ -49,18 +64,25 @@ export default function OnlineOrdersPage() {
   }
 
   function handleTakeoutCheckout(order) {
-    localStorage.setItem("currentOrder", JSON.stringify({
-      orderId: order.orderId,
-      tableNumber: 10000,
-      cart: order.items.map((item) => ({ name: item.name, price: Number(item.price), quantity: item.quantity })),
-    }));
+    localStorage.setItem(
+      "currentOrder",
+      JSON.stringify({
+        orderId: order.orderId,
+        tableNumber: 10000,
+        cart: order.items.map((item) => ({
+          name: item.name,
+          price: Number(item.price),
+          quantity: item.quantity,
+        })),
+      })
+    );
     router.push("/checkout");
   }
 
   async function handlePickup(orderId) {
     try {
       await markOnlineOrderPickedUp(orderId);
-      setOrders((prev) => prev.filter((o) => o.order_id !== orderId));
+      setOrders((prev) => prev.filter((order) => order.order_id !== orderId));
     } catch (err) {
       setMessage(err.message);
     }
@@ -70,8 +92,26 @@ export default function OnlineOrdersPage() {
     try {
       await confirmOnlineOrder(orderId);
       setOrders((prev) =>
-        prev.map((o) => o.order_id === orderId ? { ...o, customer_status: "confirmed" } : o)
+        prev.map((order) =>
+          order.order_id === orderId ? { ...order, customer_status: "confirmed" } : order
+        )
       );
+      setMessage(null);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCancel(orderId) {
+    if (employee?.role !== "manager") {
+      setMessage("Only managers can cancel online orders.");
+      return;
+    }
+
+    try {
+      await cancelOnlineOrder(orderId);
+      setOrders((prev) => prev.filter((order) => order.order_id !== orderId));
+      setMessage(null);
     } catch (err) {
       setMessage(err.message);
     }
@@ -80,18 +120,18 @@ export default function OnlineOrdersPage() {
   async function handleDeny(orderId) {
     try {
       await denyOnlineOrder(orderId);
-      setOrders((prev) => prev.filter((o) => o.order_id !== orderId));
+      setOrders((prev) => prev.filter((order) => order.order_id !== orderId));
+      setMessage(null);
     } catch (err) {
       setMessage(err.message);
     }
   }
 
-  const newOrders = orders.filter((o) => o.customer_status === "placed");
-  const activeOrders = orders.filter((o) => o.customer_status !== "placed");
+  const newOrders = orders.filter((order) => order.customer_status === "placed");
+  const activeOrders = orders.filter((order) => order.customer_status !== "placed");
 
   return (
     <div style={{ padding: "28px 32px", fontFamily: "system-ui, -apple-system, sans-serif", backgroundColor: "#f8fafc", minHeight: "100vh" }}>
-
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px" }}>
         <div>
           <h1 style={{ fontSize: "26px", fontWeight: "800", color: "#0f172a", margin: 0 }}>Takeout / Online Orders</h1>
@@ -117,17 +157,15 @@ export default function OnlineOrdersPage() {
         <p style={{ color: "#94a3b8" }}>Loading orders...</p>
       ) : orders.length === 0 && takeoutOrders.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>
-          <div style={{ fontSize: "48px", marginBottom: "12px" }}>📭</div>
+          <div style={{ fontSize: "48px", marginBottom: "12px" }}>Orders</div>
           <p style={{ fontSize: "16px", fontWeight: "600" }}>No active orders</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
-
-          {/* Takeout orders */}
           {takeoutOrders.length > 0 && (
             <div>
               <h2 style={{ fontSize: "13px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#f59e0b", marginBottom: "12px" }}>
-                ● Takeout Orders
+                Takeout Orders
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {takeoutOrders.map((order) => (
@@ -137,21 +175,28 @@ export default function OnlineOrdersPage() {
             </div>
           )}
 
-          {/* New online orders — need confirmation */}
           {newOrders.length > 0 && (
             <div>
               <h2 style={{ fontSize: "13px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#f97316", marginBottom: "12px" }}>
-                ● New Online — Awaiting Confirmation
+                New Online - Awaiting Confirmation
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {newOrders.map((order) => (
-                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onDeny={handleDeny} onCheckout={handleCheckout} onPickup={handlePickup} />
+                  <OrderCard
+                    key={order.order_id}
+                    order={order}
+                    onCancel={handleCancel}
+                    onConfirm={handleConfirm}
+                    onDeny={handleDeny}
+                    onCheckout={handleCheckout}
+                    onPickup={handlePickup}
+                    canCancel={employee?.role === "manager"}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {/* Active online orders */}
           {activeOrders.length > 0 && (
             <div>
               <h2 style={{ fontSize: "13px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "12px" }}>
@@ -159,12 +204,20 @@ export default function OnlineOrdersPage() {
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
                 {activeOrders.map((order) => (
-                  <OrderCard key={order.order_id} order={order} onConfirm={handleConfirm} onCheckout={handleCheckout} onPickup={handlePickup} />
+                  <OrderCard
+                    key={order.order_id}
+                    order={order}
+                    onCancel={handleCancel}
+                    onConfirm={handleConfirm}
+                    onDeny={handleDeny}
+                    onCheckout={handleCheckout}
+                    onPickup={handlePickup}
+                    canCancel={employee?.role === "manager"}
+                  />
                 ))}
               </div>
             </div>
           )}
-
         </div>
       )}
     </div>
@@ -176,15 +229,14 @@ function TakeoutCard({ order, onCheckout }) {
 
   return (
     <div style={{ backgroundColor: "white", borderRadius: "14px", border: "1px solid #fde68a", boxShadow: "0 1px 4px rgba(15,23,42,0.06)", overflow: "hidden" }}>
-
-      {/* Card header */}
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #fef9c3", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <p style={{ fontSize: "13px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
-            Order #{order.orderId} — Takeout
+            Order #{order.orderId} - Takeout
           </p>
           <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
-            {order.takeoutName}{order.takeoutPhone ? ` · ${order.takeoutPhone}` : ""}
+            {order.takeoutName}
+            {order.takeoutPhone ? ` - ${order.takeoutPhone}` : ""}
           </p>
         </div>
         <span style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "999px", backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}>
@@ -192,12 +244,11 @@ function TakeoutCard({ order, onCheckout }) {
         </span>
       </div>
 
-      {/* Items */}
       <div style={{ padding: "14px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-          {(order.items || []).map((item, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-              <span style={{ color: "#374151" }}>{item.quantity}× {item.name}</span>
+          {(order.items || []).map((item, index) => (
+            <div key={index} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+              <span style={{ color: "#374151" }}>{item.quantity}x {item.name}</span>
               <span style={{ color: "#64748b" }}>${(Number(item.price) * item.quantity).toFixed(2)}</span>
             </div>
           ))}
@@ -208,7 +259,6 @@ function TakeoutCard({ order, onCheckout }) {
         </div>
       </div>
 
-      {/* Action */}
       <div style={{ padding: "0 20px 16px" }}>
         <button
           onClick={() => onCheckout(order)}
@@ -221,10 +271,9 @@ function TakeoutCard({ order, onCheckout }) {
   );
 }
 
-function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
+function OrderCard({ order, onCancel, onConfirm, onDeny, onCheckout, onPickup, canCancel }) {
   const meta = STATUS_META[order.customer_status] ?? STATUS_META.placed;
   const note = order.order_note || "";
-  // Parse contact info from order_note: "FirstName LastName | phone | note"
   const parts = note.split(" | ");
   const name = parts[0] || "Guest";
   const phone = parts[1] || "";
@@ -232,29 +281,29 @@ function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
 
   return (
     <div style={{ backgroundColor: "white", borderRadius: "14px", border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(15,23,42,0.06)", overflow: "hidden" }}>
-
-      {/* Card header */}
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <p style={{ fontSize: "13px", fontWeight: "800", color: "#0f172a", margin: 0 }}>Order #{order.order_id}</p>
-          <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>{name}{phone ? ` · ${phone}` : ""}</p>
+          <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+            {name}
+            {phone ? ` - ${phone}` : ""}
+          </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "999px", backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}` }}>
             {meta.label}
           </span>
           <span style={{ fontSize: "11px", fontWeight: "600", padding: "4px 10px", borderRadius: "999px", backgroundColor: order.payment_preference === "online" ? "#f0fdf4" : "#f8fafc", color: order.payment_preference === "online" ? "#16a34a" : "#64748b", border: `1px solid ${order.payment_preference === "online" ? "#bbf7d0" : "#e2e8f0"}` }}>
-            {order.payment_preference === "online" ? "💳 Prepaid" : "💵 Pay at Pickup"}
+            {order.payment_preference === "online" ? "Prepaid" : "Pay at Pickup"}
           </span>
         </div>
       </div>
 
-      {/* Items */}
       <div style={{ padding: "14px 20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-          {(order.items || []).map((item, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-              <span style={{ color: "#374151" }}>{item.quantity}× {item.name}</span>
+          {(order.items || []).map((item, index) => (
+            <div key={index} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+              <span style={{ color: "#374151" }}>{item.quantity}x {item.name}</span>
               <span style={{ color: "#64748b" }}>${(Number(item.price) * item.quantity).toFixed(2)}</span>
             </div>
           ))}
@@ -262,7 +311,7 @@ function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
 
         {instructions && (
           <p style={{ fontSize: "12px", color: "#f97316", backgroundColor: "#fff7ed", borderRadius: "6px", padding: "6px 10px", margin: "0 0 12px" }}>
-            📝 {instructions}
+            Note: {instructions}
           </p>
         )}
 
@@ -272,8 +321,16 @@ function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
         </div>
       </div>
 
-      {/* Action buttons */}
       <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+        {canCancel && (
+          <button
+            onClick={() => onCancel(order.order_id)}
+            style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#b91c1c", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
+          >
+            Manager Cancel
+          </button>
+        )}
+
         {order.customer_status === "placed" && (
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -290,6 +347,7 @@ function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
             </button>
           </div>
         )}
+
         {order.customer_status !== "placed" && (
           <>
             {order.payment_status === "unpaid" ? (
@@ -304,15 +362,16 @@ function OrderCard({ order, onConfirm, onDeny, onCheckout, onPickup }) {
                 disabled
                 style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: "14px", fontWeight: "700", cursor: "not-allowed" }}
               >
-                ✓ Paid
+                Paid
               </button>
             )}
+
             {order.customer_status === "ready" && order.payment_status === "paid" && (
               <button
                 onClick={() => onPickup(order.order_id)}
                 style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", backgroundColor: "#111827", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}
               >
-                ✓ Customer Picked Up
+                Customer Picked Up
               </button>
             )}
           </>

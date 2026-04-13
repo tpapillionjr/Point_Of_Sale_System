@@ -694,6 +694,7 @@ async function getBackOfficeData(range) {
          CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
          oo.total,
          CASE
+           WHEN oo.customer_status IN ('canceled', 'denied') THEN 'Canceled'
            WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
@@ -739,6 +740,7 @@ async function getBackOfficeData(range) {
          CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
          oo.total,
          CASE
+           WHEN oo.customer_status IN ('canceled', 'denied') THEN 'Canceled'
            WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
@@ -749,7 +751,7 @@ async function getBackOfficeData(range) {
          oo.created_at AS createdAt,
          'Online' AS channel
        FROM Online_Orders oo
-       WHERE oo.customer_status <> 'picked_up'
+       WHERE oo.customer_status NOT IN ('picked_up', 'canceled', 'denied')
      ) active_orders
      ORDER BY createdAt DESC`
   );

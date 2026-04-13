@@ -1,5 +1,23 @@
 import express from "express";
+<<<<<<< HEAD
 import { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation, deactivateCustomer } from "../controllers/customer.controller.js";
+=======
+import {
+  getCustomerMenu,
+  createCustomerOrder,
+  getCustomerOrderStatus,
+  getOnlineOrders,
+  confirmOnlineOrder,
+  cancelOnlineOrder,
+  denyOnlineOrder,
+  registerCustomer,
+  loginCustomer,
+  getOnlineOrderById,
+  markOnlineOrderPaid,
+  markOrderPickedUp,
+  getCustomerOrderHistory,
+} from "../controllers/customer.controller.js";
+>>>>>>> 04bdb56 (Fix manager ticket permissions and update negative number validation copy)
 import { requireAuth, requireCustomerAuth, requireManager } from "../../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -10,6 +28,8 @@ router.get("/orders/:orderId/status", requireCustomerAuth, getCustomerOrderStatu
 router.get("/online-orders", requireAuth, getOnlineOrders);
 router.get("/online-orders/:orderId", requireAuth, getOnlineOrderById);
 router.patch("/online-orders/:orderId/confirm", requireAuth, confirmOnlineOrder);
+router.patch("/online-orders/:orderId/deny", requireAuth, denyOnlineOrder);
+router.patch("/online-orders/:orderId/cancel", requireAuth, requireManager, cancelOnlineOrder);
 router.patch("/online-orders/:orderId/deny", requireAuth, denyOnlineOrder);
 router.patch("/online-orders/:orderId/pay", requireAuth, markOnlineOrderPaid);
 router.patch("/online-orders/:orderId/pickup", requireAuth, markOrderPickedUp);
