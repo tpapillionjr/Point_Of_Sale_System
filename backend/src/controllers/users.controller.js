@@ -88,7 +88,7 @@ async function postResetPassword(req, res) {
 
 async function postVerifyManager(req, res) {
   try {
-    const result = await verifyManager(req.body?.pin);
+    const result = await verifyManager(req.body?.email, req.body?.password);
     res.json(result);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;

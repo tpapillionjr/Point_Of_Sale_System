@@ -25,7 +25,8 @@ export default function ServerOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
   const [pendingRemoveId, setPendingRemoveId] = useState(null);
-  const [managerPin, setManagerPin] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [managerPassword, setManagerPassword] = useState("");
   const [approvalError, setApprovalError] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showGuestPad, setShowGuestPad] = useState(false);
@@ -203,7 +204,8 @@ export default function ServerOrderPage() {
   const handleRemoveItem = (id) => {
     if (sentItemIds.includes(id)) {
       setPendingRemoveId(id);
-      setManagerPin("");
+      setManagerEmail("");
+      setManagerPassword("");
       setApprovalError(null);
     } else {
       removeItem(id);
@@ -211,35 +213,33 @@ export default function ServerOrderPage() {
   };
 
   const handleManagerApproval = useCallback(async () => {
-    if (managerPin.length !== 4) return;
+    if (!managerEmail || !managerPassword) return;
     try {
       setIsVerifying(true);
       setApprovalError(null);
-      await verifyManager(managerPin);
+      await verifyManager(managerEmail, managerPassword);
       removeItem(pendingRemoveId);
       setSentItemIds((prev) => prev.filter((sid) => sid !== pendingRemoveId));
       setPendingRemoveId(null);
-      setManagerPin("");
+      setManagerEmail("");
+      setManagerPassword("");
     } catch (err) {
       setApprovalError(err.message);
     } finally {
       setIsVerifying(false);
     }
-  }, [managerPin, pendingRemoveId]);
+  }, [managerEmail, managerPassword, pendingRemoveId]);
 
   useEffect(() => {
     if (pendingRemoveId === null) return;
 
     function handleKey(e) {
-      if (e.key >= "0" && e.key <= "9") {
-        setManagerPin((p) => (p.length < 4 ? p + e.key : p));
-      } else if (e.key === "Backspace") {
-        setManagerPin((p) => p.slice(0, -1));
-      } else if (e.key === "Enter") {
+      if (e.key === "Enter") {
         handleManagerApproval();
       } else if (e.key === "Escape") {
         setPendingRemoveId(null);
-        setManagerPin("");
+        setManagerEmail("");
+        setManagerPassword("");
         setApprovalError(null);
       }
     }
@@ -768,51 +768,40 @@ export default function ServerOrderPage() {
             <p className="ci-sub" style={{ fontSize: "1rem", fontWeight: 700, color: "#4a6484" }}>
               Manager Approval Required
             </p>
-            <p className="ci-sub">Enter manager PIN to remove item.</p>
-
-            <div className="ci-dots">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className={i < managerPin.length ? "ci-dot ci-dot--filled" : "ci-dot"} />
-              ))}
-            </div>
+            <p className="ci-sub">Enter manager credentials to remove item.</p>
 
             {approvalError && (
               <p className="ci-status ci-status--error">{approvalError}</p>
             )}
 
-            <div className="ci-grid">
-              {["1","2","3","4","5","6","7","8","9"].map((d) => (
-                <button
-                  key={d}
-                  className="ci-btn"
-                  onClick={() => setManagerPin((p) => (p.length < 4 ? p + d : p))}
-                >
-                  {d}
-                </button>
-              ))}
-              <button
-                className="ci-btn ci-btn--ghost"
-                onClick={() => setManagerPin((p) => p.slice(0, -1))}
-              >
-                ⌫
-              </button>
-              <button
-                className="ci-btn"
-                onClick={() => setManagerPin((p) => (p.length < 4 ? p + "0" : p))}
-              >
-                0
-              </button>
-              <button
-                className="ci-btn ci-btn--enter"
-                onClick={handleManagerApproval}
-                disabled={managerPin.length !== 4 || isVerifying}
-              >
-                {isVerifying ? "..." : "✓"}
-              </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", marginBottom: "12px" }}>
+              <input
+                type="email"
+                placeholder="Manager email"
+                value={managerEmail}
+                onChange={(e) => setManagerEmail(e.target.value)}
+                autoFocus
+                style={{ padding: "10px 14px", borderRadius: "10px", border: "1.5px solid #c8d8e8", fontSize: "14px", outline: "none", width: "100%", boxSizing: "border-box" }}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={managerPassword}
+                onChange={(e) => setManagerPassword(e.target.value)}
+                style={{ padding: "10px 14px", borderRadius: "10px", border: "1.5px solid #c8d8e8", fontSize: "14px", outline: "none", width: "100%", boxSizing: "border-box" }}
+              />
             </div>
 
             <button
-              onClick={() => { setPendingRemoveId(null); setManagerPin(""); setApprovalError(null); }}
+              onClick={handleManagerApproval}
+              disabled={!managerEmail || !managerPassword || isVerifying}
+              style={{ width: "100%", padding: "11px", borderRadius: "12px", border: "none", backgroundColor: (!managerEmail || !managerPassword || isVerifying) ? "#cbd5e1" : "#3b82f6", color: "white", fontWeight: 700, cursor: (!managerEmail || !managerPassword || isVerifying) ? "not-allowed" : "pointer", fontSize: "0.95rem", marginBottom: "8px" }}
+            >
+              {isVerifying ? "Verifying..." : "Approve"}
+            </button>
+
+            <button
+              onClick={() => { setPendingRemoveId(null); setManagerEmail(""); setManagerPassword(""); setApprovalError(null); }}
               style={{ width: "100%", padding: "10px", border: "1.5px solid #c8d8e8", borderRadius: "12px", backgroundColor: "white", color: "#c0392b", fontWeight: 700, cursor: "pointer", fontSize: "0.9rem" }}
             >
               Cancel
