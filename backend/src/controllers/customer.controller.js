@@ -107,7 +107,7 @@ async function loginCustomer(req, res) {
     }
 
     const rows = await db.query(
-      `SELECT customer_num_id, first_name, last_name, email, phone_number, password_hash, points_balance
+      `SELECT customer_num_id, first_name, last_name, email, phone_number, password_hash, points_balance, is_active
        FROM Customer WHERE email = ? LIMIT 1`,
       [email.trim().toLowerCase()]
     );
@@ -117,6 +117,11 @@ async function loginCustomer(req, res) {
     }
 
     const customer = rows[0];
+
+    if (!customer.is_active) {
+      return res.status(403).json({ error: "This account has been deactivated. Please contact the restaurant." });
+    }
+
     const valid = await bcrypt.compare(password, customer.password_hash);
 
     if (!valid) {
@@ -607,4 +612,34 @@ async function createCustomerReservation(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation };
+async function deactivateCustomer(req, res) {
+  try {
+    const customerId = Number.parseInt(req.params.customerId, 10);
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(400).json({ error: "Invalid customer ID." });
+    }
+
+    const rows = await db.query(
+      `SELECT customer_num_id, is_active FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+      [customerId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    const newStatus = !rows[0].is_active;
+
+    await db.query(
+      `UPDATE Customer SET is_active = ? WHERE customer_num_id = ?`,
+      [newStatus, customerId]
+    );
+
+    res.json({ customerId, is_active: newStatus });
+  } catch (error) {
+    console.error("deactivateCustomer error:", error);
+    res.status(500).json({ error: "Failed to update customer status." });
+  }
+}
+
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation, deactivateCustomer };

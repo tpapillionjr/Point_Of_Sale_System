@@ -35,6 +35,12 @@ export default function CustomerDashboardPage() {
 
     const token = localStorage.getItem("customerAuthToken");
     if (token) {
+      function forceLogout() {
+        localStorage.removeItem("customerAuthToken");
+        localStorage.removeItem("customerInfo");
+        router.replace("/customer/login");
+      }
+
       fetchCustomerLoyaltyInfo(token)
         .then((info) => {
           setLoyaltyInfo(info);
@@ -43,7 +49,9 @@ export default function CustomerDashboardPage() {
           localStorage.setItem("customerInfo", JSON.stringify(updated));
           setCustomer(updated);
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (err.status === 401) forceLogout();
+        });
 
       fetchLoyaltyRewardsPublic()
         .then(setRewards)
@@ -51,7 +59,9 @@ export default function CustomerDashboardPage() {
 
       fetchCustomerOrderHistory(token)
         .then(setOrderHistory)
-        .catch(() => {});
+        .catch((err) => {
+          if (err.status === 401) forceLogout();
+        });
     }
   }, [router]);
 

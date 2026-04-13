@@ -89,6 +89,7 @@ CREATE TABLE Customer (
     password_hash VARCHAR(255) NOT NULL,
     phone_number VARCHAR(10) NOT NULL UNIQUE,
     points_balance INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_customer_phone_digits CHECK (phone_number REGEXP '^[0-9]{10}$'),
     CONSTRAINT chk_points_nonneg CHECK (points_balance >= 0)

@@ -7,6 +7,7 @@ import {
   adjustLoyaltyPoints,
   cancelOrder,
   fetchCustomerOrdersBackOffice,
+  toggleCustomerActive,
   confirmOnlineOrder,
   createLoyaltyReward,
   createLaborShift,
@@ -2227,8 +2228,10 @@ export function CustomerLoyaltySection() {
   const [actionMessage, setActionMessage] = useState(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const filteredCustomers = (customers?.customers ?? []).filter((c) => {
+    if (showInactive ? c.isActive == 1 : c.isActive != 1) return false;
     if (!customerSearch) return true;
     const q = customerSearch.toLowerCase();
     return (
@@ -2343,7 +2346,7 @@ export function CustomerLoyaltySection() {
       </ReportSection>
 
       <ReportSection title="Customer Records">
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <input
             type="text"
             placeholder="Search by name, email, or phone..."
@@ -2351,12 +2354,18 @@ export function CustomerLoyaltySection() {
             onChange={(e) => setCustomerSearch(e.target.value)}
             className="w-full rounded-lg border px-3 py-2 text-sm md:w-80"
           />
+          <button
+            onClick={() => { setShowInactive((v) => !v); setSelectedCustomer(null); setCustomerSearch(""); }}
+            className={`rounded-lg border px-3 py-2 text-sm font-semibold ${showInactive ? "border-red-300 bg-red-50 text-red-700" : "border-gray-300 bg-white text-gray-600"}`}
+          >
+            {showInactive ? "Viewing: Inactive" : "Viewing: Active"}
+          </button>
         </div>
         {error ? (
           <ErrorState message={error} />
         ) : filteredCustomers.length ? (
           <SimpleTable
-            headers={["Name", "Email", "Phone", "Points", ""]}
+            headers={["Name", "Email", "Phone", "Points", "Actions", ""]}
             rows={filteredCustomers}
             renderRow={(item) => (
               <>
@@ -2369,11 +2378,29 @@ export function CustomerLoyaltySection() {
                   <td className="py-3 pr-4 text-gray-600">{item.email}</td>
                   <td className="py-3 pr-4 text-gray-600">{item.phoneNumber}</td>
                   <td className="py-3 pr-4 font-semibold text-blue-600">{item.pointsBalance} pts</td>
+                  <td className="py-3 pr-4" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`${item.isActive ? "Deactivate" : "Reactivate"} ${item.firstName} ${item.lastName}?`)) return;
+                        try {
+                          await toggleCustomerActive(item.customerId);
+                          setRefreshToken((v) => v + 1);
+                          setSelectedCustomer(null);
+                          setActionMessage(`${item.firstName} ${item.lastName} has been ${item.isActive ? "deactivated" : "reactivated"}.`);
+                        } catch (err) {
+                          setActionMessage(`Error: ${err.message}`);
+                        }
+                      }}
+                      className={`rounded px-3 py-1 text-xs font-semibold ${item.isActive ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-700 hover:bg-green-100"}`}
+                    >
+                      {item.isActive ? "Deactivate" : "Reactivate"}
+                    </button>
+                  </td>
                   <td className="py-3 pr-2 text-xs text-gray-400">{selectedCustomer?.customerId === item.customerId ? "▲" : "▼"}</td>
                 </tr>
                 {selectedCustomer?.customerId === item.customerId && (
                   <tr key={`${item.customerId}-detail`}>
-                    <td colSpan={5} className="bg-gray-50 px-4 pb-4 pt-2">
+                    <td colSpan={6} className="bg-gray-50 px-4 pb-4 pt-2">
                       <CustomerDetailPanel
                         customer={item}
                         onPointsAdjusted={(newBalance) => {
