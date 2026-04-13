@@ -7,6 +7,8 @@ function validateUserPayload(payload) {
 
   if (!payload?.name || typeof payload.name !== "string" || payload.name.trim().length === 0) {
     issues.push("name is required.");
+  } else if (!/^[a-zA-Z0-9\s\-']*$/.test(payload.name.trim())) {
+    issues.push("name contains invalid characters. Only letters, numbers, spaces, hyphens, and apostrophes are allowed.");
   }
 
   if (!payload?.email || typeof payload.email !== "string" || !payload.email.includes("@")) {
