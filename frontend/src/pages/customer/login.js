@@ -36,6 +36,16 @@ export default function CustomerLoginPage() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
+  function sanitizeNameInput(value) {
+    // Only allow alphanumeric, spaces, hyphens, and apostrophes
+    return value.replace(/[^a-zA-Z0-9\s\-']/g, "");
+  }
+
+  function validateNameCharacters(name) {
+    // Check if name contains only allowed characters
+    return /^[a-zA-Z0-9\s\-']*$/.test(name);
+  }
+
   function routeStaffUser(user) {
     if (user.role === "kitchen") {
       router.push("/expo");
@@ -92,6 +102,8 @@ export default function CustomerLoginPage() {
     const { firstName, lastName, email, phone, password, confirmPassword } = signupForm;
 
     if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) { setError("All fields are required."); return; }
+    if (!validateNameCharacters(firstName)) { setError("First name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
+    if (!validateNameCharacters(lastName)) { setError("Last name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
     if (!validateEmail(email)) { setError("Please enter a valid email address."); return; }
     if (!/^\d{10}$/.test(phone)) { setError("Phone number must be exactly 10 digits."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
@@ -350,7 +362,7 @@ export default function CustomerLoginPage() {
                     type="text"
                     placeholder="Jane"
                     value={signupForm.firstName}
-                    onChange={(e) => setSignupForm({ ...signupForm, firstName: e.target.value })}
+                    onChange={(e) => setSignupForm({ ...signupForm, firstName: sanitizeNameInput(e.target.value) })}
                     style={inputStyle}
                   />
                 </div>
@@ -360,7 +372,7 @@ export default function CustomerLoginPage() {
                     type="text"
                     placeholder="Doe"
                     value={signupForm.lastName}
-                    onChange={(e) => setSignupForm({ ...signupForm, lastName: e.target.value })}
+                    onChange={(e) => setSignupForm({ ...signupForm, lastName: sanitizeNameInput(e.target.value) })}
                     style={inputStyle}
                   />
                 </div>
