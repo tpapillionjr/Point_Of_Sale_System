@@ -13,6 +13,25 @@ function normalizeOptionalText(value, maxLength = null) {
   return maxLength ? trimmed.slice(0, maxLength) : trimmed;
 }
 
+const CATEGORY_ALIASES = {
+  beverages: "Beverages",
+  beverage: "Beverages",
+  drinks: "Beverages",
+  drink: "Beverages",
+  entrees: "Entrees",
+  entree: "Entrees",
+  sandwiches: "Sandwiches",
+  sandwich: "Sandwiches",
+  waffles: "Waffles",
+  waffle: "Waffles",
+  bowls: "Bowls",
+  bowl: "Bowls",
+  sides: "Sides",
+  side: "Sides",
+  appetizers: "Sides",
+  appetizer: "Sides",
+};
+
 function menuItemPayload(body) {
   const { name, category, basePrice, description, photoUrl, commonAllergens } = body ?? {};
   return {
@@ -31,7 +50,7 @@ function normalizeCategory(value) {
     return "Uncategorized";
   }
 
-  return category.toLowerCase() === "entree" ? "Entrees" : category;
+  return CATEGORY_ALIASES[category.toLowerCase()] ?? category;
 }
 
 function menuItemResponse(row) {

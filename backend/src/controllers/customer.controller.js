@@ -41,13 +41,12 @@ async function registerCustomer(req, res) {
       return res.status(400).json({ error: "All fields are required." });
     }
 
-    // Validate name characters - only allow alphanumeric, spaces, hyphens, and apostrophes
-    if (!/^[a-zA-Z0-9\s\-']*$/.test(firstName.trim())) {
-      return res.status(400).json({ error: "First name contains invalid characters. Only letters, numbers, spaces, hyphens, and apostrophes are allowed." });
+    if (!/^[a-zA-Z]+$/.test(firstName.trim())) {
+      return res.status(400).json({ error: "First name can only contain letters." });
     }
 
-    if (!/^[a-zA-Z0-9\s\-']*$/.test(lastName.trim())) {
-      return res.status(400).json({ error: "Last name contains invalid characters. Only letters, numbers, spaces, hyphens, and apostrophes are allowed." });
+    if (!/^[a-zA-Z]+$/.test(lastName.trim())) {
+      return res.status(400).json({ error: "Last name can only contain letters." });
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {

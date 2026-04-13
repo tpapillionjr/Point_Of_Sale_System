@@ -47,13 +47,11 @@ export default function CustomerLoginPage() {
   }
 
   function sanitizeNameInput(value) {
-    // Only allow alphanumeric, spaces, hyphens, and apostrophes
-    return value.replace(/[^a-zA-Z0-9\s\-']/g, "");
+    return value.replace(/[^a-zA-Z]/g, "");
   }
 
   function validateNameCharacters(name) {
-    // Check if name contains only allowed characters
-    return /^[a-zA-Z0-9\s\-']*$/.test(name);
+    return /^[a-zA-Z]+$/.test(name.trim());
   }
 
   function routeStaffUser(user) {
@@ -116,8 +114,8 @@ export default function CustomerLoginPage() {
     const { firstName, lastName, email, phone, password, confirmPassword } = signupForm;
 
     if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) { setError("All fields are required."); return; }
-    if (!validateNameCharacters(firstName)) { setError("First name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
-    if (!validateNameCharacters(lastName)) { setError("Last name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
+    if (!validateNameCharacters(firstName)) { setError("First name can only contain letters."); return; }
+    if (!validateNameCharacters(lastName)) { setError("Last name can only contain letters."); return; }
     if (!validateEmail(email)) { setError("Please enter a valid email address."); return; }
     if (!/^\d{10}$/.test(phone)) { setError("Phone number must be exactly 10 digits."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
@@ -377,6 +375,8 @@ export default function CustomerLoginPage() {
                     placeholder="Jane"
                     value={signupForm.firstName}
                     onChange={(e) => setSignupForm({ ...signupForm, firstName: sanitizeNameInput(e.target.value) })}
+                    pattern="[A-Za-z]+"
+                    autoComplete="given-name"
                     style={inputStyle}
                   />
                 </div>
@@ -387,6 +387,8 @@ export default function CustomerLoginPage() {
                     placeholder="Doe"
                     value={signupForm.lastName}
                     onChange={(e) => setSignupForm({ ...signupForm, lastName: sanitizeNameInput(e.target.value) })}
+                    pattern="[A-Za-z]+"
+                    autoComplete="family-name"
                     style={inputStyle}
                   />
                 </div>
