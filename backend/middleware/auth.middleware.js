@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import db from "../src/db/index.js";
 
 export function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -34,7 +35,7 @@ export function requireKitchenOrManager(req, res, next) {
   next();
 }
 
-export function requireCustomerAuth(req, res, next) {
+export async function requireCustomerAuth(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -43,14 +44,28 @@ export function requireCustomerAuth(req, res, next) {
 
   const token = authHeader.slice(7);
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (!decoded.customerId) {
       return res.status(401).json({ error: "Invalid customer token." });
     }
-    req.customer = decoded;
-    next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired customer token." });
   }
+
+  try {
+    const rows = await db.query(
+      `SELECT is_active FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+      [decoded.customerId]
+    );
+    if (rows.length === 0 || !rows[0].is_active) {
+      return res.status(401).json({ error: "Account has been deactivated. Call the restaurant for any questions." });
+    }
+  } catch {
+    return res.status(500).json({ error: "Authentication check failed." });
+  }
+
+  req.customer = decoded;
+  next();
 }

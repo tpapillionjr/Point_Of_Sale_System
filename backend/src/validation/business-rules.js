@@ -69,7 +69,7 @@ function validateOrderPayload(payload) {
         }
 
         if (!isFiniteNumber(item?.price) || item.price < 0) {
-          itemIssues.push(`items[${index}].price must be a non-negative number.`);
+          itemIssues.push(`items[${index}].price cannot be negative; negative numbers are not allowed.`);
         }
 
         issues.push(...itemIssues);
@@ -96,7 +96,7 @@ function validateOrderPayload(payload) {
   const serviceCharge = payload.serviceCharge ?? 0;
 
   if (![discountAmount, tax, serviceCharge].every((value) => isFiniteNumber(value) && value >= 0)) {
-    issues.push("discountAmount, tax, and serviceCharge must be non-negative numbers.");
+    issues.push("discountAmount, tax, and serviceCharge cannot be negative; negative numbers are not allowed.");
   }
 
   const total = subtotal - discountAmount + tax + serviceCharge;

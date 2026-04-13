@@ -694,6 +694,7 @@ async function getBackOfficeData(range) {
          CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
          oo.total,
          CASE
+           WHEN oo.customer_status IN ('canceled', 'denied') THEN 'Canceled'
            WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
@@ -739,6 +740,7 @@ async function getBackOfficeData(range) {
          CONCAT(oo.first_name, ' ', oo.last_name) AS employeeName,
          oo.total,
          CASE
+           WHEN oo.customer_status IN ('canceled', 'denied') THEN 'Canceled'
            WHEN oo.customer_status = 'picked_up' THEN 'Picked Up'
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
@@ -749,7 +751,7 @@ async function getBackOfficeData(range) {
          oo.created_at AS createdAt,
          'Online' AS channel
        FROM Online_Orders oo
-       WHERE oo.customer_status <> 'picked_up'
+       WHERE oo.customer_status NOT IN ('picked_up', 'canceled', 'denied')
      ) active_orders
      ORDER BY createdAt DESC`
   );
@@ -768,9 +770,10 @@ async function getBackOfficeData(range) {
        last_name AS lastName,
        email,
        phone_number AS phoneNumber,
-       points_balance AS pointsBalance
+       points_balance AS pointsBalance,
+       is_active AS isActive
      FROM Customer
-     ORDER BY points_balance DESC, customer_num_id ASC`
+     ORDER BY is_active DESC, points_balance DESC, customer_num_id ASC`
   );
 
   const userCountsPromise = db.query(
@@ -1060,6 +1063,7 @@ async function getBackOfficeData(range) {
         email: row.email,
         phoneNumber: row.phoneNumber,
         pointsBalance: Number(row.pointsBalance ?? 0),
+        isActive: row.isActive,
       })),
     },
     settings: {
