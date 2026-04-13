@@ -329,7 +329,7 @@ CREATE TABLE Order_Item (  --needed to calculate sales by item and most popular 
 
 CREATE TABLE Login_Audit (
     login_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id INT NULL,
     attempt_type ENUM('success', 'failed') NOT NULL,
     attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ip_address VARCHAR(45) NULL,

@@ -11,6 +11,11 @@ function securityTablesMissing(error) {
   return ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"].includes(error?.code);
 }
 
+function isSecurityError(error) {
+  // Check for missing tables, bad fields, or NOT NULL constraint errors
+  return ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR", "ER_BAD_NULL_ERROR"].includes(error?.code);
+}
+
 function defaultSecurityMetrics() {
   return {
     failedCount: 0,
@@ -30,12 +35,14 @@ export async function trackLoginAttempt(userId, ipAddress, success) {
       const now = new Date();
       const fifteenMinutesAgo = new Date(now - TIME_WINDOW);
 
-      // 1. Record the login attempt
-      await connection.execute(
-        `INSERT INTO Login_Audit (user_id, attempt_type, ip_address, attempted_at)
-         VALUES (?, ?, ?, ?)`,
-        [userId, success ? "success" : "failed", ipAddress, now]
-      );
+      // 1. Record the login attempt (only if userId is provided)
+      if (userId !== null && userId !== undefined) {
+        await connection.execute(
+          `INSERT INTO Login_Audit (user_id, attempt_type, ip_address, attempted_at)
+           VALUES (?, ?, ?, ?)`,
+          [userId, success ? "success" : "failed", ipAddress, now]
+        );
+      }
 
       // 2. Update or create IP tracking
       const [existingTracking] = await connection.execute(
@@ -62,23 +69,28 @@ export async function trackLoginAttempt(userId, ipAddress, success) {
         );
       }
 
-      // 3. Get user's failed attempts in the last 15 minutes
-      const [recentFailures] = await connection.execute(
-        `SELECT COUNT(*) as count FROM Login_Audit 
-         WHERE user_id = ? AND attempt_type = 'failed' AND attempted_at > ?`,
-        [userId, fifteenMinutesAgo]
-      );
+      // 3. Get user's failed attempts in the last 15 minutes (only if userId is provided)
+      let failedCount = 0;
+      let uniqueIPCount = 0;
 
-      const failedCount = recentFailures[0].count;
+      if (userId !== null && userId !== undefined) {
+        const [recentFailures] = await connection.execute(
+          `SELECT COUNT(*) as count FROM Login_Audit 
+           WHERE user_id = ? AND attempt_type = 'failed' AND attempted_at > ?`,
+          [userId, fifteenMinutesAgo]
+        );
 
-      // 4. Check for multiple IPs hitting same user account
-      const [uniqueIPs] = await connection.execute(
-        `SELECT COUNT(DISTINCT ip_address) as ip_count FROM Login_Audit
-         WHERE user_id = ? AND attempted_at > ?`,
-        [userId, fifteenMinutesAgo]
-      );
+        failedCount = recentFailures[0].count;
 
-      const uniqueIPCount = uniqueIPs[0].ip_count;
+        // 4. Check for multiple IPs hitting same user account
+        const [uniqueIPs] = await connection.execute(
+          `SELECT COUNT(DISTINCT ip_address) as ip_count FROM Login_Audit
+           WHERE user_id = ? AND attempted_at > ?`,
+          [userId, fifteenMinutesAgo]
+        );
+
+        uniqueIPCount = uniqueIPs[0].ip_count;
+      }
 
       return {
         failedCount,
@@ -89,11 +101,10 @@ export async function trackLoginAttempt(userId, ipAddress, success) {
       };
     });
   } catch (error) {
-    if (securityTablesMissing(error)) {
-      return defaultSecurityMetrics();
-    }
-
-    throw error;
+    // Log the error for debugging but don't expose it to the frontend
+    console.error("trackLoginAttempt failed:", error.message);
+    // Return safe defaults so login can continue
+    return defaultSecurityMetrics();
   }
 }
 
@@ -111,7 +122,7 @@ export async function generateCaptchaSession(userId, ipAddress) {
       [sessionToken, userId, ipAddress, expiresAt]
     );
   } catch (error) {
-    if (!securityTablesMissing(error)) {
+    if (!isSecurityError(error)) {
       throw error;
     }
   }
@@ -134,7 +145,7 @@ export async function validateCaptchaSession(sessionToken) {
       [sessionToken]
     );
   } catch (error) {
-    if (securityTablesMissing(error)) {
+    if (isSecurityError(error)) {
       throw { statusCode: 400, message: "CAPTCHA validation is not configured." };
     }
 
@@ -181,7 +192,7 @@ export async function alertManagers(alertType, relatedUserId, ipAddress, message
        WHERE role = 'manager' AND is_active = true`
     );
   } catch (error) {
-    if (securityTablesMissing(error)) {
+    if (isSecurityError(error)) {
       return;
     }
 
@@ -199,7 +210,7 @@ export async function alertManagers(alertType, relatedUserId, ipAddress, message
         [manager.user_id, alertType, relatedUserId || null, ipAddress, message]
       );
     } catch (error) {
-      if (!securityTablesMissing(error)) {
+      if (!isSecurityError(error)) {
         throw error;
       }
     }
@@ -224,7 +235,7 @@ export async function createBruteForceAlert(
 
     return result.insertId;
   } catch (error) {
-    if (securityTablesMissing(error)) {
+    if (isSecurityError(error)) {
       return null;
     }
 
@@ -246,7 +257,7 @@ export async function checkIPBlock(ipAddress) {
       [ipAddress]
     );
   } catch (error) {
-    if (securityTablesMissing(error)) {
+    if (isSecurityError(error)) {
       return { blocked: false };
     }
 
@@ -293,7 +304,7 @@ export async function blockIP(ipAddress, durationMinutes = 15) {
       [blockedUntil, ipAddress]
     );
   } catch (error) {
-    if (!securityTablesMissing(error)) {
+    if (!isSecurityError(error)) {
       throw error;
     }
   }
@@ -342,7 +353,7 @@ export async function getUserSecurityMetrics(userId) {
       [userId]
     );
   } catch (error) {
-    if (securityTablesMissing(error)) {
+    if (isSecurityError(error)) {
       return {
         isLocked: false,
         failedAttempts: 0,
