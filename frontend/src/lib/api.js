@@ -316,6 +316,12 @@ export async function denyOnlineOrder(orderId) {
   });
 }
 
+export async function cancelOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/cancel`, {
+    method: "PATCH",
+  });
+}
+
 // Customer auth — no employee token attached
 export async function customerRegister(payload) {
   const res = await fetch(`${API_URL}/api/customer/register`, {

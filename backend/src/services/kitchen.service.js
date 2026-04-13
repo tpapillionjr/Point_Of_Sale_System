@@ -86,6 +86,20 @@ async function updateTicketStatus(payload) {
       [status, ticketId]
     );
 
+<<<<<<< HEAD
+=======
+    if (ticketRows[0].online_order_id) {
+      const customerStatusMap = { in_progress: "preparing", done: "ready", canceled: "denied" };
+      const newCustomerStatus = customerStatusMap[status];
+      if (newCustomerStatus) {
+        await connection.execute(
+          `UPDATE Online_Orders SET customer_status = ? WHERE online_order_id = ?`,
+          [newCustomerStatus, ticketRows[0].online_order_id]
+        );
+      }
+    }
+
+>>>>>>> 04bdb56 (Fix manager ticket permissions and update negative number validation copy)
     if (status === "done") {
       await connection.execute(
         `UPDATE Orders
@@ -96,7 +110,7 @@ async function updateTicketStatus(payload) {
       );
     }
 
-    if (status === "canceled") {
+    if (status === "canceled" && ticketRows[0].order_id) {
       await connection.execute(
         `UPDATE Orders
          SET status = 'Void',

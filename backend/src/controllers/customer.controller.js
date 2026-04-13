@@ -4,6 +4,15 @@ import jwt from "jsonwebtoken";
 
 const CUSTOMER_JWT_SECRET = process.env.JWT_SECRET;
 const CUSTOMER_JWT_EXPIRES_IN = "7d";
+const ONLINE_ORDER_CANCELED_STATUSES = new Set(["canceled", "denied"]);
+
+function isCanceledOnlineOrderStatus(status) {
+  return ONLINE_ORDER_CANCELED_STATUSES.has(status);
+}
+
+function normalizeCustomerFacingOnlineStatus(status) {
+  return isCanceledOnlineOrderStatus(status) ? "canceled" : status;
+}
 
 function getCustomerFromAuthHeader(req) {
   const authHeader = req.headers.authorization;
@@ -295,7 +304,7 @@ async function getCustomerOrderStatus(req, res) {
       return res.status(403).json({ error: "You do not have access to this order." });
     }
 
-    res.json({ orderId, status: rows[0].customer_status });
+    res.json({ orderId, status: normalizeCustomerFacingOnlineStatus(rows[0].customer_status) });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch order status." });
   }
@@ -336,7 +345,7 @@ async function getOnlineOrders(req, res) {
       `SELECT online_order_id, first_name, last_name, phone, order_note,
               subtotal, tax, total, customer_status, payment_preference, payment_status, created_at
        FROM Online_Orders
-       WHERE customer_status != 'picked_up'
+       WHERE customer_status NOT IN ('picked_up', 'canceled', 'denied')
        ORDER BY created_at DESC`
     );
 
@@ -365,6 +374,22 @@ async function confirmOnlineOrder(req, res) {
       return res.status(400).json({ error: "Invalid order ID." });
     }
 
+    const rows = await db.query(
+      `SELECT customer_status
+       FROM Online_Orders
+       WHERE online_order_id = ?
+       LIMIT 1`,
+      [orderId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (isCanceledOnlineOrderStatus(rows[0].customer_status)) {
+      return res.status(400).json({ error: "Canceled orders cannot be confirmed." });
+    }
+
     await db.query(
       `UPDATE Online_Orders SET customer_status = 'confirmed' WHERE online_order_id = ?`,
       [orderId]
@@ -376,11 +401,83 @@ async function confirmOnlineOrder(req, res) {
   }
 }
 
+async function cancelOnlineOrder(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    const rows = await db.query(
+      `SELECT customer_status, payment_status
+       FROM Online_Orders
+       WHERE online_order_id = ?
+       LIMIT 1`,
+      [orderId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (rows[0].customer_status === "picked_up") {
+      return res.status(400).json({ error: "Picked up orders cannot be canceled." });
+    }
+
+    if (isCanceledOnlineOrderStatus(rows[0].customer_status)) {
+      return res.status(400).json({ error: "Order is already canceled." });
+    }
+
+    await db.withTransaction(async (connection) => {
+      await connection.execute(
+        `UPDATE Online_Orders
+         SET customer_status = 'denied'
+         WHERE online_order_id = ?`,
+        [orderId]
+      );
+
+      await connection.execute(
+        `UPDATE Kitchen_Ticket
+         SET status = 'canceled',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE online_order_id = ?
+           AND status IN ('new', 'in_progress')`,
+        [orderId]
+      );
+    });
+
+    res.json({
+      orderId,
+      customer_status: "canceled",
+      payment_status: rows[0].payment_status,
+    });
+  } catch (error) {
+    console.error("cancelOnlineOrder error:", error);
+    res.status(500).json({ error: "Failed to cancel order." });
+  }
+}
+
 async function markOrderPickedUp(req, res) {
   try {
     const orderId = Number(req.params.orderId);
     if (!Number.isInteger(orderId) || orderId <= 0) {
       return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    const rows = await db.query(
+      `SELECT customer_status
+       FROM Online_Orders
+       WHERE online_order_id = ?
+       LIMIT 1`,
+      [orderId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    if (isCanceledOnlineOrderStatus(rows[0].customer_status)) {
+      return res.status(400).json({ error: "Canceled orders cannot be marked picked up." });
     }
 
     await db.query(
@@ -422,7 +519,11 @@ async function getOnlineOrderById(req, res) {
       [orderId]
     );
 
-    res.json({ ...rows[0], items });
+    res.json({
+      ...rows[0],
+      customer_status: normalizeCustomerFacingOnlineStatus(rows[0].customer_status),
+      items,
+    });
   } catch (error) {
     console.error("getOnlineOrderById error:", error);
     res.status(500).json({ error: "Failed to fetch order." });
@@ -455,7 +556,10 @@ async function markOnlineOrderPaid(req, res) {
     }
 
     const rows = await db.query(
-      `SELECT payment_status FROM Online_Orders WHERE online_order_id = ? LIMIT 1`,
+      `SELECT customer_status, payment_status
+       FROM Online_Orders
+       WHERE online_order_id = ?
+       LIMIT 1`,
       [orderId]
     );
 
@@ -465,6 +569,10 @@ async function markOnlineOrderPaid(req, res) {
 
     if (rows[0].payment_status === "paid") {
       return res.status(400).json({ error: "Order is already paid." });
+    }
+
+    if (isCanceledOnlineOrderStatus(rows[0].customer_status)) {
+      return res.status(400).json({ error: "Canceled orders cannot be marked paid." });
     }
 
     await db.query(
@@ -541,7 +649,11 @@ async function getCustomerOrderHistory(req, res) {
          WHERE oi.online_order_id = ?`,
         [order.online_order_id]
       );
-      return { ...order, items };
+      return {
+        ...order,
+        customer_status: normalizeCustomerFacingOnlineStatus(order.customer_status),
+        items,
+      };
     }));
 
     res.json(ordersWithItems);
@@ -550,6 +662,7 @@ async function getCustomerOrderHistory(req, res) {
   }
 }
 
+<<<<<<< HEAD
 async function createCustomerReservation(req, res) {
   try {
     const customerId = Number(req.customer?.customerId);
@@ -643,3 +756,20 @@ async function deactivateCustomer(req, res) {
 }
 
 export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp, deleteOnlineOrder, getCustomerOrderHistory, createCustomerReservation, deactivateCustomer };
+=======
+export {
+  getCustomerMenu,
+  createCustomerOrder,
+  getCustomerOrderStatus,
+  getOnlineOrders,
+  confirmOnlineOrder,
+  cancelOnlineOrder,
+  denyOnlineOrder,
+  registerCustomer,
+  loginCustomer,
+  getOnlineOrderById,
+  markOnlineOrderPaid,
+  markOrderPickedUp,
+  getCustomerOrderHistory,
+};
+>>>>>>> 04bdb56 (Fix manager ticket permissions and update negative number validation copy)

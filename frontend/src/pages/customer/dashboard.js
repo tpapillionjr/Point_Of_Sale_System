@@ -10,7 +10,8 @@ const ORDER_STATUS_LABEL = {
   preparing: { label: "Preparing", color: "#8b5cf6" },
   ready: { label: "Ready", color: "#22c55e" },
   picked_up: { label: "Picked Up", color: "#64748b" },
-  denied: { label: "Denied", color: "#dc2626" },
+  denied: { label: "Canceled", color: "#dc2626" },
+  canceled: { label: "Canceled", color: "#dc2626" },
 };
 
 export default function CustomerDashboardPage() {

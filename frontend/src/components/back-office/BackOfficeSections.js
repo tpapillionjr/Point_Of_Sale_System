@@ -5,6 +5,7 @@ import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
 import {
   adjustLoyaltyPoints,
+  cancelOnlineOrder,
   cancelOrder,
   fetchCustomerOrdersBackOffice,
   toggleCustomerActive,
@@ -1793,6 +1794,9 @@ export function OrderHistorySection() {
       if (action === "confirm") {
         await confirmOnlineOrder(orderId);
         setCancelMessage(`Online order #${orderId} was confirmed.`);
+      } else if (action === "cancel") {
+        await cancelOnlineOrder(orderId);
+        setCancelMessage(`Online order #${orderId} was canceled.`);
       } else if (action === "pay") {
         await markOnlineOrderPaid(orderId);
         setCancelMessage(`Online order #${orderId} was marked paid.`);
@@ -1917,6 +1921,14 @@ export function OrderHistorySection() {
                         </div>
                         {item.channel === "Online" ? (
                           <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOnlineAction(item.orderId, "cancel")}
+                              disabled={onlineActionId === `cancel-${item.orderId}`}
+                              className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+                            >
+                              {onlineActionId === `cancel-${item.orderId}` ? "Canceling..." : "Manager Cancel"}
+                            </button>
                             {item.customerStatus === "placed" ? (
                               <button
                                 type="button"
