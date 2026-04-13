@@ -310,6 +310,12 @@ export async function confirmOnlineOrder(orderId) {
   });
 }
 
+export async function denyOnlineOrder(orderId) {
+  return request(`/api/customer/online-orders/${orderId}/deny`, {
+    method: "PATCH",
+  });
+}
+
 // Customer auth — no employee token attached
 export async function customerRegister(payload) {
   const res = await fetch(`${API_URL}/api/customer/register`, {

@@ -392,6 +392,24 @@ async function getOnlineOrderById(req, res) {
   }
 }
 
+async function denyOnlineOrder(req, res) {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return res.status(400).json({ error: "Invalid order ID." });
+    }
+
+    await db.query(
+      `UPDATE Online_Orders SET customer_status = 'denied' WHERE online_order_id = ? AND customer_status = 'placed'`,
+      [orderId]
+    );
+
+    res.json({ orderId, customer_status: "denied" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to deny order." });
+  }
+}
+
 async function markOnlineOrderPaid(req, res) {
   try {
     const orderId = Number(req.params.orderId);
@@ -424,4 +442,4 @@ async function markOnlineOrderPaid(req, res) {
   }
 }
 
-export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };
+export { getCustomerMenu, createCustomerOrder, getCustomerOrderStatus, getOnlineOrders, confirmOnlineOrder, denyOnlineOrder, registerCustomer, loginCustomer, getOnlineOrderById, markOnlineOrderPaid, markOrderPickedUp };
