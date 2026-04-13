@@ -240,7 +240,12 @@ function normalizeOptionalDateTime(value, label) {
     throw error;
   }
 
-  return parsed.toISOString().slice(0, 19).replace("T", " ");
+  const pad = (part) => String(part).padStart(2, "0");
+  return [
+    parsed.getFullYear(),
+    pad(parsed.getMonth() + 1),
+    pad(parsed.getDate()),
+  ].join("-") + ` ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
 }
 
 function normalizeOptionalNonNegativeNumber(value, label) {
@@ -284,6 +289,35 @@ async function createLaborShift(payload = {}) {
     throw error;
   }
 
+  const [existingShiftRows] = await db.pool.execute(
+    `SELECT shift_id AS shiftId
+     FROM Employee_Shift
+     WHERE user_id = ?
+       AND DATE(scheduled_start) = DATE(?)
+     ORDER BY scheduled_start DESC
+     LIMIT 1`,
+    [userId, scheduledStart]
+  );
+
+  if (existingShiftRows.length > 0) {
+    const shiftId = existingShiftRows[0].shiftId;
+    await db.pool.execute(
+      `UPDATE Employee_Shift
+       SET scheduled_start = ?,
+           scheduled_end = ?
+       WHERE shift_id = ?`,
+      [scheduledStart, scheduledEnd, shiftId]
+    );
+
+    return {
+      shiftId,
+      userId,
+      scheduledStart,
+      scheduledEnd,
+      updated: true,
+    };
+  }
+
   const [result] = await db.pool.execute(
     `INSERT INTO Employee_Shift (user_id, scheduled_start, scheduled_end, tip_declared_amount)
      VALUES (?, ?, ?, 0.00)`,
@@ -308,6 +342,28 @@ async function updateLaborShift(shiftIdInput, payload = {}) {
 
   const updates = [];
   const params = [];
+
+  if (Object.hasOwn(payload, "userId")) {
+    const userId = Number(payload.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      const error = new Error("userId must be a positive integer.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const [userRows] = await db.pool.execute(
+      `SELECT user_id FROM Users WHERE user_id = ? AND is_active = true LIMIT 1`,
+      [userId]
+    );
+    if (userRows.length === 0) {
+      const error = new Error("User not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    updates.push("user_id = ?");
+    params.push(userId);
+  }
 
   if (Object.hasOwn(payload, "scheduledStart")) {
     updates.push("scheduled_start = ?");

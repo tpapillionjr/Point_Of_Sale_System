@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { upload } from "@vercel/blob/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReportCard from "../reports/ReportCard";
 import ReportSection from "../reports/ReportSection";
 import {
@@ -1033,6 +1033,97 @@ export function PurchasingSection() {
   );
 }
 
+function formatDateTimeLocalValue(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function splitDateTimeInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return { date: "", time: "" };
+  }
+
+  const value = formatDateTimeLocalValue(date);
+  return {
+    date: value.slice(0, 10),
+    time: value.slice(11, 16),
+  };
+}
+
+function parseShiftDateTimeParts(dateValue, timeValue) {
+  const dateText = String(dateValue ?? "").trim();
+  const timeText = String(timeValue ?? "").trim();
+  if (!dateText || !timeText) {
+    return null;
+  }
+
+  const isoDateMatch = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const displayDateMatch = dateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const timeMatch = timeText.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+  if ((!isoDateMatch && !displayDateMatch) || !timeMatch) {
+    return null;
+  }
+
+  const yearText = isoDateMatch ? isoDateMatch[1] : displayDateMatch[3];
+  const monthText = isoDateMatch ? isoDateMatch[2] : displayDateMatch[1];
+  const dayText = isoDateMatch ? isoDateMatch[3] : displayDateMatch[2];
+  const [, hourText, minuteText, periodText] = timeMatch;
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const year = Number(yearText);
+  let hour = Number(hourText);
+  const minute = Number(minuteText);
+  const period = periodText?.toUpperCase();
+
+  if (period) {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+
+    if (period === "PM" && hour !== 12) {
+      hour += 12;
+    } else if (period === "AM" && hour === 12) {
+      hour = 0;
+    }
+  }
+
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  const parsed = new Date(year, month - 1, day, hour, minute);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function dateKey(value) {
+  if (!value) return "";
+  return formatDateTimeLocalValue(new Date(value)).slice(0, 10);
+}
+
+function firstFilledValue(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
 export function LaborSection() {
   const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
   const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
@@ -1043,12 +1134,20 @@ export function LaborSection() {
   const [usersError, setUsersError] = useState("");
   const [shiftForm, setShiftForm] = useState({
     userId: "",
-    scheduledStart: "",
-    scheduledEnd: "",
+    scheduledStartDate: "",
+    scheduledStartTime: "",
+    scheduledEndDate: "",
+    scheduledEndTime: "",
   });
   const [laborMessage, setLaborMessage] = useState("");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [updatingShiftId, setUpdatingShiftId] = useState(null);
+  const [editingShiftId, setEditingShiftId] = useState(null);
+  const shiftUserRef = useRef(null);
+  const shiftStartDateRef = useRef(null);
+  const shiftStartTimeRef = useRef(null);
+  const shiftEndDateRef = useRef(null);
+  const shiftEndTimeRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -1060,7 +1159,15 @@ export function LaborSection() {
           return;
         }
 
-        setUsers(rows.filter((user) => user.is_active !== false));
+        setUsers(
+          rows
+            .map((user) => ({
+              ...user,
+              userId: user.userId ?? user.user_id,
+              isActive: user.isActive ?? user.is_active,
+            }))
+            .filter((user) => user.userId && user.isActive !== false)
+        );
         setUsersError("");
       } catch (loadError) {
         if (isMounted) {
@@ -1076,24 +1183,120 @@ export function LaborSection() {
     };
   }, []);
 
-  async function handleCreateShift() {
-    if (!shiftForm.userId || !shiftForm.scheduledStart || !shiftForm.scheduledEnd) {
+  function readShiftFormPayload(formElement = null) {
+    const formData = formElement ? new FormData(formElement) : null;
+    const payload = {
+      userId: firstFilledValue(shiftForm.userId, shiftUserRef.current?.value, formData?.get("userId")),
+      scheduledStartDate: firstFilledValue(
+        shiftForm.scheduledStartDate,
+        shiftStartDateRef.current?.value,
+        formData?.get("scheduledStartDate")
+      ),
+      scheduledStartTime: firstFilledValue(
+        shiftForm.scheduledStartTime,
+        shiftStartTimeRef.current?.value,
+        formData?.get("scheduledStartTime")
+      ),
+      scheduledEndDate: firstFilledValue(
+        shiftForm.scheduledEndDate,
+        shiftEndDateRef.current?.value,
+        formData?.get("scheduledEndDate")
+      ),
+      scheduledEndTime: firstFilledValue(
+        shiftForm.scheduledEndTime,
+        shiftEndTimeRef.current?.value,
+        formData?.get("scheduledEndTime")
+      ),
+    };
+
+    if (
+      !payload.userId ||
+      !payload.scheduledStartDate ||
+      !payload.scheduledStartTime ||
+      !payload.scheduledEndDate ||
+      !payload.scheduledEndTime
+    ) {
       setLaborMessage("Error: Employee, start, and end are required.");
-      return;
+      return null;
     }
+
+    const scheduledStartDate = parseShiftDateTimeParts(payload.scheduledStartDate, payload.scheduledStartTime);
+    const scheduledEndDate = parseShiftDateTimeParts(payload.scheduledEndDate, payload.scheduledEndTime);
+    if (!scheduledStartDate || !scheduledEndDate) {
+      setLaborMessage("Error: Choose a valid date and time for start and end.");
+      return null;
+    }
+
+    if (scheduledEndDate <= scheduledStartDate) {
+      scheduledEndDate.setDate(scheduledEndDate.getDate() + 1);
+    }
+
+    return {
+      userId: Number(payload.userId),
+      scheduledStart: formatDateTimeLocalValue(scheduledStartDate),
+      scheduledEnd: formatDateTimeLocalValue(scheduledEndDate),
+    };
+  }
+
+  function resetShiftForm() {
+    setShiftForm({
+      userId: "",
+      scheduledStartDate: "",
+      scheduledStartTime: "",
+      scheduledEndDate: "",
+      scheduledEndTime: "",
+    });
+    setEditingShiftId(null);
+  }
+
+  function updateShiftFormField(field, value) {
+    setShiftForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSaveShift(event) {
+    event.preventDefault();
+    const payload = readShiftFormPayload(event.currentTarget);
+    if (!payload) return;
 
     try {
       setIsCreatingShift(true);
       setLaborMessage("");
-      await createLaborShift(shiftForm);
-      setShiftForm({ userId: "", scheduledStart: "", scheduledEnd: "" });
+      const existingShift = !editingShiftId
+        ? labor?.shifts?.find((shift) =>
+            Number(shift.userId) === Number(payload.userId) &&
+            dateKey(shift.scheduledStart) === dateKey(payload.scheduledStart)
+          )
+        : null;
+      const shiftIdToUpdate = editingShiftId || existingShift?.shiftId;
+
+      if (shiftIdToUpdate) {
+        await updateLaborShift(shiftIdToUpdate, payload);
+      } else {
+        await createLaborShift(payload);
+      }
+      resetShiftForm();
       setRefreshToken((current) => current + 1);
-      setLaborMessage("Shift scheduled.");
+      setLaborMessage(shiftIdToUpdate ? "Shift updated." : "Shift scheduled.");
     } catch (createError) {
-      setLaborMessage(`Error: ${createError.message || "Failed to schedule shift."}`);
+      setLaborMessage(`Error: ${createError.message || "Failed to save shift."}`);
     } finally {
       setIsCreatingShift(false);
     }
+  }
+
+  function handleEditShift(shift) {
+    const scheduledStart = splitDateTimeInputValue(new Date(shift.scheduledStart));
+    const scheduledEnd = splitDateTimeInputValue(new Date(shift.scheduledEnd));
+
+    setEditingShiftId(shift.shiftId);
+    setShiftForm({
+      userId: String(shift.userId),
+      scheduledStartDate: scheduledStart.date,
+      scheduledStartTime: scheduledStart.time,
+      scheduledEndDate: scheduledEnd.date,
+      scheduledEndTime: scheduledEnd.time,
+    });
+    setLaborMessage("");
   }
 
   async function handleUpdateShift(shiftId, payload, successMessage) {
@@ -1118,7 +1321,7 @@ export function LaborSection() {
         <SummaryCards cards={labor?.summaryCards} isLoading={isLoading} error={error} columns="xl:grid-cols-5" />
       </ReportSection>
 
-      <ReportSection title="Labor Write Actions">
+      <ReportSection title="Shifts">
         {laborMessage ? (
           <p
             className={`mb-4 rounded px-4 py-2 text-sm font-medium ${
@@ -1134,56 +1337,110 @@ export function LaborSection() {
         {usersError ? <ErrorState message={usersError} /> : null}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.4fr)]">
-          <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Schedule Shift</h3>
+          <form className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm" onSubmit={handleSaveShift} noValidate>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+              {editingShiftId ? "Edit Shift" : "Schedule Shift"}
+            </h3>
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-700">Employee</span>
               <select
+                ref={shiftUserRef}
+                name="userId"
                 value={shiftForm.userId}
-                onChange={(event) => setShiftForm((current) => ({ ...current, userId: event.target.value }))}
+                onChange={(event) => updateShiftFormField("userId", event.currentTarget.value)}
+                onInput={(event) => updateShiftFormField("userId", event.currentTarget.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Choose employee</option>
                 {users.map((user) => (
-                  <option key={user.user_id} value={user.user_id}>
+                  <option key={user.userId} value={user.userId}>
                     {user.name} ({user.role})
                   </option>
                 ))}
               </select>
             </label>
 
-            <label className="block">
+            <div>
               <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled Start</span>
-              <input
-                type="datetime-local"
-                value={shiftForm.scheduledStart}
-                onChange={(event) => setShiftForm((current) => ({ ...current, scheduledStart: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <label className="block">
+                  <span className="sr-only">Scheduled Start Date</span>
+                  <input
+                    ref={shiftStartDateRef}
+                    name="scheduledStartDate"
+                    type="date"
+                    value={shiftForm.scheduledStartDate}
+                    onChange={(event) => updateShiftFormField("scheduledStartDate", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledStartDate", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Scheduled Start Time</span>
+                  <input
+                    ref={shiftStartTimeRef}
+                    name="scheduledStartTime"
+                    type="time"
+                    value={shiftForm.scheduledStartTime}
+                    onChange={(event) => updateShiftFormField("scheduledStartTime", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledStartTime", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+            </div>
 
-            <label className="block">
+            <div>
               <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled End</span>
-              <input
-                type="datetime-local"
-                value={shiftForm.scheduledEnd}
-                onChange={(event) => setShiftForm((current) => ({ ...current, scheduledEnd: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <label className="block">
+                  <span className="sr-only">Scheduled End Date</span>
+                  <input
+                    ref={shiftEndDateRef}
+                    name="scheduledEndDate"
+                    type="date"
+                    value={shiftForm.scheduledEndDate}
+                    onChange={(event) => updateShiftFormField("scheduledEndDate", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledEndDate", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Scheduled End Time</span>
+                  <input
+                    ref={shiftEndTimeRef}
+                    name="scheduledEndTime"
+                    type="time"
+                    value={shiftForm.scheduledEndTime}
+                    onChange={(event) => updateShiftFormField("scheduledEndTime", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledEndTime", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+            </div>
 
             <div className="flex justify-end">
+              {editingShiftId ? (
+                <button
+                  type="button"
+                  onClick={resetShiftForm}
+                  disabled={isCreatingShift}
+                  className="mr-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel Edit
+                </button>
+              ) : null}
               <button
-                type="button"
-                onClick={handleCreateShift}
+                type="submit"
                 disabled={isCreatingShift}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {isCreatingShift ? "Scheduling..." : "Schedule Shift"}
+                {isCreatingShift ? "Saving..." : editingShiftId ? "Save Shift" : "Schedule Shift"}
               </button>
             </div>
-          </div>
+          </form>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Shift Attendance</h3>
@@ -1203,6 +1460,14 @@ export function LaborSection() {
                     <td className="py-3 pr-4">{formatLaborDateTime(shift.clockOut)}</td>
                     <td className="py-3 pr-4">
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditShift(shift)}
+                          disabled={updatingShiftId === shift.shiftId || isCreatingShift}
+                          className="rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           onClick={() =>
