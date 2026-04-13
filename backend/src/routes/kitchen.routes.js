@@ -3,7 +3,11 @@ import {
   requireAuth,
   requireKitchenOrManager,
 } from "../../middleware/auth.middleware.js";
-import { getKitchenTickets, patchKitchenTicket } from "../controllers/kitchen.controller.js";
+import {
+  deleteKitchenTicket,
+  getKitchenTickets,
+  patchKitchenTicket,
+} from "../controllers/kitchen.controller.js";
 
 const router = express.Router();
 
@@ -13,6 +17,12 @@ router.patch(
   requireAuth,
   requireKitchenOrManager,
   patchKitchenTicket
+);
+router.delete(
+  "/tickets/:ticketId",
+  requireAuth,
+  requireKitchenOrManager,
+  deleteKitchenTicket
 );
 
 export default router;

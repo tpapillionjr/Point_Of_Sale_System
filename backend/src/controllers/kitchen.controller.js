@@ -1,4 +1,4 @@
-import { getActiveTickets, updateTicketStatus } from "../services/kitchen.service.js";
+import { getActiveTickets, removeTicket, updateTicketStatus } from "../services/kitchen.service.js";
 
 async function getKitchenTickets(_req, res) {
   try {
@@ -31,4 +31,20 @@ async function patchKitchenTicket(req, res) {
   }
 }
 
-export { getKitchenTickets, patchKitchenTicket };
+async function deleteKitchenTicket(req, res) {
+  try {
+    const result = await removeTicket({
+      ticketId: req.params.ticketId,
+      userId: req.user?.sub ?? req.user?.userId ?? req.body?.userId,
+    });
+    res.json(result);
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500;
+    res.status(statusCode).json({
+      error: error.message || "Failed to remove kitchen ticket.",
+      details: error.details ?? [],
+    });
+  }
+}
+
+export { deleteKitchenTicket, getKitchenTickets, patchKitchenTicket };

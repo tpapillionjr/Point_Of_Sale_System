@@ -9,7 +9,7 @@ export default function MenuButton({ item, addToCart, showDetails = false }) {
       onClick={() => addToCart(item)}
       style={{
         width: "100%",
-        minHeight: showDetails ? "150px" : "90px",
+        minHeight: showDetails ? (isDrink ? "230px" : "150px") : "90px",
         border: "1px solid #444",
         borderRadius: "8px",
         backgroundColor: "#f3f4f6",
@@ -25,7 +25,7 @@ export default function MenuButton({ item, addToCart, showDetails = false }) {
         <div
           style={{
             width: "100%",
-            height: "84px",
+            height: isDrink ? "160px" : "84px",
             marginBottom: "8px",
             borderRadius: "6px",
             overflow: "hidden",
@@ -35,7 +35,12 @@ export default function MenuButton({ item, addToCart, showDetails = false }) {
           <img
             src={item.photoUrl}
             alt={item.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
           />
         </div>
       ) : null}
