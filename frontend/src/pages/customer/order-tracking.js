@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { fetchCustomerOrderStatus } from "../../lib/api";
+import { fetchCustomerOrderHistory, fetchCustomerOrderStatus } from "../../lib/api";
 
 const STEPS = [
   { id: 1, label: "Order Placed", icon: "1", message: "We've received your order!" },
@@ -11,6 +11,8 @@ const STEPS = [
   { id: 4, label: "Ready", icon: "4", message: "Your order is ready for pickup!" },
 ];
 
+const ACTIVE_ORDER_STATUSES = new Set(["placed", "confirmed", "preparing", "ready"]);
+
 export default function OrderTrackingPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
@@ -18,6 +20,18 @@ export default function OrderTrackingPage() {
   const [estimatedPoints, setEstimatedPoints] = useState(null);
   const [trackingError, setTrackingError] = useState("");
   const [isCanceled, setIsCanceled] = useState(false);
+  const [activeOrders, setActiveOrders] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("customerAuthToken");
+    if (!token) return;
+
+    fetchCustomerOrderHistory(token)
+      .then((orders) => {
+        setActiveOrders(orders.filter((order) => ACTIVE_ORDER_STATUSES.has(order.customer_status)));
+      })
+      .catch(() => {});
+  }, [router.query.orderId]);
 
   useEffect(() => {
     const stored = localStorage.getItem("estimatedPoints");
@@ -111,6 +125,30 @@ export default function OrderTrackingPage() {
           <h1 style={{ fontSize: "32px", fontWeight: "900", color: "#1e3a5f", margin: "0 0 8px", letterSpacing: "-0.02em" }}>Order Tracker</h1>
           <p style={{ color: "#64748b", fontSize: "15px", margin: 0 }}>We&apos;ll keep you updated every step of the way.</p>
         </div>
+
+        {activeOrders.length > 1 && (
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "18px 22px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", marginBottom: "24px" }}>
+            <label htmlFor="tracking-active-order-select" style={{ display: "block", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "10px" }}>
+              Other Active Orders
+            </label>
+            <select
+              id="tracking-active-order-select"
+              value={router.query.orderId ? String(router.query.orderId) : ""}
+              onChange={(event) => {
+                if (event.target.value) {
+                  router.push(`/customer/order-tracking?orderId=${event.target.value}`);
+                }
+              }}
+              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "12px 14px", color: "#1e3a5f", fontSize: "14px", fontWeight: "700", backgroundColor: "white" }}
+            >
+              {activeOrders.map((order) => (
+                <option key={order.online_order_id} value={order.online_order_id}>
+                  Order #{order.online_order_id} - {order.customer_status.replace("_", " ")} - ${Number(order.total).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {trackingError ? (
           <div style={{ backgroundColor: "#fef2f2", borderRadius: "14px", padding: "16px 20px", border: "1px solid #fecaca", marginBottom: "24px", color: "#991b1b", fontSize: "14px", fontWeight: "700" }}>

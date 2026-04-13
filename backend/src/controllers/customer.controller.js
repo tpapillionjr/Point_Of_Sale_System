@@ -158,6 +158,7 @@ async function loginCustomer(req, res) {
 }
 
 const TAX_RATE = 0.0825;
+const MAX_ACTIVE_CUSTOMER_ORDERS = 3;
 const MENU_CATEGORIES = ["Entrees", "Waffles", "Bowls", "Sandwiches", "Sides", "Beverages"];
 const CATEGORY_ALIASES = {
   beverages: "Beverages",
@@ -207,6 +208,23 @@ async function createCustomerOrder(req, res) {
     const total = subtotal + tax;
 
     const result = await db.withTransaction(async (connection) => {
+      if (orderCustomerId) {
+        const [activeOrderRows] = await connection.execute(
+          `SELECT COUNT(*) AS activeOrderCount
+           FROM Online_Orders
+           WHERE customer_num_id = ?
+             AND customer_status NOT IN ('picked_up', 'canceled', 'denied')`,
+          [orderCustomerId]
+        );
+        const activeOrderCount = Number(activeOrderRows[0]?.activeOrderCount ?? 0);
+
+        if (activeOrderCount >= MAX_ACTIVE_CUSTOMER_ORDERS) {
+          const error = new Error("You can only have three active orders at a time.");
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
       const [orderResult] = await connection.execute(
         `INSERT INTO Online_Orders (customer_num_id, first_name, last_name, email, phone, order_note, customer_status, payment_preference, subtotal, tax, total)
          VALUES (?, ?, ?, ?, ?, ?, 'placed', ?, ?, ?, ?)`,
