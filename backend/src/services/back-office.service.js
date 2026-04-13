@@ -675,6 +675,7 @@ async function getBackOfficeData(range) {
          u.name AS employeeName,
          o.total,
          o.status,
+         o.void_reason AS voidReason,
          NULL AS customerStatus,
          NULL AS paymentStatus,
          o.created_at AS createdAt,
@@ -697,6 +698,7 @@ async function getBackOfficeData(range) {
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
          END AS status,
+         NULL AS voidReason,
          oo.customer_status AS customerStatus,
          oo.payment_status AS paymentStatus,
          oo.created_at AS createdAt,
@@ -718,6 +720,7 @@ async function getBackOfficeData(range) {
          u.name AS employeeName,
          o.total,
          o.status,
+         o.void_reason AS voidReason,
          NULL AS customerStatus,
          NULL AS paymentStatus,
          o.created_at AS createdAt,
@@ -740,6 +743,7 @@ async function getBackOfficeData(range) {
            WHEN oo.payment_status = 'paid' THEN 'Paid Online'
            ELSE CONCAT(UPPER(LEFT(oo.customer_status, 1)), SUBSTRING(oo.customer_status, 2))
          END AS status,
+         NULL AS voidReason,
          oo.customer_status AS customerStatus,
          oo.payment_status AS paymentStatus,
          oo.created_at AS createdAt,
@@ -895,6 +899,61 @@ async function getBackOfficeData(range) {
   const userRoleCounts = Object.fromEntries(userCountsRows.map((row) => [row.role, Number(row.count ?? 0)]));
   const totalPoints = customerRows.reduce((sum, row) => sum + Number(row.pointsBalance ?? 0), 0);
   const averagePoints = customerRows.length ? totalPoints / customerRows.length : 0;
+  const orderRowsForItems = [...activeOrders, ...recentOrders];
+  const inStoreOrderIds = [...new Set(orderRowsForItems.filter((row) => row.channel === "In Store").map((row) => row.orderId))];
+  const onlineOrderIds = [...new Set(orderRowsForItems.filter((row) => row.channel === "Online").map((row) => row.orderId))];
+  const itemsByOrderKey = {};
+
+  if (inStoreOrderIds.length > 0) {
+    const placeholders = inStoreOrderIds.map(() => "?").join(",");
+    const itemRows = await db.query(
+      `SELECT oi.order_id AS orderId, mi.name, oi.quantity, oi.price
+       FROM Order_Item oi
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       WHERE oi.order_id IN (${placeholders})
+       ORDER BY oi.order_id ASC, mi.name ASC`,
+      inStoreOrderIds
+    );
+
+    for (const item of itemRows) {
+      const key = `In Store:${item.orderId}`;
+      if (!itemsByOrderKey[key]) itemsByOrderKey[key] = [];
+      itemsByOrderKey[key].push({ name: item.name, quantity: Number(item.quantity), price: Number(item.price) });
+    }
+  }
+
+  if (onlineOrderIds.length > 0) {
+    const placeholders = onlineOrderIds.map(() => "?").join(",");
+    const itemRows = await db.query(
+      `SELECT oi.online_order_id AS orderId, mi.name, oi.quantity, oi.price
+       FROM Online_Order_Item oi
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       WHERE oi.online_order_id IN (${placeholders})
+       ORDER BY oi.online_order_id ASC, mi.name ASC`,
+      onlineOrderIds
+    );
+
+    for (const item of itemRows) {
+      const key = `Online:${item.orderId}`;
+      if (!itemsByOrderKey[key]) itemsByOrderKey[key] = [];
+      itemsByOrderKey[key].push({ name: item.name, quantity: Number(item.quantity), price: Number(item.price) });
+    }
+  }
+
+  const mapOrderRow = (row) => ({
+    orderId: row.orderId,
+    receiptNumber: row.receiptNumber,
+    tableNumber: row.tableNumber ?? "—",
+    employeeName: row.employeeName ?? "Unknown",
+    total: Number(row.total ?? 0),
+    status: row.status,
+    voidReason: row.voidReason ?? "",
+    customerStatus: row.customerStatus,
+    paymentStatus: row.paymentStatus,
+    channel: row.channel,
+    createdAt: formatDateTime(row.createdAt),
+    items: itemsByOrderKey[`${row.channel}:${row.orderId}`] ?? [],
+  });
 
   return {
     inventory: {
@@ -984,30 +1043,8 @@ async function getBackOfficeData(range) {
         { title: "Void Orders", value: String(voidOrders) },
         { title: "Refunds", value: String(Number(refundCountsRows[0]?.refundCount ?? 0)) },
       ],
-      activeOrders: activeOrders.map((row) => ({
-        orderId: row.orderId,
-        receiptNumber: row.receiptNumber,
-        tableNumber: row.tableNumber ?? "—",
-        employeeName: row.employeeName ?? "Unknown",
-        total: Number(row.total ?? 0),
-        status: row.status,
-        customerStatus: row.customerStatus,
-        paymentStatus: row.paymentStatus,
-        channel: row.channel,
-        createdAt: formatDateTime(row.createdAt),
-      })),
-      recentOrders: recentOrders.map((row) => ({
-        orderId: row.orderId,
-        receiptNumber: row.receiptNumber,
-        tableNumber: row.tableNumber ?? "—",
-        employeeName: row.employeeName ?? "Unknown",
-        total: Number(row.total ?? 0),
-        status: row.status,
-        customerStatus: row.customerStatus,
-        paymentStatus: row.paymentStatus,
-        channel: row.channel,
-        createdAt: formatDateTime(row.createdAt),
-      })),
+      activeOrders: activeOrders.map(mapOrderRow),
+      recentOrders: recentOrders.map(mapOrderRow),
     },
     customers: {
       summaryCards: [

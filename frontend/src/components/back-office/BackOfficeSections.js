@@ -1739,14 +1739,26 @@ export function OrderHistorySection() {
   const [cancelError, setCancelError] = useState("");
   const [cancelingOrderId, setCancelingOrderId] = useState(null);
   const [onlineActionId, setOnlineActionId] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [cancelPrompt, setCancelPrompt] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
   const { data, isLoading, error } = useBackOfficeData(selectedRange, refreshToken);
   const orders = data?.orders;
 
-  async function handleManagerCancel(orderId) {
+  function openCancelPrompt(order, type) {
+    setCancelPrompt({ order, type });
+    setCancelReason("");
+    setCancelReasonError("");
+    setCancelError("");
+    setCancelMessage("");
+  }
+
+  async function handleManagerCancel(orderId, reason) {
     const employee = getStoredEmployee();
     if (!employee?.userId || employee.role !== "manager") {
       setCancelError("Only a logged-in manager can cancel an active order.");
-      return;
+      return false;
     }
 
     setCancelingOrderId(orderId);
@@ -1757,13 +1769,15 @@ export function OrderHistorySection() {
       await cancelOrder({
         orderId,
         voidedBy: employee.userId,
-        voidReason: "Manager canceled active order from back office",
+        voidReason: reason,
       });
 
       setCancelMessage(`Order #${orderId} was canceled successfully.`);
       setRefreshToken((value) => value + 1);
+      return true;
     } catch (actionError) {
       setCancelError(actionError.message || "Failed to cancel the order.");
+      return false;
     } finally {
       setCancelingOrderId(null);
     }
@@ -1798,7 +1812,7 @@ export function OrderHistorySection() {
     const employee = getStoredEmployee();
     if (!employee?.userId || employee.role !== "manager") {
       setCancelError("Only a logged-in manager can cancel online orders.");
-      return;
+      return false;
     }
 
     setOnlineActionId(`delete-${orderId}`);
@@ -1809,11 +1823,52 @@ export function OrderHistorySection() {
       await deleteOnlineOrder(orderId);
       setCancelMessage(`Online order #${orderId} was canceled.`);
       setRefreshToken((value) => value + 1);
+      return true;
     } catch (actionError) {
       setCancelError(actionError.message || "Failed to cancel online order.");
+      return false;
     } finally {
       setOnlineActionId(null);
     }
+  }
+
+  async function handleConfirmCancel() {
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelReasonError("Enter a reason before canceling the order.");
+      return;
+    }
+
+    const prompt = cancelPrompt;
+    if (!prompt) return;
+
+    setCancelReasonError("");
+
+    const canceled = prompt.type === "online"
+      ? await handleDeleteOnlineOrder(prompt.order.orderId)
+      : await handleManagerCancel(prompt.order.orderId, reason);
+
+    if (!canceled) return;
+
+    setCancelPrompt(null);
+    setCancelReason("");
+  }
+
+  function renderOrderItems(order) {
+    if (!order?.items?.length) {
+      return <p className="text-sm text-gray-500">No item details were found for this order.</p>;
+    }
+
+    return (
+      <div className="divide-y rounded-lg border">
+        {order.items.map((item, index) => (
+          <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+            <span className="font-medium text-gray-800">{item.quantity}× {item.name}</span>
+            <span className="font-semibold text-gray-900">${(Number(item.price) * Number(item.quantity)).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -1840,7 +1895,13 @@ export function OrderHistorySection() {
                   {orders.activeOrders.map((item) => (
                     <div
                       key={`active-${item.channel}-${item.orderId}`}
-                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedOrder(item)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") setSelectedOrder(item);
+                      }}
+                      className="cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:bg-blue-50/30"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="space-y-1 text-sm text-gray-700">
@@ -1858,7 +1919,10 @@ export function OrderHistorySection() {
                             {item.customerStatus === "placed" ? (
                               <button
                                 type="button"
-                                onClick={() => handleOnlineAction(item.orderId, "confirm")}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOnlineAction(item.orderId, "confirm");
+                                }}
                                 disabled={onlineActionId === `confirm-${item.orderId}`}
                                 className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
                               >
@@ -1868,7 +1932,10 @@ export function OrderHistorySection() {
                             {item.paymentStatus !== "paid" ? (
                               <button
                                 type="button"
-                                onClick={() => handleOnlineAction(item.orderId, "pay")}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOnlineAction(item.orderId, "pay");
+                                }}
                                 disabled={onlineActionId === `pay-${item.orderId}`}
                                 className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
                               >
@@ -1878,7 +1945,10 @@ export function OrderHistorySection() {
                             {item.customerStatus === "ready" && item.paymentStatus === "paid" ? (
                               <button
                                 type="button"
-                                onClick={() => handleOnlineAction(item.orderId, "pickup")}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleOnlineAction(item.orderId, "pickup");
+                                }}
                                 disabled={onlineActionId === `pickup-${item.orderId}`}
                                 className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
                               >
@@ -1888,7 +1958,10 @@ export function OrderHistorySection() {
                             {getStoredEmployee()?.role === "manager" ? (
                               <button
                                 type="button"
-                                onClick={() => handleDeleteOnlineOrder(item.orderId)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openCancelPrompt(item, "online");
+                                }}
                                 disabled={onlineActionId === `delete-${item.orderId}`}
                                 className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
                               >
@@ -1899,7 +1972,10 @@ export function OrderHistorySection() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleManagerCancel(item.orderId)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openCancelPrompt(item, "in-store");
+                            }}
                             disabled={cancelingOrderId === item.orderId}
                             className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                           >
@@ -1918,7 +1994,11 @@ export function OrderHistorySection() {
                 headers={["Channel", "Order", "Receipt", "Table", "Employee", "Total", "Status", "Created"]}
                 rows={orders.recentOrders}
                 renderRow={(item) => (
-                  <tr key={`${item.channel}-${item.orderId}`} className="border-b last:border-b-0">
+                  <tr
+                    key={`${item.channel}-${item.orderId}`}
+                    onClick={() => setSelectedOrder(item)}
+                    className="cursor-pointer border-b transition hover:bg-blue-50/60 last:border-b-0"
+                  >
                     <td className="py-3 pr-4">{item.channel}</td>
                     <td className="py-3 pr-4 font-medium text-gray-800">{item.orderId}</td>
                     <td className="py-3 pr-4">{item.receiptNumber}</td>
@@ -1936,6 +2016,86 @@ export function OrderHistorySection() {
           </>
         )}
       </ReportSection>
+
+      {selectedOrder ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/45 p-4" onClick={() => setSelectedOrder(null)}>
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Order Summary</p>
+                <h3 className="mt-1 text-xl font-bold text-gray-900">{selectedOrder.receiptNumber}</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {selectedOrder.channel} · {selectedOrder.channel === "Online" ? "Online Order" : `Table ${selectedOrder.tableNumber}`} · {selectedOrder.createdAt}
+                </p>
+              </div>
+              <button type="button" onClick={() => setSelectedOrder(null)} className="rounded-lg border px-3 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                Close
+              </button>
+            </div>
+
+            <div className="mb-4 grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">{selectedOrder.channel === "Online" ? "Customer" : "Employee"}</p>
+                <p className="mt-1 font-semibold text-gray-900">{selectedOrder.employeeName}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">Status</p>
+                <p className="mt-1 font-semibold text-gray-900">{selectedOrder.status}</p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-xs font-semibold uppercase text-gray-500">Total</p>
+                <p className="mt-1 font-semibold text-gray-900">${selectedOrder.total.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {selectedOrder.status === "Void" && selectedOrder.voidReason ? (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-red-700">Cancellation Reason</p>
+                <p className="mt-1 text-sm font-medium text-red-900">{selectedOrder.voidReason}</p>
+              </div>
+            ) : null}
+
+            {renderOrderItems(selectedOrder)}
+          </div>
+        </div>
+      ) : null}
+
+      {cancelPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/45 p-4" onClick={() => setCancelPrompt(null)}>
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Cancel Order</p>
+            <h3 className="mt-1 text-xl font-bold text-gray-900">{cancelPrompt.order.receiptNumber}</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Tell the team why this order is being canceled.
+            </p>
+            <label className="mt-4 block text-sm font-semibold text-gray-700" htmlFor="cancel-reason">
+              Reason <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              rows={4}
+              className="mt-2 w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+              placeholder="Customer requested cancellation, duplicate order, wrong table..."
+            />
+            {cancelReasonError ? <p className="mt-2 text-sm text-red-600">{cancelReasonError}</p> : null}
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setCancelPrompt(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                disabled={cancelingOrderId === cancelPrompt.order.orderId || onlineActionId === `delete-${cancelPrompt.order.orderId}`}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
+              >
+                {cancelingOrderId === cancelPrompt.order.orderId || onlineActionId === `delete-${cancelPrompt.order.orderId}` ? "Canceling..." : "Cancel Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
