@@ -760,11 +760,13 @@ async function getBackOfficeData(range) {
   const customerRowsPromise = db.query(
     `SELECT
        customer_num_id AS customerId,
+       first_name AS firstName,
+       last_name AS lastName,
+       email,
        phone_number AS phoneNumber,
        points_balance AS pointsBalance
      FROM Customer
-     ORDER BY points_balance DESC, customer_num_id ASC
-     LIMIT 20`
+     ORDER BY points_balance DESC, customer_num_id ASC`
   );
 
   const userCountsPromise = db.query(
@@ -1016,6 +1018,9 @@ async function getBackOfficeData(range) {
       ],
       customers: customerRows.map((row) => ({
         customerId: row.customerId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
         phoneNumber: row.phoneNumber,
         pointsBalance: Number(row.pointsBalance ?? 0),
       })),
@@ -1034,12 +1039,68 @@ async function getBackOfficeData(range) {
   };
 }
 
+async function getCustomerOrders(customerIdInput) {
+  const customerId = Number(customerIdInput);
+  if (!Number.isInteger(customerId) || customerId <= 0) {
+    throw { status: 400, message: "Invalid customer ID." };
+  }
+
+  const customerRows = await db.query(
+    `SELECT customer_num_id AS customerId, first_name AS firstName, last_name AS lastName,
+            email, phone_number AS phoneNumber, points_balance AS pointsBalance
+     FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+    [customerId]
+  );
+  if (customerRows.length === 0) throw { status: 404, message: "Customer not found." };
+
+  const orderRows = await db.query(
+    `SELECT oo.online_order_id AS orderId, oo.created_at AS createdAt,
+            oo.total, oo.customer_status AS status,
+            oo.payment_preference AS paymentPreference
+     FROM Online_Orders oo
+     WHERE oo.customer_num_id = ?
+     ORDER BY oo.created_at DESC
+     LIMIT 50`,
+    [customerId]
+  );
+
+  const orderIds = orderRows.map((o) => o.orderId);
+  let itemsByOrder = {};
+  if (orderIds.length > 0) {
+    const placeholders = orderIds.map(() => "?").join(",");
+    const itemRows = await db.query(
+      `SELECT oi.online_order_id AS orderId, mi.name, oi.quantity, oi.price
+       FROM Online_Order_Item oi
+       JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+       WHERE oi.online_order_id IN (${placeholders})`,
+      orderIds
+    );
+    for (const item of itemRows) {
+      if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
+      itemsByOrder[item.orderId].push({ name: item.name, quantity: item.quantity, price: Number(item.price) });
+    }
+  }
+
+  return {
+    customer: customerRows[0],
+    orders: orderRows.map((o) => ({
+      orderId: o.orderId,
+      createdAt: o.createdAt,
+      total: Number(o.total),
+      status: o.status,
+      paymentPreference: o.paymentPreference,
+      items: itemsByOrder[o.orderId] ?? [],
+    })),
+  };
+}
+
 export {
   createLaborShift,
   createInventoryItem,
   deleteInventoryItem,
   getBackOfficeDashboard,
   getBackOfficeData,
+  getCustomerOrders,
   receivePurchasingStock,
   updateLaborShift,
   updateInventoryItemAmount,
