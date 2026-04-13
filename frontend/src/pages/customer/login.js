@@ -88,6 +88,10 @@ export default function CustomerLoginPage() {
         localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, pointsBalance: data.pointsBalance }));
         router.push(getCustomerRedirect());
       } catch (customerError) {
+        if (customerError.message?.toLowerCase().includes("deactivated")) {
+          setError("Account has been deactivated. Call the restaurant for any questions.");
+          return;
+        }
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
         saveStaffSession(staffData.token, {
           userId: staffData.user.userId,
@@ -97,8 +101,8 @@ export default function CustomerLoginPage() {
         });
         routeStaffUser(staffData.user);
       }
-    } catch (err) {
-      setError(err.message || "Invalid email or password.");
+    } catch {
+      setError("Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }

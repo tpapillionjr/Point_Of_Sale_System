@@ -69,6 +69,11 @@ export default function KitchenPage() {
       return;
     }
 
+    if (!["kitchen", "manager"].includes(employee.role)) {
+      setMessage("Only kitchen staff or managers can clear tickets.");
+      return;
+    }
+
     try {
       await updateKitchenTicket(ticketId, {
         userId: employee.userId,
@@ -92,7 +97,7 @@ export default function KitchenPage() {
           <p className="expo-header__eyebrow">Kitchen Production Board</p>
           <h2 className="expo-header__title">Kitchen</h2>
           <p className="expo-header__subtext">
-            Track live backend tickets, watch aging orders, and only let kitchen staff close them.
+            Track live backend tickets, watch aging orders, and let kitchen staff or managers clear them.
           </p>
         </div>
 
