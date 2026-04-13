@@ -239,7 +239,7 @@ CREATE TABLE Online_Orders (
     order_note VARCHAR(255) NULL,
 
     -- Status tracking
-    customer_status ENUM('placed','confirmed','preparing','ready','picked_up') NOT NULL DEFAULT 'placed',
+    customer_status ENUM('placed','confirmed','preparing','ready','picked_up','denied') NOT NULL DEFAULT 'placed',
     payment_preference ENUM('online','in_store') NOT NULL DEFAULT 'in_store',
     payment_status ENUM('unpaid','paid') NOT NULL DEFAULT 'unpaid',
 

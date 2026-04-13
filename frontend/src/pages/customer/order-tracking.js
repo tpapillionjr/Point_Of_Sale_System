@@ -25,7 +25,7 @@ export default function OrderTrackingPage() {
     const orderId = router.query.orderId;
     if (!orderId) return;
 
-    const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4 };
+    const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4, denied: -1 };
 
     async function poll() {
       try {
@@ -41,7 +41,7 @@ export default function OrderTrackingPage() {
 
     poll();
     const interval = setInterval(() => {
-      if (currentStepRef.current >= 4) {
+      if (currentStepRef.current >= 4 || currentStepRef.current === -1) {
         clearInterval(interval);
         return;
       }
@@ -90,8 +90,20 @@ export default function OrderTrackingPage() {
           </div>
         )}
 
+        {/* Denied state */}
+        {!trackingError && currentStep === -1 && (
+          <div style={{ backgroundColor: "#fef2f2", borderRadius: "20px", padding: "40px 32px", border: "1px solid #fecaca", textAlign: "center", marginBottom: "24px" }}>
+            <div style={{ fontSize: "48px", marginBottom: "12px" }}>❌</div>
+            <p style={{ fontSize: "20px", fontWeight: "800", color: "#991b1b", margin: "0 0 8px" }}>Order Denied</p>
+            <p style={{ fontSize: "14px", color: "#b91c1c", margin: "0 0 24px" }}>We&apos;re sorry, we were unable to fulfill your order at this time.</p>
+            <Link href="/customer/menu" style={{ padding: "12px 28px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none", fontSize: "14px" }}>
+              Order Again
+            </Link>
+          </div>
+        )}
+
         {/* Progress bar */}
-        {!trackingError && (
+        {!trackingError && currentStep !== -1 && (
         <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "40px 32px 32px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)", marginBottom: "24px" }}>
 
           {/* Steps row */}
@@ -168,7 +180,6 @@ export default function OrderTrackingPage() {
           </div>
         </div>
         )}
-
 
       </div>
     </div>
