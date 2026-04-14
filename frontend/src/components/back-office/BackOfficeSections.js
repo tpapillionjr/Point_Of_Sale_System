@@ -1044,38 +1044,57 @@ function formatDateTimeLocalValue(date) {
   ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatShiftInputValue(date) {
+function splitShiftInputValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return "";
+    return { date: "", time: "" };
   }
 
-  const pad = (value) => String(value).padStart(2, "0");
-  const hours = date.getHours();
-  const displayHours = hours % 12 || 12;
-  const period = hours >= 12 ? "PM" : "AM";
-
-  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}, ${pad(displayHours)}:${pad(date.getMinutes())} ${period}`;
+  const value = formatDateTimeLocalValue(date);
+  return {
+    date: value.slice(0, 10),
+    time: value.slice(11, 16),
+  };
 }
 
-function parseShiftDateTimeInput(value) {
-  const trimmed = String(value ?? "").trim();
-  if (!trimmed) {
+function createDefaultShiftTimes() {
+  const start = new Date();
+  start.setSeconds(0, 0);
+  const minute = start.getMinutes();
+  if (minute % 5 !== 0) {
+    start.setMinutes(minute + (5 - (minute % 5)));
+  }
+
+  const end = new Date(start);
+  end.setHours(end.getHours() + 8);
+  const startParts = splitShiftInputValue(start);
+  const endParts = splitShiftInputValue(end);
+
+  return {
+    scheduledStartDate: startParts.date,
+    scheduledStartTime: startParts.time,
+    scheduledEndDate: endParts.date,
+    scheduledEndTime: endParts.time,
+  };
+}
+
+function parseShiftDateTimeParts(dateValue, timeValue) {
+  const dateText = String(dateValue ?? "").trim();
+  const timeText = String(timeValue ?? "").trim();
+  if (!dateText || !timeText) {
     return null;
   }
 
-  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-  if (isoMatch) {
-    const [, year, month, day, hour, minute] = isoMatch.map(Number);
-    const parsed = new Date(year, month - 1, day, hour, minute);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const displayMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})\s*([AP]M)$/i);
-  if (!displayMatch) {
+  const dateMatch = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const displayDateMatch = dateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const timeMatch = timeText.match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+  if ((!dateMatch && !displayDateMatch) || !timeMatch) {
     return null;
   }
 
-  const [, monthText, dayText, yearText, hourText, minuteText, periodText] = displayMatch;
+  const yearText = dateMatch ? dateMatch[1] : displayDateMatch[3];
+  const monthText = dateMatch ? dateMatch[2] : displayDateMatch[1];
+  const dayText = dateMatch ? dateMatch[3] : displayDateMatch[2];
+  const [, hourText, minuteText, periodText] = timeMatch;
   const month = Number(monthText);
   const day = Number(dayText);
   const year = Number(yearText);
@@ -1083,14 +1102,20 @@ function parseShiftDateTimeInput(value) {
   const minute = Number(minuteText);
   const period = periodText?.toUpperCase();
 
-  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
-    return null;
+  if (period) {
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+
+    if (period === "PM" && hour !== 12) {
+      hour += 12;
+    } else if (period === "AM" && hour === 12) {
+      hour = 0;
+    }
   }
 
-  if (period === "PM" && hour !== 12) {
-    hour += 12;
-  } else if (period === "AM" && hour === 12) {
-    hour = 0;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
   }
 
   const parsed = new Date(year, month - 1, day, hour, minute);
@@ -1122,6 +1147,13 @@ function firstFilledValue(...values) {
   return "";
 }
 
+function createEmptyShiftForm() {
+  return {
+    userId: "",
+    ...createDefaultShiftTimes(),
+  };
+}
+
 export function LaborSection() {
   const [draftFilters, setDraftFilters] = useState(createDefaultDateRange);
   const [selectedRange, setSelectedRange] = useState(createDefaultDateRange);
@@ -1130,18 +1162,16 @@ export function LaborSection() {
   const labor = data?.labor;
   const [users, setUsers] = useState([]);
   const [usersError, setUsersError] = useState("");
-  const [shiftForm, setShiftForm] = useState({
-    userId: "",
-    scheduledStart: "",
-    scheduledEnd: "",
-  });
+  const [shiftForm, setShiftForm] = useState(createEmptyShiftForm);
   const [laborMessage, setLaborMessage] = useState("");
   const [isCreatingShift, setIsCreatingShift] = useState(false);
   const [updatingShiftId, setUpdatingShiftId] = useState(null);
   const [editingShiftId, setEditingShiftId] = useState(null);
   const shiftUserRef = useRef(null);
-  const shiftStartRef = useRef(null);
-  const shiftEndRef = useRef(null);
+  const shiftStartDateRef = useRef(null);
+  const shiftStartTimeRef = useRef(null);
+  const shiftEndDateRef = useRef(null);
+  const shiftEndTimeRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -1181,19 +1211,43 @@ export function LaborSection() {
     const formData = formElement ? new FormData(formElement) : null;
     const payload = {
       userId: firstFilledValue(shiftForm.userId, shiftUserRef.current?.value, formData?.get("userId")),
-      scheduledStart: firstFilledValue(shiftForm.scheduledStart, shiftStartRef.current?.value, formData?.get("scheduledStart")),
-      scheduledEnd: firstFilledValue(shiftForm.scheduledEnd, shiftEndRef.current?.value, formData?.get("scheduledEnd")),
+      scheduledStartDate: firstFilledValue(
+        shiftForm.scheduledStartDate,
+        shiftStartDateRef.current?.value,
+        formData?.get("scheduledStartDate")
+      ),
+      scheduledStartTime: firstFilledValue(
+        shiftForm.scheduledStartTime,
+        shiftStartTimeRef.current?.value,
+        formData?.get("scheduledStartTime")
+      ),
+      scheduledEndDate: firstFilledValue(
+        shiftForm.scheduledEndDate,
+        shiftEndDateRef.current?.value,
+        formData?.get("scheduledEndDate")
+      ),
+      scheduledEndTime: firstFilledValue(
+        shiftForm.scheduledEndTime,
+        shiftEndTimeRef.current?.value,
+        formData?.get("scheduledEndTime")
+      ),
     };
 
-    if (!payload.userId || !payload.scheduledStart || !payload.scheduledEnd) {
+    if (
+      !payload.userId ||
+      !payload.scheduledStartDate ||
+      !payload.scheduledStartTime ||
+      !payload.scheduledEndDate ||
+      !payload.scheduledEndTime
+    ) {
       setLaborMessage("Error: Employee, start, and end are required.");
       return null;
     }
 
-    const scheduledStartDate = parseShiftDateTimeInput(payload.scheduledStart);
-    const scheduledEndDate = parseShiftDateTimeInput(payload.scheduledEnd);
+    const scheduledStartDate = parseShiftDateTimeParts(payload.scheduledStartDate, payload.scheduledStartTime);
+    const scheduledEndDate = parseShiftDateTimeParts(payload.scheduledEndDate, payload.scheduledEndTime);
     if (!scheduledStartDate || !scheduledEndDate) {
-      setLaborMessage("Error: Use MM/DD/YYYY, HH:MM AM/PM for start and end.");
+      setLaborMessage("Error: Choose a valid date and time for start and end.");
       return null;
     }
 
@@ -1209,12 +1263,19 @@ export function LaborSection() {
   }
 
   function resetShiftForm() {
-    setShiftForm({ userId: "", scheduledStart: "", scheduledEnd: "" });
+    setShiftForm(createEmptyShiftForm());
     setEditingShiftId(null);
   }
 
   function updateShiftFormField(field, value) {
     setShiftForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function resetShiftTimes() {
+    setShiftForm((current) => ({
+      ...current,
+      ...createDefaultShiftTimes(),
+    }));
   }
 
   async function handleSaveShift(event) {
@@ -1249,11 +1310,16 @@ export function LaborSection() {
   }
 
   function handleEditShift(shift) {
+    const scheduledStart = splitShiftInputValue(new Date(shift.scheduledStart));
+    const scheduledEnd = splitShiftInputValue(new Date(shift.scheduledEnd));
+
     setEditingShiftId(shift.shiftId);
     setShiftForm({
       userId: String(shift.userId),
-      scheduledStart: formatShiftInputValue(new Date(shift.scheduledStart)),
-      scheduledEnd: formatShiftInputValue(new Date(shift.scheduledEnd)),
+      scheduledStartDate: scheduledStart.date,
+      scheduledStartTime: scheduledStart.time,
+      scheduledEndDate: scheduledEnd.date,
+      scheduledEndTime: scheduledEnd.time,
     });
     setLaborMessage("");
   }
@@ -1320,43 +1386,81 @@ export function LaborSection() {
               </select>
             </label>
 
-            <label className="block">
+            <div>
               <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled Start</span>
-              <input
-                ref={shiftStartRef}
-                name="scheduledStart"
-                type="text"
-                inputMode="text"
-                placeholder="04/13/2026, 05:25 PM"
-                value={shiftForm.scheduledStart}
-                onChange={(event) => updateShiftFormField("scheduledStart", event.currentTarget.value)}
-                onInput={(event) => updateShiftFormField("scheduledStart", event.currentTarget.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <label className="block">
+                  <span className="sr-only">Scheduled Start Date</span>
+                  <input
+                    ref={shiftStartDateRef}
+                    name="scheduledStartDate"
+                    type="date"
+                    value={shiftForm.scheduledStartDate}
+                    onChange={(event) => updateShiftFormField("scheduledStartDate", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledStartDate", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Scheduled Start Time</span>
+                  <input
+                    ref={shiftStartTimeRef}
+                    name="scheduledStartTime"
+                    type="time"
+                    value={shiftForm.scheduledStartTime}
+                    onChange={(event) => updateShiftFormField("scheduledStartTime", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledStartTime", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+            </div>
 
-            <label className="block">
+            <div>
               <span className="mb-2 block text-sm font-semibold text-gray-700">Scheduled End</span>
-              <input
-                ref={shiftEndRef}
-                name="scheduledEnd"
-                type="text"
-                inputMode="text"
-                placeholder="04/14/2026, 05:11 PM"
-                value={shiftForm.scheduledEnd}
-                onChange={(event) => updateShiftFormField("scheduledEnd", event.currentTarget.value)}
-                onInput={(event) => updateShiftFormField("scheduledEnd", event.currentTarget.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <label className="block">
+                  <span className="sr-only">Scheduled End Date</span>
+                  <input
+                    ref={shiftEndDateRef}
+                    name="scheduledEndDate"
+                    type="date"
+                    value={shiftForm.scheduledEndDate}
+                    onChange={(event) => updateShiftFormField("scheduledEndDate", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledEndDate", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Scheduled End Time</span>
+                  <input
+                    ref={shiftEndTimeRef}
+                    name="scheduledEndTime"
+                    type="time"
+                    value={shiftForm.scheduledEndTime}
+                    onChange={(event) => updateShiftFormField("scheduledEndTime", event.currentTarget.value)}
+                    onInput={(event) => updateShiftFormField("scheduledEndTime", event.currentTarget.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+            </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={resetShiftTimes}
+                disabled={isCreatingShift}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Reset Times
+              </button>
               {editingShiftId ? (
                 <button
                   type="button"
                   onClick={resetShiftForm}
                   disabled={isCreatingShift}
-                  className="mr-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel Edit
                 </button>
