@@ -76,3 +76,5 @@ backend/SSL.crt.pem
 *.out
 *.exe
 .vercel
+database/
+backend/.env
