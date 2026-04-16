@@ -185,12 +185,15 @@ async function getRevenueTrend(filters) {
 
 async function getTopSellingItems(limit = 5, filters) {
   return db.query(
-    `SELECT
+     `SELECT
        item_sales.name AS name,
+       item_sales.category AS category,
        COALESCE(SUM(item_sales.quantity), 0) AS sold,
-       ROUND(COALESCE(SUM(item_sales.quantity * item_sales.price), 0), 2) AS revenue
+       ROUND(COALESCE(SUM(item_sales.quantity * item_sales.price), 0), 2) AS revenue,
+       COALESCE(MAX(i.amount_available), 0) AS quantity,
+       DATE_FORMAT(MAX(item_sales.createdAt), '%Y-%m-%d') AS lastPurchased
      FROM (
-       SELECT mi.menu_item_id AS menuItemId, mi.name, oi.quantity, oi.price, o.created_at AS createdAt
+       SELECT mi.menu_item_id AS menuItemId, mi.name, COALESCE(mi.category, 'Restaurant') AS category, oi.quantity, oi.price, o.created_at AS createdAt
        FROM Order_Item oi
        JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
        JOIN Orders o ON o.order_id = oi.order_id
@@ -198,13 +201,14 @@ async function getTopSellingItems(limit = 5, filters) {
 
        UNION ALL
 
-       SELECT mi.menu_item_id AS menuItemId, mi.name, ooi.quantity, ooi.price, oo.created_at AS createdAt
+       SELECT mi.menu_item_id AS menuItemId, mi.name, COALESCE(mi.category, 'Restaurant') AS category, ooi.quantity, ooi.price, oo.created_at AS createdAt
        FROM Online_Order_Item ooi
        JOIN Menu_Item mi ON mi.menu_item_id = ooi.menu_item_id
        JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
      ) item_sales
+     LEFT JOIN Inventory i ON i.menu_item_id = item_sales.menuItemId
      WHERE ${buildRangeFilter(filters, "item_sales.createdAt")}
-     GROUP BY item_sales.menuItemId, item_sales.name
+     GROUP BY item_sales.menuItemId, item_sales.name, item_sales.category
      ORDER BY sold DESC, revenue DESC, item_sales.name ASC
      LIMIT ${Number(limit)}`
   );
@@ -485,7 +489,7 @@ async function getReportsDashboard(range) {
     await Promise.all([
       getSummaryForFilters(filters),
       getRevenueTrend(filters),
-      getTopSellingItems(5, filters),
+      getTopSellingItems(30, filters),
       getLowInventoryItems(5),
       getSalesByCategory(filters),
       getSalesByServer(filters),
@@ -573,7 +577,14 @@ async function getReportsDashboard(range) {
       summary.tips
     ),
     revenueTrend: revenueTrend.map((row) => ({ date: row.date, revenue: Number(row.revenue || 0) })),
-    topItems: topItems.map((row) => ({ name: row.name, sold: Number(row.sold || 0), revenue: Number(row.revenue || 0) })),
+    topItems: topItems.map((row) => ({
+      name: row.name,
+      category: row.category ?? "Restaurant",
+      sold: Number(row.sold || 0),
+      revenue: Number(row.revenue || 0),
+      quantity: Number(row.quantity || 0),
+      lastPurchased: row.lastPurchased ?? "No purchases",
+    })),
     lowInventory: lowInventory.map((row) => ({
       itemName: row.itemName,
       amountAvailable: Number(row.amountAvailable || 0),

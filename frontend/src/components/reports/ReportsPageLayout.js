@@ -4,7 +4,7 @@ import { getReportsDashboard } from "../../lib/api";
 import FilterBar from "./FilterBar";
 
 const sectionOptions = [
-  { value: "/reports", label: "Overview Dashboard" },
+  { value: "/reports", label: "Overview" },
   { value: "/reports/sales", label: "Sales Reports" },
   { value: "/reports/labor", label: "Labor Reports" },
   { value: "/reports/inventory", label: "Inventory & Menu" },
@@ -19,12 +19,24 @@ function toDateInputValue(date) {
 function createDefaultDateFilters() {
   const endDate = new Date();
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 29);
+  startDate.setDate(startDate.getDate() - 6);
 
   return {
     startDate: toDateInputValue(startDate),
     endDate: toDateInputValue(endDate),
   };
+}
+
+function filtersForDatePreset(preset) {
+  if (preset === "7days") {
+    return { days: 7 };
+  }
+
+  if (preset === "365days") {
+    return { days: 365 };
+  }
+
+  return { days: 30 };
 }
 
 function matchesSearch(value, searchTerm) {
@@ -36,11 +48,9 @@ function matchesSearch(value, searchTerm) {
 }
 
 function filterRows(rows, searchTerm, fields) {
-  if (!searchTerm) {
-    return rows ?? [];
-  }
-
-  return (rows ?? []).filter((row) => fields.some((field) => matchesSearch(row[field], searchTerm)));
+  return (rows ?? []).filter(
+    (row) => !searchTerm || fields.some((field) => matchesSearch(row[field], searchTerm))
+  );
 }
 
 function formatMoney(value) {
@@ -108,9 +118,10 @@ function buildVisibleExportSections(payload, pathname, selectedView, searchTerm)
   const topItemsSection = section(
     "Item Sales Data Points",
     [
-      { header: "Item", key: "name" },
-      { header: "Sold", key: "sold" },
-      { header: "Revenue", key: "revenue", format: formatMoney },
+      { header: "Item Bought", key: "name" },
+      { header: "Amount Earned", key: "revenue", format: formatMoney },
+      { header: "Quantity", key: "quantity" },
+      { header: "Last Purchased", key: "lastPurchased" },
     ],
     topItems
   );
@@ -575,21 +586,34 @@ export default function ReportsPageLayout({
   const [selectedView, setSelectedView] = useState(fallbackView);
   const [defaultFilters] = useState(createDefaultDateFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
+  const [datePreset, setDatePreset] = useState("7days");
   const [searchTerm, setSearchTerm] = useState("");
-  const [exportFormat, setExportFormat] = useState("csv");
-  const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
+  const [showExportChoices, setShowExportChoices] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState(filtersForDatePreset("7days"));
   const resolvedSelectedView = viewOptions.some((option) => option.id === selectedView)
     ? selectedView
     : fallbackView;
 
   function applyFilters() {
-    setAppliedFilters({
-      startDate: draftFilters.startDate || defaultFilters.startDate,
-      endDate: draftFilters.endDate || defaultFilters.endDate,
-    });
+    if (datePreset === "custom") {
+      setAppliedFilters({
+        startDate: draftFilters.startDate || defaultFilters.startDate,
+        endDate: draftFilters.endDate || defaultFilters.endDate,
+      });
+      return;
+    }
+
+    setAppliedFilters(filtersForDatePreset(datePreset));
   }
 
-  async function handleExport() {
+  function handleDatePresetChange(nextPreset) {
+    setDatePreset(nextPreset);
+    if (nextPreset !== "custom") {
+      setAppliedFilters(filtersForDatePreset(nextPreset));
+    }
+  }
+
+  async function handleExport(exportFormat) {
     const payload = await getReportsDashboard(appliedFilters);
     const sections = buildVisibleExportSections(payload, router.pathname, resolvedSelectedView, searchTerm);
     const metadata = {
@@ -617,11 +641,50 @@ export default function ReportsPageLayout({
   return (
     <div className="min-h-screen bg-slate-100 px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">lumi POS</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">{title}</h1>
-          <p className="mt-3 max-w-3xl text-base text-slate-600">{description}</p>
+        <div className="mb-5 text-center">
+          <h1 className="text-4xl font-normal tracking-tight text-slate-900">{title}</h1>
+          {description && <p className="sr-only">{description}</p>}
         </div>
+
+        {showExportChoices && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-950">Choose Export Type</h2>
+                  <p className="mt-2 text-sm text-slate-600">Pick the file format for this report.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowExportChoices(false)}
+                  className="rounded-md px-3 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  { format: "csv", label: "Excel CSV" },
+                  { format: "pdf", label: "PDF" },
+                  { format: "json", label: "JSON" },
+                ].map((option) => (
+                  <button
+                    key={option.format}
+                    type="button"
+                    onClick={() => {
+                      setShowExportChoices(false);
+                      handleExport(option.format);
+                    }}
+                    className="rounded-md border border-blue-600 bg-white px-4 py-3 text-sm font-semibold text-blue-600 transition hover:bg-blue-50"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <FilterBar
           sectionOptions={sectionOptions}
@@ -632,12 +695,12 @@ export default function ReportsPageLayout({
           onViewChange={setSelectedView}
           filters={draftFilters}
           onFiltersChange={setDraftFilters}
+          datePreset={datePreset}
+          onDatePresetChange={handleDatePresetChange}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
-          exportFormat={exportFormat}
-          onExportFormatChange={setExportFormat}
           onApply={applyFilters}
-          onExport={handleExport}
+          onExport={() => setShowExportChoices(true)}
         />
 
         <div className="space-y-6">{children(appliedFilters, resolvedSelectedView, searchTerm)}</div>

@@ -1,30 +1,19 @@
 import { useEffect, useState } from "react";
-import ReportCard from "./ReportCard";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import ReportSection from "./ReportSection";
-import TopItemsTable from "./TopItemsTable";
-import LowInventoryTable from "./LowInventoryTable";
-import RevenueChart from "./RevenueChart";
-import TopItemsChart from "./TopItemsChart";
 import { getReportsDashboard } from "../../lib/api";
 
-function SimpleTable({ headers, rows, renderRow }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border-collapse">
-        <thead>
-          <tr className="border-b text-left text-sm text-gray-500">
-            {headers.map((header) => (
-              <th key={header} className="py-2 pr-4">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{rows.map(renderRow)}</tbody>
-      </table>
-    </div>
-  );
-}
+const SALES_ROWS_PER_PAGE = 10;
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
@@ -48,16 +37,6 @@ function filterBySearch(rows, searchTerm, fields) {
   }
 
   return rows.filter((row) => fields.some((field) => matchesSearch(row[field], searchTerm)));
-}
-
-function LoadingCards() {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {[1, 2, 3].map((index) => (
-        <ReportCard key={index} title="Loading" value="..." />
-      ))}
-    </div>
-  );
 }
 
 function useReportsData(selectedRange = "7days") {
@@ -101,197 +80,236 @@ function useReportsData(selectedRange = "7days") {
   return { data, isLoading, error };
 }
 
-function RenderCardList({ cards, isLoading, error, emptyMessage }) {
-  if (error) {
-    return <ErrorState message={error} />;
-  }
-
-  if (isLoading) {
-    return <LoadingCards />;
-  }
-
-  if (!cards?.length) {
-    return <EmptyState message={emptyMessage} />;
-  }
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map((card) => (
-        <ReportCard key={card.title ?? card.label} title={card.title ?? card.label} value={card.value} />
-      ))}
-    </div>
-  );
-}
-
 function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
-function DataPointTable({ title, headers, rows, renderRow, emptyMessage }) {
+function formatPlainNumber(value, digits = 0) {
+  return Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function ReportLedgerTable({ columns, rows, renderFooter, emptyMessage, isLoading }) {
+  if (!rows?.length) {
+    return <EmptyState message={isLoading ? "Loading report rows..." : emptyMessage} />;
+  }
+
   return (
-    <div>
-      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">{title}</h3>
-      {rows?.length ? (
-        <SimpleTable headers={headers} rows={rows} renderRow={renderRow} />
-      ) : (
-        <EmptyState message={emptyMessage} />
-      )}
+    <div className="overflow-x-auto rounded bg-white shadow">
+      <table className="min-w-full border-collapse text-center text-sm text-gray-800">
+        <thead>
+          <tr className="border-b border-gray-200 bg-blue-50 text-base text-gray-950">
+            {columns.map((column) => (
+              <th key={column.key} className="border-r border-gray-200 px-4 py-3 font-semibold underline last:border-r-0">
+                {column.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.id ?? row.name ?? row.itemName ?? row.category ?? row.order ?? row.method ?? index} className="border-b border-gray-200 last:border-b-0">
+              {columns.map((column) => (
+                <td key={column.key} className="border-r border-gray-200 px-4 py-3 last:border-r-0">
+                  {column.render ? column.render(row) : row[column.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {renderFooter && (
+          <tfoot>
+            <tr className="border-t border-gray-300 bg-blue-50 text-sm font-medium text-gray-950">
+              {renderFooter()}
+            </tr>
+          </tfoot>
+        )}
+      </table>
     </div>
   );
 }
 
-function ReportSourceData({ data, searchTerm = "", includeInventory = true }) {
-  const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
-  const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
+function SalesReportChart({ rows, chartType }) {
+  if (!rows.length) {
+    return <EmptyState message="No item sales data available." />;
+  }
+
+  const chartRows = rows.map((item) => ({
+    ...item,
+    displayName: item.name.length > 18 ? `${item.name.slice(0, 18)}...` : item.name,
+  }));
 
   return (
-    <div className="mt-6 space-y-6">
-      <DataPointTable
-        title="Revenue Data Points"
-        headers={["Date", "Revenue"]}
-        rows={data?.revenueTrend ?? []}
-        emptyMessage="No revenue data points are available."
-        renderRow={(item) => (
-          <tr key={item.date} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.date}</td>
-            <td className="py-3 pr-4 text-gray-700">{formatMoney(item.revenue)}</td>
-          </tr>
-        )}
-      />
-
-      <DataPointTable
-        title="Item Sales Data Points"
-        headers={["Item", "Sold", "Revenue"]}
-        rows={filteredTopItems}
-        emptyMessage="No item sales data points are available."
-        renderRow={(item) => (
-          <tr key={item.name} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.name}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.sold}</td>
-            <td className="py-3 pr-4 text-gray-700">{formatMoney(item.revenue)}</td>
-          </tr>
-        )}
-      />
-
-      {includeInventory && (
-        <DataPointTable
-          title="Inventory Alert Data Points"
-          headers={["Item", "Available", "Status"]}
-          rows={filteredLowInventory}
-          emptyMessage="No inventory alert data points are available."
-          renderRow={(item) => (
-            <tr key={item.itemName} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{item.itemName}</td>
-              <td className="py-3 pr-4 text-gray-700">{item.amountAvailable}</td>
-              <td className="py-3 pr-4 text-gray-700">{item.status}</td>
-            </tr>
+    <div className="rounded bg-white p-4 shadow">
+      <div className="h-96 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === "line" ? (
+            <LineChart data={chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="displayName" angle={-20} textAnchor="end" interval={0} />
+              <YAxis />
+              <Tooltip formatter={(value, name) => [name === "revenue" ? formatMoney(value) : value, name === "revenue" ? "Amount Earned" : "Quantity"]} />
+              <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={3} />
+              <Line type="monotone" dataKey="quantity" stroke="#16a34a" strokeWidth={3} />
+            </LineChart>
+          ) : (
+            <BarChart data={chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="displayName" angle={-20} textAnchor="end" interval={0} />
+              <YAxis />
+              <Tooltip formatter={(value, name) => [name === "revenue" ? formatMoney(value) : value, name === "revenue" ? "Amount Earned" : "Quantity"]} />
+              <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="quantity" fill="#16a34a" radius={[4, 4, 0, 0]} />
+            </BarChart>
           )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function SalesReportTable({ rows, isLoading, currentPage, onPageChange }) {
+  const totalRevenue = rows.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  const totalQuantity = rows.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const topItem = [...rows].sort((a, b) => Number(b.sold || 0) - Number(a.sold || 0))[0]?.name ?? "No data";
+  const pageCount = Math.max(1, Math.ceil(rows.length / SALES_ROWS_PER_PAGE));
+  const normalizedPage = Math.min(currentPage, pageCount);
+  const pageRows = rows.slice((normalizedPage - 1) * SALES_ROWS_PER_PAGE, normalizedPage * SALES_ROWS_PER_PAGE);
+
+  return (
+    <>
+      <ReportLedgerTable
+        columns={[
+          { key: "name", header: "Item Bought" },
+          { key: "revenue", header: "Amount Earned", render: (item) => formatMoney(item.revenue) },
+          { key: "quantity", header: "Quantity" },
+          { key: "lastPurchased", header: "Last Purchased" },
+        ]}
+        rows={pageRows}
+        isLoading={isLoading}
+        emptyMessage="No item sales data available."
+        renderFooter={() => (
+          <>
+            <td className="border-r border-gray-200 px-4 py-3">Most Popular Item: {topItem}</td>
+            <td className="border-r border-gray-200 px-4 py-3">Total Earned: {formatMoney(totalRevenue)}</td>
+            <td className="border-r border-gray-200 px-4 py-3">Total Quantity: {formatPlainNumber(totalQuantity)}</td>
+            <td className="px-4 py-3">Total Count: {formatPlainNumber(rows.length)}</td>
+          </>
+        )}
+      />
+
+      {rows.length > 0 && (
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.max(1, normalizedPage - 1))}
+            disabled={normalizedPage === 1}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Previous
+          </button>
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => (
+            <button
+              key={page}
+              type="button"
+              onClick={() => onPageChange(page)}
+              className={`rounded px-4 py-2 text-sm font-medium ${
+                normalizedPage === page ? "bg-blue-700 text-white" : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onPageChange(Math.min(pageCount, normalizedPage + 1))}
+            disabled={normalizedPage === pageCount}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SalesReportView({ rows, isLoading }) {
+  const [isChartView, setIsChartView] = useState(false);
+  const [chartType, setChartType] = useState("bar");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => setIsChartView((current) => !current)}
+          className="rounded bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+        >
+          {isChartView ? "Switch to Table View" : "Switch to Chart View"}
+        </button>
+
+        {isChartView && (
+          <div className="relative min-w-48">
+            <select
+              value={chartType}
+              onChange={(event) => setChartType(event.target.value)}
+              className="h-12 w-full appearance-none rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm text-slate-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              aria-label="Chart Type"
+            >
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+                <path
+                  d="M5 7.5 10 12.5l5-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {isChartView ? (
+        <SalesReportChart rows={rows} chartType={chartType} />
+      ) : (
+        <SalesReportTable
+          rows={rows}
+          isLoading={isLoading}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
         />
       )}
     </div>
   );
 }
 
-function SummaryWithSourceData({
-  title,
-  cards,
-  data,
-  isLoading,
-  error,
-  emptyMessage,
-  searchTerm = "",
-  includeInventory = true,
-}) {
+function MetricReportTable({ rows, title = "Metric", valueTitle = "Value", emptyMessage, isLoading }) {
   return (
-    <ReportSection title={title}>
-      <RenderCardList cards={cards} isLoading={isLoading} error={error} emptyMessage={emptyMessage} />
-      {!error && !isLoading && (
-        <ReportSourceData data={data} searchTerm={searchTerm} includeInventory={includeInventory} />
+    <ReportLedgerTable
+      columns={[
+        { key: "label", header: title, render: (item) => item.title ?? item.label },
+        { key: "value", header: valueTitle },
+      ]}
+      rows={rows ?? []}
+      isLoading={isLoading}
+      emptyMessage={emptyMessage}
+      renderFooter={() => (
+        <>
+          <td className="border-r border-gray-200 px-4 py-3">Rows Reported: {formatPlainNumber(rows?.length ?? 0)}</td>
+          <td className="px-4 py-3" aria-label="No total" />
+        </>
       )}
-    </ReportSection>
-  );
-}
-
-function MetricDataPoints({ title, rows, emptyMessage }) {
-  return (
-    <div className="mt-6">
-      <DataPointTable
-        title={title}
-        headers={["Metric", "Value"]}
-        rows={rows ?? []}
-        emptyMessage={emptyMessage}
-        renderRow={(item) => (
-          <tr key={item.title ?? item.label} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.title ?? item.label}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.value}</td>
-          </tr>
-        )}
-      />
-    </div>
-  );
-}
-
-function OperationsSourceData({ data }) {
-  return (
-    <div className="mt-6 space-y-6">
-      <DataPointTable
-        title="Void Data Points"
-        headers={["Order", "Reason", "Employee", "Amount"]}
-        rows={data?.voids ?? []}
-        emptyMessage="No void data points are available."
-        renderRow={(item) => (
-          <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.reason}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.employee}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
-          </tr>
-        )}
-      />
-
-      <DataPointTable
-        title="Discount Data Points"
-        headers={["Type", "Count", "Amount"]}
-        rows={data?.discounts ?? []}
-        emptyMessage="No discount data points are available."
-        renderRow={(item) => (
-          <tr key={item.type} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.type}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.count}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
-          </tr>
-        )}
-      />
-
-      <DataPointTable
-        title="Refund Data Points"
-        headers={["Order", "Reason", "Amount", "Status"]}
-        rows={data?.refunds ?? []}
-        emptyMessage="No refund data points are available."
-        renderRow={(item) => (
-          <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.reason}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.status}</td>
-          </tr>
-        )}
-      />
-
-      <DataPointTable
-        title="Payment Data Points"
-        headers={["Method", "Transactions", "Amount"]}
-        rows={data?.paymentMethods ?? []}
-        emptyMessage="No payment data points are available."
-        renderRow={(item) => (
-          <tr key={item.method} className="border-b last:border-b-0">
-            <td className="py-3 pr-4 font-medium text-gray-800">{item.method}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.count}</td>
-            <td className="py-3 pr-4 text-gray-700">{item.amount}</td>
-          </tr>
-        )}
-      />
-    </div>
+    />
   );
 }
 
@@ -299,59 +317,93 @@ export function ReportsOverviewSection({ selectedRange, searchTerm = "" }) {
   const { data, isLoading, error } = useReportsData(selectedRange);
   const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
   const filteredLowInventory = filterBySearch(data?.lowInventory ?? [], searchTerm, ["itemName", "status"]);
+  const filteredLabor = filterBySearch(data?.laborOverview ?? [], searchTerm, ["name", "performance"]);
+  const laborSnapshot = data
+    ? [
+        { label: "Employees Tracked", value: formatPlainNumber(filteredLabor.length) },
+        {
+          label: "Scheduled Hours",
+          value: formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.scheduled || 0), 0), 1),
+        },
+        {
+          label: "Actual Hours",
+          value: formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.worked || 0), 0), 1),
+        },
+        {
+          label: "Clock-Ins",
+          value: formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.clockIns || 0), 0)),
+        },
+        {
+          label: "Strong Performers",
+          value: formatPlainNumber(filteredLabor.filter((item) => item.performance === "Strong").length),
+        },
+      ]
+    : null;
 
   return (
     <>
-      <SummaryWithSourceData
-        title="Report Summary"
-        cards={data?.customSummary}
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No report summary is available."
-        searchTerm={searchTerm}
-      />
+      <ReportSection title="Sales Report">
+        {error ? <ErrorState message={error} /> : <SalesReportView rows={filteredTopItems} isLoading={isLoading} />}
+      </ReportSection>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ReportSection title="Revenue Trend">
+      <ReportSection title="Inventory Support Report">
+        {error ? (
+          <ErrorState message={error} />
+        ) : (
+          <ReportLedgerTable
+            columns={[
+              { key: "itemName", header: "Item" },
+              { key: "amountAvailable", header: "Available" },
+              { key: "status", header: "Status" },
+            ]}
+            rows={filteredLowInventory}
+            isLoading={isLoading}
+            emptyMessage="No low inventory alerts are active."
+            renderFooter={() => (
+              <>
+                <td className="border-r border-gray-200 px-4 py-3">Items Tracked: {formatPlainNumber(filteredLowInventory.length)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Total Available: {formatPlainNumber(filteredLowInventory.reduce((sum, item) => sum + Number(item.amountAvailable || 0), 0))}</td>
+                <td className="px-4 py-3">Critical Count: {formatPlainNumber(filteredLowInventory.filter((item) => item.status === "Critical").length)}</td>
+              </>
+            )}
+          />
+        )}
+      </ReportSection>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <ReportSection title="Labor Snapshot">
           {error ? (
             <ErrorState message={error} />
-          ) : data?.revenueTrend?.length ? (
-            <RevenueChart data={data.revenueTrend} />
           ) : (
-            <EmptyState message={isLoading ? "Loading revenue trend..." : "No revenue data available."} />
+            <MetricReportTable
+              rows={laborSnapshot}
+              isLoading={isLoading}
+              emptyMessage="No labor snapshot is available."
+            />
           )}
         </ReportSection>
 
-        <ReportSection title="Top Selling Items">
+        <ReportSection title="Operations Snapshot">
           {error ? (
             <ErrorState message={error} />
-          ) : filteredTopItems.length ? (
-            <TopItemsChart items={filteredTopItems} />
           ) : (
-            <EmptyState message={isLoading ? "Loading top items..." : "No item sales data available."} />
-          )}
-        </ReportSection>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <ReportSection title="Top Selling Items Table">
-          {error ? (
-            <ErrorState message={error} />
-          ) : filteredTopItems.length ? (
-            <TopItemsTable items={filteredTopItems} />
-          ) : (
-            <EmptyState message={isLoading ? "Loading top items..." : "No top-selling items are available."} />
+            <MetricReportTable
+              rows={data?.operationalSummary}
+              isLoading={isLoading}
+              emptyMessage="No operational summary is available."
+            />
           )}
         </ReportSection>
 
-        <ReportSection title="Low Inventory">
+        <ReportSection title="Customer Snapshot">
           {error ? (
             <ErrorState message={error} />
-          ) : filteredLowInventory.length ? (
-            <LowInventoryTable items={filteredLowInventory} />
           ) : (
-            <EmptyState message={isLoading ? "Loading inventory..." : "No low inventory alerts are active."} />
+            <MetricReportTable
+              rows={data?.customerOverview}
+              isLoading={isLoading}
+              emptyMessage="No customer overview is available."
+            />
           )}
         </ReportSection>
       </div>
@@ -364,122 +416,42 @@ export function SalesOverviewSection({ selectedRange, searchTerm = "" }) {
   const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
-    <>
-      <SummaryWithSourceData
-        title="Sales Summary"
-        cards={data?.customSummary}
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No sales summary is available."
-        searchTerm={searchTerm}
-        includeInventory={false}
-      />
-
-      <ReportSection title="Revenue Trend">
-        {error ? (
-          <ErrorState message={error} />
-        ) : data?.revenueTrend?.length ? (
-          <RevenueChart data={data.revenueTrend} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading revenue trend..." : "No revenue trend is available."} />
-        )}
-      </ReportSection>
-
-      <ReportSection title="Top Selling Items">
-        {error ? (
-          <ErrorState message={error} />
-        ) : filteredTopItems.length ? (
-          <TopItemsTable items={filteredTopItems} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading top items..." : "No item sales data available."} />
-        )}
-      </ReportSection>
-    </>
+    <ReportSection title="Sales Report">
+      {error ? <ErrorState message={error} /> : <SalesReportView rows={filteredTopItems} isLoading={isLoading} />}
+    </ReportSection>
   );
 }
 
 export function SalesDailySection() {
   const { data, isLoading, error } = useReportsData("today");
+  const topItems = data?.topItems ?? [];
 
   return (
-    <>
-      <SummaryWithSourceData
-        title="Daily Summary"
-        cards={data?.customSummary}
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No daily summary is available."
-        includeInventory={false}
-      />
-
-      <ReportSection title="Daily Revenue">
-        {error ? (
-          <ErrorState message={error} />
-        ) : data?.revenueTrend?.length ? (
-          <RevenueChart data={data.revenueTrend} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading daily revenue..." : "No daily revenue data available."} />
-        )}
-      </ReportSection>
-    </>
+    <ReportSection title="Daily Sales Report">
+      {error ? <ErrorState message={error} /> : <SalesReportView rows={topItems} isLoading={isLoading} />}
+    </ReportSection>
   );
 }
 
 export function SalesWeeklySection() {
   const { data, isLoading, error } = useReportsData("7days");
+  const topItems = data?.topItems ?? [];
 
   return (
-    <>
-      <SummaryWithSourceData
-        title="Weekly Summary"
-        cards={data?.customSummary}
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No weekly summary is available."
-        includeInventory={false}
-      />
-
-      <ReportSection title="Weekly Revenue">
-        {error ? (
-          <ErrorState message={error} />
-        ) : data?.revenueTrend?.length ? (
-          <RevenueChart data={data.revenueTrend} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading weekly revenue..." : "No weekly revenue data available."} />
-        )}
-      </ReportSection>
-    </>
+    <ReportSection title="Weekly Sales Report">
+      {error ? <ErrorState message={error} /> : <SalesReportView rows={topItems} isLoading={isLoading} />}
+    </ReportSection>
   );
 }
 
 export function SalesMonthlySection() {
   const { data, isLoading, error } = useReportsData("30days");
+  const topItems = data?.topItems ?? [];
 
   return (
-    <>
-      <SummaryWithSourceData
-        title="Monthly Summary"
-        cards={data?.customSummary}
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No monthly summary is available."
-        includeInventory={false}
-      />
-
-      <ReportSection title="Monthly Revenue">
-        {error ? (
-          <ErrorState message={error} />
-        ) : data?.revenueTrend?.length ? (
-          <RevenueChart data={data.revenueTrend} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading monthly revenue..." : "No monthly revenue data available."} />
-        )}
-      </ReportSection>
-    </>
+    <ReportSection title="Monthly Sales Report">
+      {error ? <ErrorState message={error} /> : <SalesReportView rows={topItems} isLoading={isLoading} />}
+    </ReportSection>
   );
 }
 
@@ -488,26 +460,9 @@ export function SalesItemsSection({ selectedRange = "30days", searchTerm = "" })
   const filteredTopItems = filterBySearch(data?.topItems ?? [], searchTerm, ["name"]);
 
   return (
-    <>
-      <ReportSection title="Sales by Item Chart">
-        {error ? (
-          <ErrorState message={error} />
-        ) : filteredTopItems.length ? (
-          <TopItemsChart items={filteredTopItems} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading item sales..." : "No item sales data available."} />
-        )}
-      </ReportSection>
-      <ReportSection title="Sales by Item Table">
-        {error ? (
-          <ErrorState message={error} />
-        ) : filteredTopItems.length ? (
-          <TopItemsTable items={filteredTopItems} />
-        ) : (
-          <EmptyState message={isLoading ? "Loading item sales..." : "No item sales data available."} />
-        )}
-      </ReportSection>
-    </>
+    <ReportSection title="Sales by Item">
+      {error ? <ErrorState message={error} /> : <SalesReportView rows={filteredTopItems} isLoading={isLoading} />}
+    </ReportSection>
   );
 }
 
@@ -520,13 +475,20 @@ export function SalesCategoriesSection({ selectedRange = "30days", searchTerm = 
       {error ? (
         <ErrorState message={error} />
       ) : filteredCategories.length ? (
-        <div className="space-y-3 text-gray-700">
-          {filteredCategories.map((item) => (
-            <p key={item.category}>
-              {item.category}: ${item.revenue.toFixed(2)}
-            </p>
-          ))}
-        </div>
+        <ReportLedgerTable
+          columns={[
+            { key: "category", header: "Category" },
+            { key: "revenue", header: "Amount Earned", render: (item) => formatMoney(item.revenue) },
+          ]}
+          rows={filteredCategories}
+          emptyMessage="No category sales data available."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Top Category: {filteredCategories[0]?.category ?? "No data"}</td>
+              <td className="px-4 py-3">Total Earned: {formatMoney(filteredCategories.reduce((sum, item) => sum + Number(item.revenue || 0), 0))}</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading category sales..." : "No category sales data available."} />
       )}
@@ -543,13 +505,22 @@ export function SalesServersSection({ selectedRange = "30days", searchTerm = "" 
       {error ? (
         <ErrorState message={error} />
       ) : filteredServers.length ? (
-        <div className="space-y-3 text-gray-700">
-          {filteredServers.map((item) => (
-            <p key={item.name}>
-              {item.name}: ${item.revenue.toFixed(2)} ({item.orders} orders)
-            </p>
-          ))}
-        </div>
+        <ReportLedgerTable
+          columns={[
+            { key: "name", header: "Server" },
+            { key: "revenue", header: "Amount Earned", render: (item) => formatMoney(item.revenue) },
+            { key: "orders", header: "Orders" },
+          ]}
+          rows={filteredServers}
+          emptyMessage="No server sales data available."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Top Server: {filteredServers[0]?.name ?? "No data"}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Total Earned: {formatMoney(filteredServers.reduce((sum, item) => sum + Number(item.revenue || 0), 0))}</td>
+              <td className="px-4 py-3">Total Orders: {formatPlainNumber(filteredServers.reduce((sum, item) => sum + Number(item.orders || 0), 0))}</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading server sales..." : "No server sales data available."} />
       )}
@@ -567,18 +538,12 @@ export function SalesTipsSection({ selectedRange }) {
       ) : isLoading ? (
         <EmptyState message="Loading tip data..." />
       ) : (
-        <SimpleTable
-          headers={["Metric", "Value"]}
+        <MetricReportTable
           rows={[
             { label: "Total Tips", value: `$${(data?.tipSummary?.totalTips ?? 0).toFixed(2)}` },
             { label: "Average Daily Tips", value: `$${(data?.tipSummary?.averageTips ?? 0).toFixed(2)}` },
           ]}
-          renderRow={(item) => (
-            <tr key={item.label} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{item.label}</td>
-              <td className="py-3 pr-4">{item.value}</td>
-            </tr>
-          )}
+          emptyMessage="No tip data available."
         />
       )}
     </ReportSection>
@@ -596,18 +561,26 @@ export function LaborOverviewSection({ selectedRange = "7days", searchTerm = "" 
         {error ? (
           <ErrorState message={error} />
         ) : filteredLabor.length ? (
-          <SimpleTable
-            headers={["Employee", "Scheduled Hours", "Actual Hours", "Hours This Week", "Clock-Ins", "Performance"]}
+          <ReportLedgerTable
+            columns={[
+              { key: "name", header: "Employee" },
+              { key: "scheduled", header: "Scheduled Hours" },
+              { key: "worked", header: "Actual Hours" },
+              { key: "hoursWorkedThisWeek", header: "Hours This Week", render: (employee) => employee.hoursWorkedThisWeek ?? 0 },
+              { key: "clockIns", header: "Clock-Ins" },
+              { key: "performance", header: "Performance" },
+            ]}
             rows={filteredLabor}
-            renderRow={(employee) => (
-              <tr key={employee.name} className="border-b last:border-b-0">
-                <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
-                <td className="py-3 pr-4">{employee.scheduled}</td>
-                <td className="py-3 pr-4">{employee.worked}</td>
-                <td className="py-3 pr-4">{employee.hoursWorkedThisWeek ?? 0}</td>
-                <td className="py-3 pr-4">{employee.clockIns}</td>
-                <td className="py-3 pr-4">{employee.performance}</td>
-              </tr>
+            emptyMessage="No labor data available."
+            renderFooter={() => (
+              <>
+                <td className="border-r border-gray-200 px-4 py-3">Employees: {formatPlainNumber(filteredLabor.length)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Scheduled: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.scheduled || 0), 0), 1)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Worked: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.worked || 0), 0), 1)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Week Hours: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.hoursWorkedThisWeek || 0), 0), 1)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Clock-Ins: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.clockIns || 0), 0))}</td>
+                <td className="px-4 py-3">Strong: {formatPlainNumber(filteredLabor.filter((item) => item.performance === "Strong").length)}</td>
+              </>
             )}
           />
         ) : (
@@ -619,14 +592,18 @@ export function LaborOverviewSection({ selectedRange = "7days", searchTerm = "" 
         {error ? (
           <ErrorState message={error} />
         ) : filteredWeeklyHours.length ? (
-          <SimpleTable
-            headers={["Employee", "Hours This Week"]}
+          <ReportLedgerTable
+            columns={[
+              { key: "name", header: "Employee" },
+              { key: "hoursWorkedThisWeek", header: "Hours This Week" },
+            ]}
             rows={filteredWeeklyHours}
-            renderRow={(employee) => (
-              <tr key={employee.name} className="border-b last:border-b-0">
-                <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
-                <td className="py-3 pr-4">{employee.hoursWorkedThisWeek}</td>
-              </tr>
+            emptyMessage="No employee hours are logged for this week."
+            renderFooter={() => (
+              <>
+                <td className="border-r border-gray-200 px-4 py-3">Employees: {formatPlainNumber(filteredWeeklyHours.length)}</td>
+                <td className="px-4 py-3">Total Hours: {formatPlainNumber(filteredWeeklyHours.reduce((sum, item) => sum + Number(item.hoursWorkedThisWeek || 0), 0), 1)}</td>
+              </>
             )}
           />
         ) : (
@@ -650,16 +627,22 @@ export function LaborClockSection({ selectedRange = "7days", searchTerm = "" }) 
       {error ? (
         <ErrorState message={error} />
       ) : filteredClock.length ? (
-        <SimpleTable
-          headers={["Employee", "Last Clock In", "Last Clock Out", "Status"]}
+        <ReportLedgerTable
+          columns={[
+            { key: "name", header: "Employee" },
+            { key: "lastClockIn", header: "Last Clock In" },
+            { key: "lastClockOut", header: "Last Clock Out" },
+            { key: "status", header: "Status" },
+          ]}
           rows={filteredClock}
-          renderRow={(employee) => (
-            <tr key={employee.name} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{employee.name}</td>
-              <td className="py-3 pr-4">{employee.lastClockIn}</td>
-              <td className="py-3 pr-4">{employee.lastClockOut}</td>
-              <td className="py-3 pr-4">{employee.status}</td>
-            </tr>
+          emptyMessage="No clock data available."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Employees: {formatPlainNumber(filteredClock.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Clocked In: {formatPlainNumber(filteredClock.filter((item) => item.status === "Clocked In").length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Clocked Out: {formatPlainNumber(filteredClock.filter((item) => item.status === "Clocked Out").length)}</td>
+              <td className="px-4 py-3">Current Status Count</td>
+            </>
           )}
         />
       ) : (
@@ -678,17 +661,26 @@ export function LaborHoursSection({ selectedRange = "7days", searchTerm = "" }) 
       {error ? (
         <ErrorState message={error} />
       ) : filteredLabor.length ? (
-        <div className="space-y-4">
-          {filteredLabor.map((employee) => (
-            <div key={employee.name} className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="font-semibold text-gray-900">{employee.name}</p>
-              <p className="text-gray-600">Scheduled: {employee.scheduled} hrs</p>
-              <p className="text-gray-600">Worked: {employee.worked} hrs</p>
-              <p className="text-gray-600">Worked this week: {employee.hoursWorkedThisWeek ?? 0} hrs</p>
-              <p className="text-gray-600">Difference: {(employee.worked - employee.scheduled).toFixed(1)} hrs</p>
-            </div>
-          ))}
-        </div>
+        <ReportLedgerTable
+          columns={[
+            { key: "name", header: "Employee" },
+            { key: "scheduled", header: "Scheduled Hours" },
+            { key: "worked", header: "Actual Hours" },
+            { key: "hoursWorkedThisWeek", header: "Hours This Week", render: (employee) => employee.hoursWorkedThisWeek ?? 0 },
+            { key: "difference", header: "Difference", render: (employee) => (Number(employee.worked || 0) - Number(employee.scheduled || 0)).toFixed(1) },
+          ]}
+          rows={filteredLabor}
+          emptyMessage="No labor hours data available."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Employees: {formatPlainNumber(filteredLabor.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Scheduled: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.scheduled || 0), 0), 1)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Worked: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.worked || 0), 0), 1)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Week Hours: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.hoursWorkedThisWeek || 0), 0), 1)}</td>
+              <td className="px-4 py-3">Difference: {formatPlainNumber(filteredLabor.reduce((sum, item) => sum + Number(item.worked || 0) - Number(item.scheduled || 0), 0), 1)}</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading labor hours..." : "No labor hours data available."} />
       )}
@@ -707,7 +699,22 @@ export function InventoryOverviewSection({ selectedRange = "30days", searchTerm 
         {error ? (
           <ErrorState message={error} />
         ) : filteredLowInventory.length ? (
-          <LowInventoryTable items={filteredLowInventory} />
+          <ReportLedgerTable
+            columns={[
+              { key: "itemName", header: "Item" },
+              { key: "amountAvailable", header: "Available" },
+              { key: "status", header: "Status" },
+            ]}
+            rows={filteredLowInventory}
+            emptyMessage="No stock alerts are active."
+            renderFooter={() => (
+              <>
+                <td className="border-r border-gray-200 px-4 py-3">Items Tracked: {formatPlainNumber(filteredLowInventory.length)}</td>
+                <td className="border-r border-gray-200 px-4 py-3">Total Available: {formatPlainNumber(filteredLowInventory.reduce((sum, item) => sum + Number(item.amountAvailable || 0), 0))}</td>
+                <td className="px-4 py-3">Critical Count: {formatPlainNumber(filteredLowInventory.filter((item) => item.status === "Critical").length)}</td>
+              </>
+            )}
+          />
         ) : (
           <EmptyState message={isLoading ? "Loading inventory..." : "No stock alerts are active."} />
         )}
@@ -716,7 +723,7 @@ export function InventoryOverviewSection({ selectedRange = "30days", searchTerm 
         {error ? (
           <ErrorState message={error} />
         ) : filteredTopItems.length ? (
-          <TopItemsTable items={filteredTopItems} />
+          <SalesReportView rows={filteredTopItems} isLoading={isLoading} />
         ) : (
           <EmptyState message={isLoading ? "Loading item demand..." : "No item demand data available."} />
         )}
@@ -734,7 +741,22 @@ export function InventoryStockSection({ selectedRange = "30days", searchTerm = "
       {error ? (
         <ErrorState message={error} />
       ) : filteredLowInventory.length ? (
-        <LowInventoryTable items={filteredLowInventory} />
+        <ReportLedgerTable
+          columns={[
+            { key: "itemName", header: "Item" },
+            { key: "amountAvailable", header: "Available" },
+            { key: "status", header: "Status" },
+          ]}
+          rows={filteredLowInventory}
+          emptyMessage="No stock alerts are active."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Items Tracked: {formatPlainNumber(filteredLowInventory.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Total Available: {formatPlainNumber(filteredLowInventory.reduce((sum, item) => sum + Number(item.amountAvailable || 0), 0))}</td>
+              <td className="px-4 py-3">Critical Count: {formatPlainNumber(filteredLowInventory.filter((item) => item.status === "Critical").length)}</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading stock levels..." : "No stock alerts are active."} />
       )}
@@ -751,13 +773,20 @@ export function InventoryUsageSection({ selectedRange = "30days", searchTerm = "
       {error ? (
         <ErrorState message={error} />
       ) : filteredUsage.length ? (
-        <div className="space-y-3 text-gray-700">
-          {filteredUsage.map((item) => (
-            <p key={item.itemName}>
-              {item.itemName} used: {item.amountUsed}
-            </p>
-          ))}
-        </div>
+        <ReportLedgerTable
+          columns={[
+            { key: "itemName", header: "Item" },
+            { key: "amountUsed", header: "Amount Used" },
+          ]}
+          rows={filteredUsage}
+          emptyMessage="No usage data available."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Most Used: {filteredUsage[0]?.itemName ?? "No data"}</td>
+              <td className="px-4 py-3">Total Used: {formatPlainNumber(filteredUsage.reduce((sum, item) => sum + Number(item.amountUsed || 0), 0))}</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading usage data..." : "No usage data available."} />
       )}
@@ -774,7 +803,7 @@ export function InventoryTopItemsSection({ selectedRange = "30days", searchTerm 
       {error ? (
         <ErrorState message={error} />
       ) : filteredTopItems.length ? (
-        <TopItemsTable items={filteredTopItems} />
+        <SalesReportView rows={filteredTopItems} isLoading={isLoading} />
       ) : (
         <EmptyState message={isLoading ? "Loading top items..." : "No top items data available."} />
       )}
@@ -790,11 +819,14 @@ export function InventoryWasteSection({ selectedRange = "30days" }) {
       {error ? (
         <ErrorState message={error} />
       ) : data?.inventoryWaste ? (
-        <div className="space-y-3 text-gray-700">
-          <p>High waste item: {data.inventoryWaste.highWasteItem}</p>
-          <p>Most efficient item: {data.inventoryWaste.mostEfficientItem}</p>
-          <p>Suggested reorder priority: {data.inventoryWaste.reorderPriority}</p>
-        </div>
+        <MetricReportTable
+          rows={[
+            { label: "High Waste Item", value: data.inventoryWaste.highWasteItem },
+            { label: "Most Efficient Item", value: data.inventoryWaste.mostEfficientItem },
+            { label: "Suggested Reorder Priority", value: data.inventoryWaste.reorderPriority },
+          ]}
+          emptyMessage="No waste insights are available."
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading waste insights..." : "No waste insights are available."} />
       )}
@@ -807,13 +839,15 @@ export function OperationsOverviewSection({ selectedRange = "7days" }) {
 
   return (
     <ReportSection title="Operational Reports">
-      <RenderCardList
-        cards={data?.operationalSummary}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No operational summary is available."
-      />
-      {!error && !isLoading && <OperationsSourceData data={data} />}
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <MetricReportTable
+          rows={data?.operationalSummary}
+          isLoading={isLoading}
+          emptyMessage="No operational summary is available."
+        />
+      )}
     </ReportSection>
   );
 }
@@ -827,16 +861,22 @@ export function OperationsVoidsSection({ selectedRange = "7days", searchTerm = "
       {error ? (
         <ErrorState message={error} />
       ) : filteredVoids.length ? (
-        <SimpleTable
-          headers={["Order", "Reason", "Employee", "Amount"]}
+        <ReportLedgerTable
+          columns={[
+            { key: "order", header: "Order" },
+            { key: "reason", header: "Reason" },
+            { key: "employee", header: "Employee" },
+            { key: "amount", header: "Amount" },
+          ]}
           rows={filteredVoids}
-          renderRow={(item) => (
-            <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
-              <td className="py-3 pr-4">{item.reason}</td>
-              <td className="py-3 pr-4">{item.employee}</td>
-              <td className="py-3 pr-4">{item.amount}</td>
-            </tr>
+          emptyMessage="No voided orders were found for this range."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Total Voids: {formatPlainNumber(filteredVoids.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Top Reason: {filteredVoids[0]?.reason ?? "No data"}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Employees: {formatPlainNumber(new Set(filteredVoids.map((item) => item.employee)).size)}</td>
+              <td className="px-4 py-3">Review Count: {formatPlainNumber(filteredVoids.length)}</td>
+            </>
           )}
         />
       ) : (
@@ -855,15 +895,20 @@ export function OperationsDiscountsSection({ selectedRange = "7days", searchTerm
       {error ? (
         <ErrorState message={error} />
       ) : filteredDiscounts.length ? (
-        <SimpleTable
-          headers={["Type", "Count", "Amount"]}
+        <ReportLedgerTable
+          columns={[
+            { key: "type", header: "Type" },
+            { key: "count", header: "Count" },
+            { key: "amount", header: "Amount" },
+          ]}
           rows={filteredDiscounts}
-          renderRow={(item) => (
-            <tr key={item.type} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{item.type}</td>
-              <td className="py-3 pr-4">{item.count}</td>
-              <td className="py-3 pr-4">{item.amount}</td>
-            </tr>
+          emptyMessage="No discounts were found for this range."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Discount Types: {formatPlainNumber(filteredDiscounts.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Total Count: {formatPlainNumber(filteredDiscounts.reduce((sum, item) => sum + Number(item.count || 0), 0))}</td>
+              <td className="px-4 py-3">Amount Tracked</td>
+            </>
           )}
         />
       ) : (
@@ -882,16 +927,22 @@ export function OperationsRefundsSection({ selectedRange = "7days", searchTerm =
       {error ? (
         <ErrorState message={error} />
       ) : filteredRefunds.length ? (
-        <SimpleTable
-          headers={["Order", "Reason", "Amount", "Status"]}
+        <ReportLedgerTable
+          columns={[
+            { key: "order", header: "Order" },
+            { key: "reason", header: "Reason" },
+            { key: "amount", header: "Amount" },
+            { key: "status", header: "Status" },
+          ]}
           rows={filteredRefunds}
-          renderRow={(item) => (
-            <tr key={`${item.order}-${item.reason}`} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{item.order}</td>
-              <td className="py-3 pr-4">{item.reason}</td>
-              <td className="py-3 pr-4">{item.amount}</td>
-              <td className="py-3 pr-4">{item.status}</td>
-            </tr>
+          emptyMessage="No refunds were found for this range."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Refunds: {formatPlainNumber(filteredRefunds.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Top Reason: {filteredRefunds[0]?.reason ?? "No data"}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Amount Tracked</td>
+              <td className="px-4 py-3">Approved: {formatPlainNumber(filteredRefunds.filter((item) => item.status === "Approved").length)}</td>
+            </>
           )}
         />
       ) : (
@@ -910,15 +961,22 @@ export function OperationsPaymentsSection({ selectedRange = "7days", searchTerm 
       {error ? (
         <ErrorState message={error} />
       ) : filteredPayments.length ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {filteredPayments.map((item) => (
-            <div key={item.method} className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className="font-semibold text-gray-900">{item.method}</p>
-              <p className="text-gray-600">Transactions: {item.count}</p>
-              <p className="text-gray-600">Amount: {item.amount}</p>
-            </div>
-          ))}
-        </div>
+        <ReportLedgerTable
+          columns={[
+            { key: "method", header: "Method" },
+            { key: "count", header: "Transactions" },
+            { key: "amount", header: "Amount" },
+          ]}
+          rows={filteredPayments}
+          emptyMessage="No payment data is available for this range."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Methods: {formatPlainNumber(filteredPayments.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Transactions: {formatPlainNumber(filteredPayments.reduce((sum, item) => sum + Number(item.count || 0), 0))}</td>
+              <td className="px-4 py-3">Payment Mix</td>
+            </>
+          )}
+        />
       ) : (
         <EmptyState message={isLoading ? "Loading payment mix..." : "No payment data is available for this range."} />
       )}
@@ -931,17 +989,13 @@ export function CustomerOverviewSection({ selectedRange = "30days" }) {
 
   return (
     <ReportSection title="Customer Behavior">
-      <RenderCardList
-        cards={data?.customerOverview}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No customer overview is available."
-      />
-      {!error && !isLoading && (
-        <MetricDataPoints
-          title="Customer Data Points"
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <MetricReportTable
           rows={data?.customerOverview}
-          emptyMessage="No customer data points are available."
+          isLoading={isLoading}
+          emptyMessage="No customer overview is available."
         />
       )}
     </ReportSection>
@@ -953,17 +1007,13 @@ export function CustomerHabitsSection({ selectedRange = "30days" }) {
 
   return (
     <ReportSection title="Ordering Habits">
-      <RenderCardList
-        cards={data?.customerHabits}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No customer habit data is available."
-      />
-      {!error && !isLoading && (
-        <MetricDataPoints
-          title="Ordering Data Points"
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <MetricReportTable
           rows={data?.customerHabits}
-          emptyMessage="No ordering data points are available."
+          isLoading={isLoading}
+          emptyMessage="No customer habit data is available."
         />
       )}
     </ReportSection>
@@ -975,17 +1025,13 @@ export function CustomerLoyaltySection({ selectedRange = "30days" }) {
 
   return (
     <ReportSection title="Loyalty Usage">
-      <RenderCardList
-        cards={data?.customerLoyalty}
-        isLoading={isLoading}
-        error={error}
-        emptyMessage="No loyalty data is available."
-      />
-      {!error && !isLoading && (
-        <MetricDataPoints
-          title="Loyalty Data Points"
+      {error ? (
+        <ErrorState message={error} />
+      ) : (
+        <MetricReportTable
           rows={data?.customerLoyalty}
-          emptyMessage="No loyalty data points are available."
+          isLoading={isLoading}
+          emptyMessage="No loyalty data is available."
         />
       )}
     </ReportSection>
@@ -1001,15 +1047,20 @@ export function CustomerRepeatSection({ selectedRange = "30days", searchTerm = "
       {error ? (
         <ErrorState message={error} />
       ) : filteredCustomers.length ? (
-        <SimpleTable
-          headers={["Customer", "Visits", "Favorite Item"]}
+        <ReportLedgerTable
+          columns={[
+            { key: "name", header: "Customer" },
+            { key: "visits", header: "Visits" },
+            { key: "favorite", header: "Favorite Item" },
+          ]}
           rows={filteredCustomers}
-          renderRow={(customer) => (
-            <tr key={customer.name} className="border-b last:border-b-0">
-              <td className="py-3 pr-4 font-medium text-gray-800">{customer.name}</td>
-              <td className="py-3 pr-4">{customer.visits}</td>
-              <td className="py-3 pr-4">{customer.favorite}</td>
-            </tr>
+          emptyMessage="Repeat customer tracking is not available with the current schema."
+          renderFooter={() => (
+            <>
+              <td className="border-r border-gray-200 px-4 py-3">Customers: {formatPlainNumber(filteredCustomers.length)}</td>
+              <td className="border-r border-gray-200 px-4 py-3">Total Visits: {formatPlainNumber(filteredCustomers.reduce((sum, item) => sum + Number(item.visits || 0), 0))}</td>
+              <td className="px-4 py-3">Top Favorite: {filteredCustomers[0]?.favorite ?? "No data"}</td>
+            </>
           )}
         />
       ) : (

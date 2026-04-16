@@ -19,7 +19,7 @@ const viewOptions = [
 export default function SalesReportsPage() {
   return (
     <ReportsPageLayout
-      title="Sales Reports"
+      title="Sales Report"
       description="Track revenue, orders, average ticket value, and sales performance."
       viewOptions={viewOptions}
       defaultView="overview"
