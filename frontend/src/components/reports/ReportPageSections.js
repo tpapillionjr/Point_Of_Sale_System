@@ -3,8 +3,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,6 +18,7 @@ import ReportSection from "./ReportSection";
 import { getReportsDashboard } from "../../lib/api";
 
 const SALES_ROWS_PER_PAGE = 10;
+const ITEM_DISTRIBUTION_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
 
 function EmptyState({ message }) {
   return <p className="text-sm text-gray-600">{message}</p>;
@@ -91,6 +96,57 @@ function formatPlainNumber(value, digits = 0) {
   });
 }
 
+function getSalesSummary(rows) {
+  const totalRevenue = rows.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  const totalInventoryLeft = rows.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const totalSold = rows.reduce((sum, item) => sum + Number(item.sold || 0), 0);
+  const topItem = [...rows].sort((a, b) => Number(b.sold || 0) - Number(a.sold || 0))[0]?.name ?? "No data";
+
+  return {
+    totalRevenue,
+    totalInventoryLeft,
+    totalSold,
+    topItem,
+    itemCount: rows.length,
+  };
+}
+
+function SalesSummaryStrip({ rows, isLoading }) {
+  if (isLoading) {
+    return (
+      <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+        {[1, 2, 3, 4].map((item) => (
+          <div key={item} className="rounded bg-white p-4 text-center shadow">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Loading</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">...</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const summary = getSalesSummary(rows);
+  const cards = [
+    { label: "Total Sales", value: formatMoney(summary.totalRevenue) },
+    { label: "Items Sold", value: formatPlainNumber(summary.totalSold) },
+    { label: "Inventory Left", value: formatPlainNumber(summary.totalInventoryLeft) },
+    { label: "Most Popular", value: summary.topItem },
+  ];
+
+  return (
+    <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+      {cards.map((card) => (
+        <div key={card.label} className="rounded bg-white p-4 text-center shadow">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{card.label}</p>
+          <p className="mt-2 truncate text-2xl font-semibold text-slate-900" title={card.value}>
+            {card.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ReportLedgerTable({ columns, rows, renderFooter, emptyMessage, isLoading }) {
   if (!rows?.length) {
     return <EmptyState message={isLoading ? "Loading report rows..." : emptyMessage} />;
@@ -131,6 +187,21 @@ function ReportLedgerTable({ columns, rows, renderFooter, emptyMessage, isLoadin
   );
 }
 
+function ItemDistributionTooltip({ active, payload }) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const item = payload[0].payload;
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm shadow">
+      <p className="font-semibold text-slate-950">{item.name}</p>
+      <p className="mt-1 text-slate-600">{formatPlainNumber(item.value)} sold</p>
+    </div>
+  );
+}
+
 function SalesReportChart({ rows, chartType }) {
   if (!rows.length) {
     return <EmptyState message="No item sales data available." />;
@@ -140,12 +211,36 @@ function SalesReportChart({ rows, chartType }) {
     ...item,
     displayName: item.name.length > 18 ? `${item.name.slice(0, 18)}...` : item.name,
   }));
+  const pieRows = rows
+    .filter((item) => Number(item.sold || 0) > 0)
+    .map((item) => ({
+      name: item.name,
+      value: Number(item.sold || 0),
+    }));
 
   return (
     <div className="rounded bg-white p-4 shadow">
-      <div className="h-96 w-full">
+      <div className="h-[28rem] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {chartType === "line" ? (
+          {chartType === "pie" ? (
+            <PieChart>
+              <Tooltip content={<ItemDistributionTooltip />} />
+              <Legend />
+              <Pie
+                data={pieRows}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="54%"
+                outerRadius={125}
+                label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+              >
+                {pieRows.map((item, index) => (
+                  <Cell key={item.name} fill={ITEM_DISTRIBUTION_COLORS[index % ITEM_DISTRIBUTION_COLORS.length]} />
+                ))}
+              </Pie>
+            </PieChart>
+          ) : chartType === "line" ? (
             <LineChart data={chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="displayName" angle={-20} textAnchor="end" interval={0} />
@@ -171,9 +266,7 @@ function SalesReportChart({ rows, chartType }) {
 }
 
 function SalesReportTable({ rows, isLoading, currentPage, onPageChange }) {
-  const totalRevenue = rows.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
-  const totalQuantity = rows.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  const topItem = [...rows].sort((a, b) => Number(b.sold || 0) - Number(a.sold || 0))[0]?.name ?? "No data";
+  const { totalRevenue, totalInventoryLeft, topItem } = getSalesSummary(rows);
   const pageCount = Math.max(1, Math.ceil(rows.length / SALES_ROWS_PER_PAGE));
   const normalizedPage = Math.min(currentPage, pageCount);
   const pageRows = rows.slice((normalizedPage - 1) * SALES_ROWS_PER_PAGE, normalizedPage * SALES_ROWS_PER_PAGE);
@@ -194,7 +287,7 @@ function SalesReportTable({ rows, isLoading, currentPage, onPageChange }) {
           <>
             <td className="border-r border-gray-200 px-4 py-3">Most Popular Item: {topItem}</td>
             <td className="border-r border-gray-200 px-4 py-3">Total Earned: {formatMoney(totalRevenue)}</td>
-            <td className="border-r border-gray-200 px-4 py-3">Total Quantity: {formatPlainNumber(totalQuantity)}</td>
+            <td className="border-r border-gray-200 px-4 py-3">Total Quantity: {formatPlainNumber(totalInventoryLeft)}</td>
             <td className="px-4 py-3">Total Count: {formatPlainNumber(rows.length)}</td>
           </>
         )}
@@ -243,6 +336,8 @@ function SalesReportView({ rows, isLoading }) {
 
   return (
     <div>
+      <SalesSummaryStrip rows={rows} isLoading={isLoading} />
+
       <div className="mb-4 flex flex-wrap justify-center gap-3">
         <button
           type="button"
@@ -262,6 +357,7 @@ function SalesReportView({ rows, isLoading }) {
             >
               <option value="bar">Bar Chart</option>
               <option value="line">Line Chart</option>
+              <option value="pie">Pie Chart</option>
             </select>
             <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
               <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
