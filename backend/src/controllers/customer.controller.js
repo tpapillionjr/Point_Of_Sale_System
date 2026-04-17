@@ -10,6 +10,14 @@ function isCanceledOnlineOrderStatus(status) {
   return ONLINE_ORDER_CANCELED_STATUSES.has(status);
 }
 
+function detectCardType(digits) {
+  if (/^4/.test(digits)) return "visa";
+  if (/^(5[1-5]|2[2-7])/.test(digits)) return "mastercard";
+  if (/^3[47]/.test(digits)) return "amex";
+  if (/^(6011|622|64|65)/.test(digits)) return "discover";
+  return null;
+}
+
 function normalizeCustomerFacingOnlineStatus(status) {
   return isCanceledOnlineOrderStatus(status) ? "canceled" : status;
 }
@@ -191,7 +199,7 @@ function normalizeCategory(value) {
 async function createCustomerOrder(req, res) {
   try {
 
-    const { firstName, lastName, email, phone, note, cart, paymentPreference, customerId, rewardId } = req.body;
+    const { firstName, lastName, email, phone, note, cart, paymentPreference, paymentData, customerId, rewardId } = req.body;
     const authenticatedCustomer = getCustomerFromAuthHeader(req);
     const orderCustomerId = authenticatedCustomer?.customerId ?? null;
 
@@ -240,10 +248,13 @@ async function createCustomerOrder(req, res) {
         );
       }
 
-      if (paymentPreference === "online" && orderCustomerId) {
+      if (paymentPreference === "online") {
+        const digits = (paymentData?.cardNumber ?? "").replace(/\s/g, "");
+        const cardLast4 = digits.slice(-4) || null;
+        const cardType = detectCardType(digits);
         await connection.execute(
-          `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
-          [onlineOrderId]
+          `UPDATE Online_Orders SET payment_status = 'paid', payment_method = 'card', card_type = ?, card_last4 = ? WHERE online_order_id = ?`,
+          [cardType, cardLast4, onlineOrderId]
         );
       }
 
@@ -572,6 +583,22 @@ async function markOnlineOrderPaid(req, res) {
       return res.status(400).json({ error: "Invalid order ID." });
     }
 
+    const { paymentMethod, cardNumber, cardType } = req.body ?? {};
+
+    if (!paymentMethod || !["cash", "card"].includes(paymentMethod)) {
+      return res.status(400).json({ error: "paymentMethod must be 'cash' or 'card'." });
+    }
+
+    if (paymentMethod === "card") {
+      const digits = (cardNumber ?? "").replace(/\s/g, "");
+      if (!/^\d{13,19}$/.test(digits)) {
+        return res.status(400).json({ error: "Invalid card number." });
+      }
+      if (!cardType || !["visa", "mastercard", "amex", "discover"].includes(cardType)) {
+        return res.status(400).json({ error: "Invalid card type." });
+      }
+    }
+
     const rows = await db.query(
       `SELECT customer_status, payment_status
        FROM Online_Orders
@@ -592,12 +619,19 @@ async function markOnlineOrderPaid(req, res) {
       return res.status(400).json({ error: "Canceled orders cannot be marked paid." });
     }
 
+    const cardLast4 = paymentMethod === "card"
+      ? (cardNumber ?? "").replace(/\s/g, "").slice(-4)
+      : null;
+    const savedCardType = paymentMethod === "card" ? cardType : null;
+
     await db.query(
-      `UPDATE Online_Orders SET payment_status = 'paid' WHERE online_order_id = ?`,
-      [orderId]
+      `UPDATE Online_Orders
+       SET payment_status = 'paid', payment_method = ?, card_type = ?, card_last4 = ?
+       WHERE online_order_id = ?`,
+      [paymentMethod, savedCardType, cardLast4, orderId]
     );
 
-    res.json({ orderId, payment_status: "paid" });
+    res.json({ orderId, payment_status: "paid", payment_method: paymentMethod });
   } catch (error) {
     console.error("markOnlineOrderPaid error:", error);
     res.status(500).json({ error: "Failed to mark order as paid." });

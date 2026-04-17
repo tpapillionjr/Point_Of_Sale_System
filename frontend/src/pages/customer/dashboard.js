@@ -26,6 +26,7 @@ export default function CustomerDashboardPage() {
   const [orderHistory, setOrderHistory] = useState([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [selectedTrackOrderId, setSelectedTrackOrderId] = useState(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");
@@ -61,7 +62,15 @@ export default function CustomerDashboardPage() {
         .catch(() => {});
 
       fetchCustomerOrderHistory(token)
-        .then(setOrderHistory)
+        .then((history) => {
+          setOrderHistory(history);
+          const active = history.filter((o) => ACTIVE_ORDER_STATUSES.has(o.customer_status));
+          if (active.length > 0) {
+            const storedLast = localStorage.getItem(`lastOrderId:${parsed.customerId}`);
+            const preferred = active.find((o) => String(o.online_order_id) === String(storedLast));
+            setSelectedTrackOrderId(String((preferred ?? active[0]).online_order_id));
+          }
+        })
         .catch((err) => {
           if (err.status === 401) forceLogout();
         });
@@ -84,9 +93,6 @@ export default function CustomerDashboardPage() {
     ? Math.min(100, Math.round((pointsBalance / nextReward.points_cost) * 100))
     : rewards.length > 0 ? 100 : 0;
   const activeOrders = orderHistory.filter((order) => ACTIVE_ORDER_STATUSES.has(order.customer_status));
-  const activeOrderSelectValue = activeOrders.some((order) => String(order.online_order_id) === String(lastOrderId))
-    ? String(lastOrderId)
-    : "";
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -155,53 +161,39 @@ export default function CustomerDashboardPage() {
             </div>
           </Link>
 
-          {lastOrderId ? (
-            <Link href={`/customer/order-tracking?orderId=${lastOrderId}`} style={{ textDecoration: "none" }}>
-              <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", cursor: "pointer", textAlign: "center" }}>
-                <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
-                <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>Track Order</p>
-                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "4px 0 0" }}>Order #{lastOrderId}</p>
-              </div>
-            </Link>
-          ) : (
-            <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", textAlign: "center", opacity: 0.6 }}>
-              <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
-              <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: 0 }}>Track Order</p>
-              <p style={{ fontSize: "12px", color: "#94a3b8", margin: "4px 0 0" }}>No recent orders</p>
-            </div>
-          )}
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", textAlign: "center" }}>
+            <div style={{ fontSize: "36px", marginBottom: "10px" }}>📦</div>
+            <p style={{ fontSize: "15px", fontWeight: "700", color: "#1e3a5f", margin: "0 0 12px" }}>Track Order</p>
+            {activeOrders.length > 0 ? (
+              <>
+                <select
+                  value={selectedTrackOrderId ?? ""}
+                  onChange={(e) => setSelectedTrackOrderId(e.target.value)}
+                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 12px", color: "#1e3a5f", fontSize: "13px", fontWeight: "600", backgroundColor: "white", marginBottom: "10px" }}
+                >
+                  {activeOrders.map((order) => {
+                    const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status };
+                    return (
+                      <option key={order.online_order_id} value={String(order.online_order_id)}>
+                        Order #{order.online_order_id} — {statusMeta.label} — ${Number(order.total).toFixed(2)}
+                      </option>
+                    );
+                  })}
+                </select>
+                <button
+                  onClick={() => { if (selectedTrackOrderId) router.push(`/customer/order-tracking?orderId=${selectedTrackOrderId}`); }}
+                  style={{ width: "100%", padding: "10px", backgroundColor: "#1e3a5f", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}
+                >
+                  Track Selected Order
+                </button>
+                <p style={{ fontSize: "11px", color: "#94a3b8", margin: "8px 0 0" }}>Up to 3 active orders</p>
+              </>
+            ) : (
+              <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, opacity: 0.7 }}>No active orders</p>
+            )}
+          </div>
         </div>
 
-        {activeOrders.length > 0 && (
-          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "20px 24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", marginBottom: "24px" }}>
-            <label htmlFor="active-order-select" style={{ display: "block", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "10px" }}>
-              Active Orders ({activeOrders.length}/3)
-            </label>
-            <select
-              id="active-order-select"
-              value={activeOrderSelectValue}
-              onChange={(event) => {
-                if (event.target.value) {
-                  router.push(`/customer/order-tracking?orderId=${event.target.value}`);
-                }
-              }}
-              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "12px 14px", color: "#1e3a5f", fontSize: "14px", fontWeight: "700", backgroundColor: "white" }}
-            >
-              <option value="">Choose an order to track</option>
-              {activeOrders.map((order) => {
-                const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status };
-                return (
-                  <option key={order.online_order_id} value={order.online_order_id}>
-                    Order #{order.online_order_id} - {statusMeta.label} - ${Number(order.total).toFixed(2)}
-                  </option>
-                );
-              })}
-            </select>
-            <p style={{ fontSize: "12px", color: "#64748b", margin: "10px 0 0" }}>
-              You can keep up to three orders active at the same time.
-            </p>
-          </div>
-        )}
 
         {/* Rewards catalog */}
         {rewards.length > 0 && (

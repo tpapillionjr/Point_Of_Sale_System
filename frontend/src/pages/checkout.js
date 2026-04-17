@@ -161,6 +161,7 @@ export default function CheckoutPage() {
           tipAmount,
           total,
           cashTendered,
+          cardNumber: paymentMethod === "CREDIT" ? cardForm.cardNumber.replace(/\s/g, "") : undefined,
         }),
         timeout,
       ]);

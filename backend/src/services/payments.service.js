@@ -61,6 +61,16 @@ async function closeOrder(payload) {
     }
 
     const paymentType = paymentMethod === "CASH" ? "cash" : "card";
+  const cardDigits = (payload?.cardNumber ?? "").replace(/\s/g, "");
+  const cardLast4 = paymentType === "card" && cardDigits.length >= 4 ? cardDigits.slice(-4) : null;
+  function detectCardType(digits) {
+    if (/^4/.test(digits)) return "visa";
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return "mastercard";
+    if (/^3[47]/.test(digits)) return "amex";
+    if (/^(6011|622|64|65)/.test(digits)) return "discover";
+    return null;
+  }
+  const cardType = paymentType === "card" ? detectCardType(cardDigits) : null;
     const changeGiven = paymentMethod === "CASH" ? Number((cashTendered - total).toFixed(2)) : 0;
     const paymentRows =
       paymentMethod === "SPLIT"
@@ -99,8 +109,8 @@ async function closeOrder(payload) {
           "REG-01",
           servedBy,
           paymentType,
-          paymentType === "card" ? "visa" : null,
-          paymentType === "card" ? "0000" : null,
+          cardType,
+          cardLast4,
           payment.amount,
           payment.tipAmount,
           payment.tenderedAmount,

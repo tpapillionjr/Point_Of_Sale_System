@@ -11,6 +11,8 @@ export default function OnlineCheckoutPage() {
   // Payment
   const [paymentMethod, setPaymentMethod] = useState(null); // "CASH" | "CREDIT"
   const [cashInput, setCashInput] = useState("");
+  const [cardForm, setCardForm] = useState({ cardNumber: "", cardName: "", expiryDate: "", cvv: "" });
+  const [cardErrors, setCardErrors] = useState({});
   const [isClosing, setIsClosing] = useState(false);
   const [stage, setStage] = useState("checkout"); // "checkout" | "complete"
 
@@ -45,15 +47,50 @@ export default function OnlineCheckoutPage() {
     }
   }
 
+  function detectCardType(digits) {
+    if (/^4/.test(digits)) return "visa";
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return "mastercard";
+    if (/^3[47]/.test(digits)) return "amex";
+    if (/^(6011|622|64|65)/.test(digits)) return "discover";
+    return null;
+  }
+
+  function getCardExpiryError(expiryDate) {
+    if (!expiryDate.trim() || !/^\d{2}\/\d{2}$/.test(expiryDate)) return "Format: MM/YY";
+    const [monthText, yearText] = expiryDate.split("/");
+    const month = Number(monthText);
+    const year = 2000 + Number(yearText);
+    if (!Number.isInteger(month) || month < 1 || month > 12) return "Enter a valid month";
+    const now = new Date();
+    if (year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1)) return "Card is expired";
+    return null;
+  }
+
   async function handleMarkPaid() {
     if (!paymentMethod) return;
     const cashTendered = parseFloat(cashInput) || 0;
     if (paymentMethod === "CASH" && cashTendered < Number(order.total)) return;
 
+    if (paymentMethod === "CREDIT") {
+      const errs = {};
+      if (!cardForm.cardNumber.trim() || cardForm.cardNumber.replace(/\s/g, "").length < 13) errs.cardNumber = "Valid card number required";
+      if (!cardForm.cardName.trim()) errs.cardName = "Cardholder name required";
+      const expiryError = getCardExpiryError(cardForm.expiryDate);
+      if (expiryError) errs.expiryDate = expiryError;
+      if (!cardForm.cvv.trim() || !/^\d{3,4}$/.test(cardForm.cvv)) errs.cvv = "3-4 digits required";
+      if (Object.keys(errs).length > 0) { setCardErrors(errs); return; }
+      setCardErrors({});
+    }
+
     setIsClosing(true);
     setError(null);
     try {
-      await markOnlineOrderPaid(order.online_order_id);
+      const digits = cardForm.cardNumber.replace(/\s/g, "");
+      await markOnlineOrderPaid(order.online_order_id, {
+        paymentMethod: paymentMethod === "CASH" ? "cash" : "card",
+        cardNumber: paymentMethod === "CREDIT" ? digits : undefined,
+        cardType: paymentMethod === "CREDIT" ? detectCardType(digits) : undefined,
+      });
 
       // Award points to looked-up customer if found (and order has no customer_num_id)
       if (lookupResult && !order.customer_num_id) {
@@ -239,7 +276,14 @@ export default function OnlineCheckoutPage() {
               ].map(({ label, active, border, text }) => (
                 <button
                   key={label}
-                  onClick={() => { setPaymentMethod(label); setCashInput(""); }}
+                  onClick={() => {
+                    setPaymentMethod(label);
+                    setCashInput("");
+                    if (label !== "CREDIT") {
+                      setCardForm({ cardNumber: "", cardName: "", expiryDate: "", cvv: "" });
+                      setCardErrors({});
+                    }
+                  }}
                   style={{ padding: "14px", border: "2px solid", borderColor: paymentMethod === label ? border : "#e5e7eb", borderRadius: "10px", backgroundColor: paymentMethod === label ? active : "white", color: paymentMethod === label ? text : "#374151", fontWeight: "700", fontSize: "14px", cursor: "pointer", letterSpacing: "0.04em" }}
                 >
                   {label}
@@ -248,8 +292,65 @@ export default function OnlineCheckoutPage() {
             </div>
 
             {paymentMethod === "CREDIT" && (
-              <div style={{ marginTop: "12px", padding: "14px", backgroundColor: "#eff6ff", borderRadius: "10px", border: "1px solid #bfdbfe", textAlign: "center", fontSize: "14px", color: "#1d4ed8", fontWeight: "600" }}>
-                Swipe or insert card · ${total.toFixed(2)}
+              <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Card Number *</label>
+                  <input
+                    type="text"
+                    placeholder="4532 1234 5678 9010"
+                    value={cardForm.cardNumber}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 16);
+                      setCardForm({ ...cardForm, cardNumber: val.replace(/(\d{4})(?=\d)/g, "$1 ") });
+                    }}
+                    style={{ width: "100%", padding: "11px 14px", borderRadius: "8px", border: `1px solid ${cardErrors.cardNumber ? "#fca5a5" : "#d1d5db"}`, fontSize: "14px", color: "#111827", backgroundColor: cardErrors.cardNumber ? "#fef2f2" : "white", boxSizing: "border-box", outline: "none", fontFamily: "monospace" }}
+                  />
+                  {cardErrors.cardNumber && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cardNumber}</p>}
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Cardholder Name *</label>
+                  <input
+                    type="text"
+                    placeholder="Alex Johnson"
+                    value={cardForm.cardName}
+                    onChange={(e) => setCardForm({ ...cardForm, cardName: e.target.value })}
+                    style={{ width: "100%", padding: "11px 14px", borderRadius: "8px", border: `1px solid ${cardErrors.cardName ? "#fca5a5" : "#d1d5db"}`, fontSize: "14px", color: "#111827", backgroundColor: cardErrors.cardName ? "#fef2f2" : "white", boxSizing: "border-box", outline: "none" }}
+                  />
+                  {cardErrors.cardName && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cardName}</p>}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Expires *</label>
+                    <input
+                      type="text"
+                      placeholder="MM/YY"
+                      value={cardForm.expiryDate}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                        setCardForm({ ...cardForm, expiryDate: val.length >= 2 ? `${val.slice(0, 2)}/${val.slice(2)}` : val });
+                      }}
+                      style={{ width: "100%", padding: "11px 14px", borderRadius: "8px", border: `1px solid ${cardErrors.expiryDate ? "#fca5a5" : "#d1d5db"}`, fontSize: "14px", color: "#111827", backgroundColor: cardErrors.expiryDate ? "#fef2f2" : "white", boxSizing: "border-box", outline: "none", fontFamily: "monospace" }}
+                    />
+                    {cardErrors.expiryDate && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.expiryDate}</p>}
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>CVV *</label>
+                    <input
+                      type="text"
+                      placeholder="123"
+                      value={cardForm.cvv}
+                      onChange={(e) => setCardForm({ ...cardForm, cvv: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                      style={{ width: "100%", padding: "11px 14px", borderRadius: "8px", border: `1px solid ${cardErrors.cvv ? "#fca5a5" : "#d1d5db"}`, fontSize: "14px", color: "#111827", backgroundColor: cardErrors.cvv ? "#fef2f2" : "white", boxSizing: "border-box", outline: "none", fontFamily: "monospace" }}
+                    />
+                    {cardErrors.cvv && <p style={{ fontSize: "12px", color: "#dc2626", margin: "4px 0 0" }}>{cardErrors.cvv}</p>}
+                  </div>
+                </div>
+
+                <p style={{ fontSize: "12px", color: "#6b7280", margin: "4px 0 0", paddingTop: "8px", borderTop: "1px solid #e5e7eb" }}>
+                  ✓ Card information is used for this transaction only.
+                </p>
               </div>
             )}
 
@@ -291,7 +392,17 @@ export default function OnlineCheckoutPage() {
 
           <button
             onClick={handleMarkPaid}
-            disabled={isClosing || !paymentMethod || (paymentMethod === "CASH" && (cashTendered < total || cashInput === ""))}
+            disabled={
+              isClosing ||
+              !paymentMethod ||
+              (paymentMethod === "CASH" && (cashTendered < total || cashInput === "")) ||
+              (paymentMethod === "CREDIT" && (
+                cardForm.cardNumber.replace(/\s/g, "").length < 13 ||
+                !cardForm.cardName.trim() ||
+                !/^\d{2}\/\d{2}$/.test(cardForm.expiryDate) ||
+                !/^\d{3,4}$/.test(cardForm.cvv)
+              ))
+            }
             style={{ width: "100%", padding: "16px", border: "none", borderRadius: "12px", backgroundColor: !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "#d1d5db" : "#111827", color: !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "#9ca3af" : "white", fontWeight: "700", fontSize: "16px", letterSpacing: "0.05em", cursor: !paymentMethod || (paymentMethod === "CASH" && cashTendered < total) ? "not-allowed" : "pointer" }}
           >
             {isClosing ? "PROCESSING..." : `MARK AS PAID — $${total.toFixed(2)}`}

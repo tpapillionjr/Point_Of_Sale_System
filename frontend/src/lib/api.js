@@ -433,8 +433,11 @@ export async function fetchOnlineOrderById(orderId) {
   return request(`/api/customer/online-orders/${orderId}`);
 }
 
-export async function markOnlineOrderPaid(orderId) {
-  return request(`/api/customer/online-orders/${orderId}/pay`, { method: "PATCH" });
+export async function markOnlineOrderPaid(orderId, paymentData) {
+  return request(`/api/customer/online-orders/${orderId}/pay`, {
+    method: "PATCH",
+    body: JSON.stringify(paymentData ?? {}),
+  });
 }
 
 export async function markOnlineOrderPickedUp(orderId) {

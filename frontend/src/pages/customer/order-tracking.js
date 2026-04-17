@@ -20,6 +20,7 @@ export default function OrderTrackingPage() {
   const [estimatedPoints, setEstimatedPoints] = useState(null);
   const [trackingError, setTrackingError] = useState("");
   const [isCanceled, setIsCanceled] = useState(false);
+  const [isPickedUp, setIsPickedUp] = useState(false);
   const [activeOrders, setActiveOrders] = useState([]);
 
   useEffect(() => {
@@ -43,7 +44,13 @@ export default function OrderTrackingPage() {
     const orderId = router.query.orderId;
     if (!orderId) return;
 
+    startTransition(() => {
+      setIsPickedUp(false);
+      setIsCanceled(false);
+    });
+
     const STATUS_MAP = { placed: 1, confirmed: 2, preparing: 3, ready: 4 };
+    let intervalId = null;
 
     async function poll() {
       try {
@@ -54,6 +61,14 @@ export default function OrderTrackingPage() {
           setCurrentStep(1);
           setIsCanceled(true);
           setTrackingError("");
+          clearInterval(intervalId);
+          return;
+        }
+
+        if (status === "picked_up") {
+          setIsPickedUp(true);
+          setActiveOrders((prev) => prev.filter((o) => String(o.online_order_id) !== String(orderId)));
+          clearInterval(intervalId);
           return;
         }
 
@@ -68,19 +83,60 @@ export default function OrderTrackingPage() {
     }
 
     poll();
-    const interval = setInterval(() => {
-      if (currentStepRef.current >= 4 || currentStepRef.current === -1) {
-        clearInterval(interval);
-        return;
-      }
+    intervalId = setInterval(poll, 5000);
 
-      poll();
-    }, 5000);
-
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalId);
   }, [router.query.orderId]);
 
   const active = STEPS.find((step) => step.id === currentStep) ?? STEPS[0];
+  const currentOrder = activeOrders.find((o) => String(o.online_order_id) === String(router.query.orderId));
+
+  if (isPickedUp) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dcfce7 0%, #f0fdf4 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", backgroundColor: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(134,239,172,0.15)" }}>
+          <Link href="/customer" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+            <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
+            <span style={{ fontSize: "20px", fontWeight: "700", color: "#14532d" }}>lumi</span>
+          </Link>
+          <Link href="/customer/menu" style={{ fontSize: "14px", fontWeight: "600", color: "#16a34a", textDecoration: "none" }}>
+            Order Again
+          </Link>
+        </nav>
+
+        <div style={{ maxWidth: "780px", margin: "0 auto", padding: "60px 24px" }}>
+          <div style={{ backgroundColor: "rgba(255,255,255,0.92)", borderRadius: "20px", padding: "40px 32px", border: "1px solid #bbf7d0", boxShadow: "0 4px 24px rgba(22,163,74,0.08)", textAlign: "center" }}>
+            <div style={{ fontSize: "56px", marginBottom: "12px" }}>✓</div>
+            <h1 style={{ fontSize: "32px", fontWeight: "900", color: "#15803d", margin: "0 0 12px", letterSpacing: "-0.02em" }}>Enjoy your meal!</h1>
+            <p style={{ color: "#166534", fontSize: "15px", margin: "0 0 24px" }}>
+              Your order has been picked up. Thank you for dining with us!
+            </p>
+            {activeOrders.filter((o) => String(o.online_order_id) !== String(router.query.orderId)).length > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontSize: "13px", color: "#166534", fontWeight: "600", margin: "0 0 10px" }}>You still have active orders:</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {activeOrders
+                    .filter((o) => String(o.online_order_id) !== String(router.query.orderId))
+                    .map((order) => (
+                      <Link
+                        key={order.online_order_id}
+                        href={`/customer/order-tracking?orderId=${order.online_order_id}`}
+                        style={{ display: "block", padding: "10px 16px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", color: "#15803d", fontSize: "13px", fontWeight: "700", textDecoration: "none" }}
+                      >
+                        Track Order #{order.online_order_id} — ${Number(order.total).toFixed(2)}
+                      </Link>
+                    ))}
+                </div>
+              </div>
+            )}
+            <Link href="/customer" style={{ display: "inline-block", padding: "12px 24px", backgroundColor: "#15803d", color: "white", borderRadius: "10px", fontWeight: "700", fontSize: "14px", textDecoration: "none" }}>
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isCanceled) {
     return (
@@ -162,6 +218,36 @@ export default function OrderTrackingPage() {
             <p style={{ margin: 0, fontSize: "14px", color: "#166534", fontWeight: "600" }}>
               You&apos;ll earn approximately <strong>{estimatedPoints} points</strong> when this order is paid.
             </p>
+          </div>
+        )}
+
+        {!trackingError && currentOrder?.items?.length > 0 && (
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "20px", padding: "24px 28px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", boxShadow: "0 4px 24px rgba(15,23,42,0.07)", marginBottom: "24px" }}>
+            <p style={{ fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", margin: "0 0 16px" }}>
+              Order #{currentOrder.online_order_id} — Receipt
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+              {currentOrder.items.map((item, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", color: "#1e3a5f" }}>
+                  <span style={{ fontWeight: "600" }}>{item.name} <span style={{ color: "#94a3b8", fontWeight: "500" }}>x{item.quantity}</span></span>
+                  <span style={{ fontWeight: "700" }}>${(item.price * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#64748b" }}>
+                <span>Subtotal</span>
+                <span>${Number(currentOrder.subtotal).toFixed(2)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#64748b" }}>
+                <span>Tax</span>
+                <span>${Number(currentOrder.tax).toFixed(2)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "15px", fontWeight: "800", color: "#1e3a5f", marginTop: "4px" }}>
+                <span>Total</span>
+                <span>${Number(currentOrder.total).toFixed(2)}</span>
+              </div>
+            </div>
           </div>
         )}
 
