@@ -1,8 +1,8 @@
 import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/router";
 import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic, fetchCustomerOrderHistory } from "../../lib/api";
+import CustomerNav from "../../components/CustomerNav";
 
 const ORDER_STATUS_LABEL = {
   placed: { label: "Placed", color: "#f97316" },
@@ -97,16 +97,11 @@ export default function CustomerDashboardPage() {
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
 
-      {/* Navbar */}
-      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", backgroundColor: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>
-        <Link href="/customer" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
-          <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
-          <span style={{ fontSize: "20px", fontWeight: "700", color: "#334e6e" }}>lumi</span>
-        </Link>
-        <button onClick={handleLogout} style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>
+      <CustomerNav right={
+        <button onClick={handleLogout} style={{ fontSize: "13px", fontWeight: "600", color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>
           Sign Out
         </button>
-      </nav>
+      } />
 
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 24px" }}>
 

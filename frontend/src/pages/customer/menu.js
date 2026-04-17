@@ -1,9 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/router";
 import { useCustomerSession } from "../../lib/useCustomerSession";
+import CustomerNav from "../../components/CustomerNav";
 import { MENU_CATEGORIES, normalizeMenuCategory, isBeverageCategory } from "../../lib/menuCategories";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -110,31 +110,19 @@ export default function CustomerMenuPage() {
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
 
-      {/* Navbar */}
-      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", backgroundColor: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(148,163,184,0.15)", position: "sticky", top: 0, zIndex: 10 }}>
-        <Link href="/customer" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
-          <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
-          <span style={{ fontSize: "20px", fontWeight: "700", color: "#334e6e" }}>lumi</span>
-        </Link>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {customer ? (
-            <Link href="/customer/dashboard" style={{ fontSize: "14px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>
-              Hi, {customer.firstName}
-            </Link>
-          ) : (
-            <Link href="/customer/login" style={{ fontSize: "14px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>
-              Log In
-            </Link>
+      <CustomerNav right={
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {!customer && (
+            <Link href="/customer/login" style={{ fontSize: "13px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>Log In</Link>
           )}
           <button
             onClick={() => setShowCart(true)}
-            style={{ padding: "8px 20px", borderRadius: "999px", border: "none", backgroundColor: cartCount > 0 ? "#3b82f6" : "#94a3b8", color: "white", fontSize: "14px", fontWeight: "700", cursor: "pointer", boxShadow: cartCount > 0 ? "0 4px 14px rgba(59,130,246,0.3)" : "none" }}
+            style={{ padding: "7px 16px", borderRadius: "999px", border: "none", backgroundColor: cartCount > 0 ? "#3b82f6" : "#94a3b8", color: "white", fontSize: "13px", fontWeight: "700", cursor: "pointer", boxShadow: cartCount > 0 ? "0 4px 14px rgba(59,130,246,0.3)" : "none" }}
           >
             Cart ({cartCount}) · ${cartTotal.toFixed(2)}
           </button>
         </div>
-      </nav>
+      } />
 
       <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "24px", padding: "32px 40px", maxWidth: "1100px", margin: "0 auto" }}>
 

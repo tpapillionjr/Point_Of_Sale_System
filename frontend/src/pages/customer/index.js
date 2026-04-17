@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCustomerSession } from "../../lib/useCustomerSession";
+import CustomerNav from "../../components/CustomerNav";
 
 const FEATURED_ITEMS = [
   { id: 1, name: "All-Star Special", description: "Our signature breakfast platter with eggs, bacon, and toast.", price: 11.99, category: "Entrees" },
@@ -21,73 +22,22 @@ export default function CustomerHomePage() {
       fontFamily: "system-ui, -apple-system, sans-serif",
     }}>
 
-      {/* Navbar */}
-      <nav style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "18px 40px",
-        backgroundColor: "rgba(255,255,255,0.7)",
-        backdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(148,163,184,0.15)",
-        position: "sticky",
-        top: 0,
-        zIndex: 10,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
-          <span style={{ fontSize: "22px", fontWeight: "700", color: "#334e6e", letterSpacing: "-0.01em" }}>lumi</span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {customer ? (
-            <>
-              <span style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>
-                Welcome back, {customer.firstName}
-              </span>
-              <Link href="/customer/dashboard" style={{
-                padding: "8px 20px",
-                borderRadius: "999px",
-                border: "none",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                fontSize: "14px",
-                fontWeight: "600",
-                textDecoration: "none",
-              }}>
-                My Account
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/customer/login" style={{
-                padding: "8px 20px",
-                borderRadius: "999px",
-                border: "1px solid rgba(100,116,139,0.3)",
-                backgroundColor: "rgba(255,255,255,0.8)",
-                color: "#334e6e",
-                fontSize: "14px",
-                fontWeight: "600",
-                textDecoration: "none",
-              }}>
-                Log In
-              </Link>
-              <Link href="/customer/login?mode=signup" style={{
-                padding: "8px 20px",
-                borderRadius: "999px",
-                border: "none",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                fontSize: "14px",
-                fontWeight: "600",
-                textDecoration: "none",
-              }}>
-                Sign Up
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <CustomerNav right={
+        customer ? (
+          <Link href="/customer/dashboard" style={{ padding: "7px 18px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+            My Account
+          </Link>
+        ) : (
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Link href="/customer/login" style={{ padding: "7px 16px", borderRadius: "999px", border: "1px solid rgba(100,116,139,0.3)", backgroundColor: "rgba(255,255,255,0.8)", color: "#334e6e", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+              Log In
+            </Link>
+            <Link href="/customer/login?mode=signup" style={{ padding: "7px 16px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+              Sign Up
+            </Link>
+          </div>
+        )
+      } />
 
       {/* Hero */}
       <section style={{
