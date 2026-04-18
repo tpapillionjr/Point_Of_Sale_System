@@ -47,11 +47,13 @@ export default function CustomerLoginPage() {
   }
 
   function sanitizeNameInput(value) {
-    return value.replace(/[^a-zA-Z]/g, "");
+    // Only allow alphanumeric, spaces, hyphens, and apostrophes, and limit to 20 characters
+    return value.replace(/[^a-zA-Z0-9\s\-']/g, "").slice(0, 20);
   }
 
   function validateNameCharacters(name) {
-    return /^[a-zA-Z]+$/.test(name.trim());
+    // Check if name contains only allowed characters
+    return /^[a-zA-Z0-9\s\-']*$/.test(name);
   }
 
   function routeStaffUser(user) {
@@ -90,12 +92,6 @@ export default function CustomerLoginPage() {
           setError("Account has been deactivated. Call the restaurant for any questions.");
           return;
         }
-
-        if (!customerError.message?.toLowerCase().includes("invalid email or password")) {
-          setError(customerError.message || "Customer login failed.");
-          return;
-        }
-
         const staffData = await staffLogin({ identifier: loginForm.email, password: loginForm.password });
         saveStaffSession(staffData.token, {
           userId: staffData.user.userId,
@@ -105,8 +101,8 @@ export default function CustomerLoginPage() {
         });
         routeStaffUser(staffData.user);
       }
-    } catch (error) {
-      setError(error.message || "Invalid email or password.");
+    } catch {
+      setError("Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }
@@ -120,8 +116,10 @@ export default function CustomerLoginPage() {
     const { firstName, lastName, email, phone, password, confirmPassword } = signupForm;
 
     if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) { setError("All fields are required."); return; }
-    if (!validateNameCharacters(firstName)) { setError("First name can only contain letters."); return; }
-    if (!validateNameCharacters(lastName)) { setError("Last name can only contain letters."); return; }
+    if (firstName.length > 20) { setError("First name must be 20 characters or less."); return; }
+    if (lastName.length > 20) { setError("Last name must be 20 characters or less."); return; }
+    if (!validateNameCharacters(firstName)) { setError("First name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
+    if (!validateNameCharacters(lastName)) { setError("Last name contains invalid characters. Only letters, numbers, hyphens, and apostrophes are allowed."); return; }
     if (!validateEmail(email)) { setError("Please enter a valid email address."); return; }
     if (!/^\d{10}$/.test(phone)) { setError("Phone number must be exactly 10 digits."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
@@ -381,8 +379,6 @@ export default function CustomerLoginPage() {
                     placeholder="Jane"
                     value={signupForm.firstName}
                     onChange={(e) => setSignupForm({ ...signupForm, firstName: sanitizeNameInput(e.target.value) })}
-                    pattern="[A-Za-z]+"
-                    autoComplete="given-name"
                     style={inputStyle}
                   />
                 </div>
@@ -393,8 +389,6 @@ export default function CustomerLoginPage() {
                     placeholder="Doe"
                     value={signupForm.lastName}
                     onChange={(e) => setSignupForm({ ...signupForm, lastName: sanitizeNameInput(e.target.value) })}
-                    pattern="[A-Za-z]+"
-                    autoComplete="family-name"
                     style={inputStyle}
                   />
                 </div>

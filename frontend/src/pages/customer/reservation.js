@@ -197,7 +197,7 @@ export default function CustomerReservationPage() {
               </div>
               <div>
                 <RequiredLabel>Time</RequiredLabel>
-                <select value={form.time} onChange={(e) => updateField("time", e.target.value)} style={inputStyle}>
+                <select value={form.time} onChange={(e) => updateField("time", e.target.value)} className="lumi-report-select">
                   {TIME_SLOTS.map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
@@ -208,7 +208,7 @@ export default function CustomerReservationPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
               <div>
                 <RequiredLabel>Party Size</RequiredLabel>
-                <select value={form.partySize} onChange={(e) => updateField("partySize", e.target.value)} style={inputStyle}>
+                <select value={form.partySize} onChange={(e) => updateField("partySize", e.target.value)} className="lumi-report-select">
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
                     <option key={count} value={count}>{count}</option>
                   ))}

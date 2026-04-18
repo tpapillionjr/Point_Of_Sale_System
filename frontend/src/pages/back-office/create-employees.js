@@ -168,7 +168,7 @@ export default function CreateEmployeesPage() {
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                  className="lumi-report-select"
                 >
                   <option value="employee">Server</option>
                   <option value="kitchen">Kitchen</option>

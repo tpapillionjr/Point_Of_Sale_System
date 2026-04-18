@@ -782,7 +782,7 @@ export function InventorySection() {
                   <select
                     value={inventoryForm.menuItemId}
                     onChange={(event) => setInventoryForm({ ...inventoryForm, menuItemId: event.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="lumi-report-select"
                   >
                     <option value="">Select menu item</option>
                     {filteredMenuItemOptions.map((item) => (
@@ -1375,7 +1375,7 @@ export function LaborSection() {
                 value={shiftForm.userId}
                 onChange={(event) => updateShiftFormField("userId", event.currentTarget.value)}
                 onInput={(event) => updateShiftFormField("userId", event.currentTarget.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="lumi-report-select"
               >
                 <option value="">Choose employee</option>
                 {users.map((user) => (
@@ -1935,7 +1935,7 @@ export function MenuManagementSection() {
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="lumi-report-select"
                 >
                   <option value="">— Select category —</option>
                   {MENU_CATEGORIES.map((cat) => (
@@ -2807,7 +2807,7 @@ export function CustomerLoyaltySection() {
                 <select
                   value={form.menuItemId}
                   onChange={(e) => setForm({ ...form, menuItemId: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="lumi-report-select"
                 >
                   <option value="">— None —</option>
                   {menuItems.map((item) => (

@@ -164,7 +164,8 @@ export default function CustomerDashboardPage() {
                 <select
                   value={selectedTrackOrderId ?? ""}
                   onChange={(e) => setSelectedTrackOrderId(e.target.value)}
-                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 12px", color: "#1e3a5f", fontSize: "13px", fontWeight: "600", backgroundColor: "white", marginBottom: "10px" }}
+                  className="lumi-report-select"
+                  style={{ marginBottom: "10px" }}
                 >
                   {activeOrders.map((order) => {
                     const statusMeta = ORDER_STATUS_LABEL[order.customer_status] ?? { label: order.customer_status };

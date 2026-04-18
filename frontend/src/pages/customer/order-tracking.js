@@ -172,7 +172,7 @@ export default function OrderTrackingPage() {
                   router.push(`/customer/order-tracking?orderId=${event.target.value}`);
                 }
               }}
-              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "12px 14px", color: "#1e3a5f", fontSize: "14px", fontWeight: "700", backgroundColor: "white" }}
+              className="lumi-report-select"
             >
               {activeOrders.map((order) => (
                 <option key={order.online_order_id} value={order.online_order_id}>
