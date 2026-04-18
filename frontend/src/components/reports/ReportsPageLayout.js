@@ -9,6 +9,19 @@ const sectionOptions = [
   { value: "/reports/item-report", label: "Item Report" },
 ];
 
+function currentSectionValue(pathname) {
+  const exactMatch = sectionOptions.find((option) => option.value === pathname);
+  if (exactMatch) {
+    return exactMatch.value;
+  }
+
+  const parentMatch = [...sectionOptions]
+    .sort((a, b) => b.value.length - a.value.length)
+    .find((option) => option.value !== "/reports" && pathname.startsWith(`${option.value}/`));
+
+  return parentMatch?.value ?? "/reports/revenue";
+}
+
 function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -575,21 +588,14 @@ export default function ReportsPageLayout({
   title,
   description,
   children,
-  viewOptions = [],
-  defaultView,
 }) {
   const router = useRouter();
-  const fallbackView = defaultView ?? viewOptions[0]?.id ?? "";
-  const [selectedView, setSelectedView] = useState(fallbackView);
   const [defaultFilters] = useState(createDefaultDateFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [datePreset, setDatePreset] = useState("7days");
   const [searchTerm, setSearchTerm] = useState("");
   const [showExportChoices, setShowExportChoices] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState(filtersForDatePreset("7days"));
-  const resolvedSelectedView = viewOptions.some((option) => option.id === selectedView)
-    ? selectedView
-    : fallbackView;
 
   function applyFilters() {
     if (datePreset === "custom") {
@@ -612,15 +618,15 @@ export default function ReportsPageLayout({
 
   async function handleExport(exportFormat) {
     const payload = await getReportsDashboard(appliedFilters);
-    const sections = buildVisibleExportSections(payload, router.pathname, resolvedSelectedView, searchTerm);
+    const sections = buildVisibleExportSections(payload, router.pathname, "overview", searchTerm);
     const metadata = {
       title,
-      view: resolvedSelectedView,
+      view: "overview",
       filters: appliedFilters,
       searchTerm,
       exportedAt: new Date().toLocaleString(),
     };
-    const filenameBase = `${router.pathname.split("/").filter(Boolean).join("-") || "reports"}-${resolvedSelectedView || "overview"}`;
+    const filenameBase = `${router.pathname.split("/").filter(Boolean).join("-") || "reports"}-overview`;
 
     if (exportFormat === "pdf") {
       downloadBlob(buildPdfContent(metadata, sections), "application/pdf", `${filenameBase}.pdf`);
@@ -685,11 +691,8 @@ export default function ReportsPageLayout({
 
         <FilterBar
           sectionOptions={sectionOptions}
-          selectedSection={router.pathname}
+          selectedSection={currentSectionValue(router.pathname)}
           onSectionChange={(nextPath) => router.push(nextPath)}
-          viewOptions={viewOptions.length ? viewOptions : [{ id: "", label: "Overview" }]}
-          selectedView={resolvedSelectedView}
-          onViewChange={setSelectedView}
           filters={draftFilters}
           onFiltersChange={setDraftFilters}
           datePreset={datePreset}
@@ -700,7 +703,7 @@ export default function ReportsPageLayout({
           onExport={() => setShowExportChoices(true)}
         />
 
-        <div className="space-y-6">{children(appliedFilters, resolvedSelectedView, searchTerm)}</div>
+        <div className="space-y-6">{children(appliedFilters, "overview", searchTerm)}</div>
       </div>
     </div>
   );

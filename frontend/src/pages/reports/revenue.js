@@ -36,7 +36,6 @@ function useRevenueData(selectedRange, revenueType) {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     getRevenueReport(selectedRange, revenueType)
       .then((payload) => {
@@ -106,23 +105,22 @@ function RevenueReportSection({ selectedRange }) {
             <ReportCard title="Total Tips" value={fmt(summary.totalTips)} />
           </div>
 
-          {/* Revenue Trend Chart */}
           <ReportSection title="Revenue Trend">
-            {trend.length === 0 ? (
-              <p className="text-sm text-slate-500">No data for selected range.</p>
-            ) : (
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12 }} width={64} />
-                    <Tooltip formatter={(v) => fmt(v)} />
-                    <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {trend.length === 0 ? (
+                <p className="text-sm text-slate-500">No data for selected range.</p>
+              ) : (
+                <div className="rounded-2xl bg-white p-5 shadow-sm">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12 }} width={64} />
+                      <Tooltip formatter={(v) => fmt(v)} />
+                      <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
           </ReportSection>
 
           {/* Breakdown Tables */}

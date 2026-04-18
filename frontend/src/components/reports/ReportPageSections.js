@@ -333,12 +333,17 @@ function SalesReportView({ rows, isLoading }) {
   const [isChartView, setIsChartView] = useState(false);
   const [chartType, setChartType] = useState("bar");
   const [currentPage, setCurrentPage] = useState(1);
+  const chartOptions = [
+    { id: "bar", label: "Bar" },
+    { id: "line", label: "Line" },
+    { id: "pie", label: "Pie" },
+  ];
 
   return (
     <div>
       <SalesSummaryStrip rows={rows} isLoading={isLoading} />
 
-      <div className="mb-4 flex flex-wrap justify-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
         <button
           type="button"
           onClick={() => setIsChartView((current) => !current)}
@@ -348,29 +353,25 @@ function SalesReportView({ rows, isLoading }) {
         </button>
 
         {isChartView && (
-          <div className="relative min-w-48">
-            <select
-              value={chartType}
-              onChange={(event) => setChartType(event.target.value)}
-              className="h-12 w-full appearance-none rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm text-slate-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              aria-label="Chart Type"
-            >
-              <option value="bar">Bar Chart</option>
-              <option value="line">Line Chart</option>
-              <option value="pie">Pie Chart</option>
-            </select>
-            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
-              <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
-                <path
-                  d="M5 7.5 10 12.5l5-5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                />
-              </svg>
-            </span>
+          <div
+            className="flex rounded-md border border-slate-300 bg-white p-1 shadow-sm"
+            aria-label="Chart Type"
+            role="group"
+          >
+            {chartOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setChartType(option.id)}
+                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                  chartType === option.id
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         )}
       </div>

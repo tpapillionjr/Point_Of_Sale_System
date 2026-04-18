@@ -20,7 +20,6 @@ function useCustomerLoyaltyData(selectedRange) {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     getCustomerLoyaltyReport(selectedRange)
       .then((payload) => {
@@ -64,57 +63,56 @@ function CustomerLoyaltySection({ selectedRange }) {
             <ReportCard title="Total Points Balance" value={String(summary.totalPointsBalance ?? 0)} />
           </div>
 
-          {/* Most Loyal Customer Highlight */}
           <ReportSection title="Most Loyal Customer">
-            {mostLoyal ? (
-              <div className="rounded-2xl bg-blue-600 p-6 text-white shadow-sm">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-blue-200 mb-1">
-                      Top Customer — Selected Period
-                    </p>
-                    <h3 className="text-2xl font-bold">{mostLoyal.name}</h3>
-                    <p className="text-blue-200 text-sm mt-0.5">{mostLoyal.email}</p>
-                  </div>
-                  <div className="flex gap-6">
-                    <div className="text-center">
-                      <p className="text-3xl font-bold">{mostLoyal.pointsEarned.toLocaleString()}</p>
-                      <p className="text-xs text-blue-200 mt-0.5">Points Earned</p>
+              {mostLoyal ? (
+                <div className="rounded-2xl bg-blue-600 p-6 text-white shadow-sm">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-blue-200 mb-1">
+                        Top Customer — Selected Period
+                      </p>
+                      <h3 className="text-2xl font-bold">{mostLoyal.name}</h3>
+                      <p className="text-blue-200 text-sm mt-0.5">{mostLoyal.email}</p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-3xl font-bold">{mostLoyal.currentBalance.toLocaleString()}</p>
-                      <p className="text-xs text-blue-200 mt-0.5">Current Balance</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-3xl font-bold">{mostLoyal.orders}</p>
-                      <p className="text-xs text-blue-200 mt-0.5">Orders</p>
+                    <div className="flex gap-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold">{mostLoyal.pointsEarned.toLocaleString()}</p>
+                        <p className="text-xs text-blue-200 mt-0.5">Points Earned</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-3xl font-bold">{mostLoyal.currentBalance.toLocaleString()}</p>
+                        <p className="text-xs text-blue-200 mt-0.5">Current Balance</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-3xl font-bold">{mostLoyal.orders}</p>
+                        <p className="text-xs text-blue-200 mt-0.5">Orders</p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">No loyalty activity in this period.</p>
-            )}
+              ) : (
+                <p className="text-sm text-slate-500">No loyalty activity in this period.</p>
+              )}
           </ReportSection>
 
           {/* Points Trend Chart */}
           <ReportSection title="Points Activity Over Time">
-            {trend.length === 0 ? (
-              <p className="text-sm text-slate-500">No data for selected range.</p>
-            ) : (
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} width={48} />
-                    <Tooltip />
-                    <Bar dataKey="pointsEarned" fill="#2563eb" radius={[4, 4, 0, 0]} name="Earned" />
-                    <Bar dataKey="pointsRedeemed" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Redeemed" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {trend.length === 0 ? (
+                <p className="text-sm text-slate-500">No data for selected range.</p>
+              ) : (
+                <div className="rounded-2xl bg-white p-5 shadow-sm">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} width={48} />
+                      <Tooltip />
+                      <Bar dataKey="pointsEarned" fill="#2563eb" radius={[4, 4, 0, 0]} name="Earned" />
+                      <Bar dataKey="pointsRedeemed" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Redeemed" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
           </ReportSection>
 
           {/* Top Customers Table */}
