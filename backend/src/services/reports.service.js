@@ -71,6 +71,26 @@ function formatCurrency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function getMenuItemStockStatus(inventoryItemName, stock, inStock) {
+  if (!inventoryItemName) {
+    return "Not Tracked";
+  }
+
+  if (!inStock || stock <= 0) {
+    return "Out of Stock";
+  }
+
+  if (stock <= 3) {
+    return "Critical";
+  }
+
+  if (stock <= 10) {
+    return "Low Stock";
+  }
+
+  return "In Stock";
+}
+
 function buildSummaryCards(prefix, revenue, orders, tips) {
   return [
     { title: `${prefix}Revenue`, value: formatCurrency(revenue) },
@@ -885,6 +905,7 @@ async function getItemReport(range, category = "all") {
          mi.base_price AS basePrice,
          COALESCE(SUM(sales.quantity), 0) AS unitsSold,
          ROUND(COALESCE(SUM(sales.quantity * sales.price), 0), 2) AS revenue,
+         MAX(inv.inventory_item_name) AS inventoryItemName,
          COALESCE(MAX(inv.amount_available), 0) AS stock,
          COALESCE(MAX(inv.availability_status), TRUE) AS inStock
        FROM Menu_Item mi
@@ -924,7 +945,8 @@ async function getItemReport(range, category = "all") {
          END AS status
        FROM Inventory i
        JOIN Menu_Item mi ON mi.menu_item_id = i.menu_item_id
-       WHERE i.availability_status = FALSE OR i.amount_available <= 10
+       WHERE (i.availability_status = FALSE OR i.amount_available <= 10)
+         ${categoryCondition}
        ORDER BY i.amount_available ASC`
     ),
   ]);
@@ -932,23 +954,45 @@ async function getItemReport(range, category = "all") {
   const withSales = itemRows.filter((r) => Number(r.unitsSold) > 0);
   const mostPopular = withSales[0] ?? null;
   const leastPopular = withSales.length > 1 ? withSales[withSales.length - 1] : null;
+  const highestRevenue = [...itemRows].sort(
+    (left, right) =>
+      Number(right.revenue || 0) - Number(left.revenue || 0) ||
+      Number(right.unitsSold || 0) - Number(left.unitsSold || 0) ||
+      left.name.localeCompare(right.name)
+  )[0] ?? null;
 
-  return {
-    summary: {
-      totalItems: itemRows.length,
-      itemsNeedingRestock: lowStockRows.length,
-      mostPopularItem: mostPopular ? { name: mostPopular.name, unitsSold: Number(mostPopular.unitsSold) } : null,
-      leastPopularItem: leastPopular ? { name: leastPopular.name, unitsSold: Number(leastPopular.unitsSold) } : null,
-    },
-    items: itemRows.map((row) => ({
+  const enrichedItems = itemRows.map((row) => {
+    const stock = Number(row.stock || 0);
+    const inStock = Boolean(row.inStock);
+    const stockStatus = getMenuItemStockStatus(row.inventoryItemName, stock, inStock);
+
+    return {
       name: row.name,
       category: row.category,
       basePrice: Number(row.basePrice || 0),
       unitsSold: Number(row.unitsSold || 0),
       revenue: Number(row.revenue || 0),
-      stock: Number(row.stock || 0),
-      inStock: Boolean(row.inStock),
-    })),
+      inventoryItemName: row.inventoryItemName ?? "",
+      stock,
+      inStock,
+      stockStatus,
+      availableNow: ["In Stock", "Low Stock", "Critical"].includes(stockStatus),
+      needsRestocking: ["Low Stock", "Critical", "Out of Stock"].includes(stockStatus),
+    };
+  });
+
+  return {
+    summary: {
+      totalItems: enrichedItems.length,
+      itemsNeedingRestock: lowStockRows.length,
+      inStockItems: enrichedItems.filter((item) => item.availableNow).length,
+      outOfStockItems: enrichedItems.filter((item) => item.stockStatus === "Out of Stock").length,
+      notTrackedItems: enrichedItems.filter((item) => item.stockStatus === "Not Tracked").length,
+      mostPopularItem: mostPopular ? { name: mostPopular.name, unitsSold: Number(mostPopular.unitsSold) } : null,
+      leastPopularItem: leastPopular ? { name: leastPopular.name, unitsSold: Number(leastPopular.unitsSold) } : null,
+      highestRevenueItem: highestRevenue ? { name: highestRevenue.name, revenue: Number(highestRevenue.revenue || 0) } : null,
+    },
+    items: enrichedItems,
     categories: categoryRows.map((r) => r.category),
     lowStockItems: lowStockRows.map((row) => ({
       itemName: row.itemName,

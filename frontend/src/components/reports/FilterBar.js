@@ -73,12 +73,17 @@ export default function FilterBar({
   onDatePresetChange,
   searchTerm,
   onSearchTermChange,
+  extraFilters = [],
   onApply,
   onExport,
 }) {
+  const filterGridClass = extraFilters.length
+    ? "mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5"
+    : "mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-4";
+
   return (
     <div className="mb-5">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-4">
+      <div className={filterGridClass}>
         <FilterField label="Report Group">
           <StyledSelect
             value={selectedSection}
@@ -130,6 +135,22 @@ export default function FilterBar({
             <option value="custom">Custom Dates</option>
           </StyledSelect>
         </FilterField>
+
+        {extraFilters.map((filter) => (
+          <FilterField key={filter.id} label={filter.label}>
+            <StyledSelect
+              value={filter.value}
+              onChange={(event) => filter.onChange(event.target.value)}
+              ariaLabel={filter.ariaLabel ?? filter.label}
+            >
+              {filter.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </StyledSelect>
+          </FilterField>
+        ))}
       </div>
 
       {datePreset === "custom" && (

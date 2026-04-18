@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import { getReportsDashboard } from "../../lib/api";
+import { getItemReport, getReportsDashboard } from "../../lib/api";
 import FilterBar from "./FilterBar";
 
 const sectionOptions = [
   { value: "/reports/revenue", label: "Revenue Report" },
   { value: "/reports/customer-loyalty", label: "Customer Loyalty Report" },
-  { value: "/reports/item-report", label: "Item Report" },
+  { value: "/reports/menu-report", label: "Menu Report" },
 ];
 
 function toDateInputValue(date) {
@@ -34,6 +34,34 @@ function filtersForDatePreset(preset) {
   }
 
   return { days: 30 };
+}
+
+function createDefaultExtraFilterValues(filters = []) {
+  return filters.reduce(
+    (values, filter) => ({
+      ...values,
+      [filter.id]: filter.defaultValue ?? "",
+    }),
+    {}
+  );
+}
+
+function buildRequestFilters(filters = {}) {
+  const requestFilters = {};
+
+  if (filters.days) {
+    requestFilters.days = filters.days;
+  }
+
+  if (filters.startDate) {
+    requestFilters.startDate = filters.startDate;
+  }
+
+  if (filters.endDate) {
+    requestFilters.endDate = filters.endDate;
+  }
+
+  return requestFilters;
 }
 
 function matchesSearch(value, searchTerm) {
@@ -81,8 +109,107 @@ function currentReportKey(pathname, selectedView) {
   return `${reportGroup}:${selectedView || "overview"}`;
 }
 
+function isAvailableMenuReportItem(row) {
+  return Boolean(row?.availableNow);
+}
+
+function buildMenuReportExportSections(payload, searchTerm) {
+  const items = filterRows(payload.items, searchTerm, ["name", "category", "stockStatus"]);
+  const inStockItems = items.filter((row) => isAvailableMenuReportItem(row));
+  const restockItems = filterRows(payload.lowStockItems, searchTerm, ["itemName", "menuItemName", "category", "status"]);
+  const withSales = items.filter((item) => Number(item.unitsSold || 0) > 0);
+  const rankedByPopularity = [...withSales].sort(
+    (left, right) =>
+      Number(right.unitsSold || 0) - Number(left.unitsSold || 0) ||
+      Number(right.revenue || 0) - Number(left.revenue || 0) ||
+      left.name.localeCompare(right.name)
+  );
+  const rankedByRevenue = [...items].sort(
+    (left, right) =>
+      Number(right.revenue || 0) - Number(left.revenue || 0) ||
+      Number(right.unitsSold || 0) - Number(left.unitsSold || 0) ||
+      left.name.localeCompare(right.name)
+  );
+
+  return [
+    section(
+      "Menu Report Summary",
+      [
+        { header: "Metric", key: "metric" },
+        { header: "Value", key: "value" },
+      ],
+      [
+        { metric: "Total Items", value: items.length },
+        {
+          metric: "Most Popular Item",
+          value: rankedByPopularity[0]
+            ? `${rankedByPopularity[0].name} (${rankedByPopularity[0].unitsSold} sold)`
+            : "No data",
+        },
+        {
+          metric: "Least Popular Item",
+          value: rankedByPopularity.length
+            ? `${rankedByPopularity[rankedByPopularity.length - 1].name} (${rankedByPopularity[rankedByPopularity.length - 1].unitsSold} sold)`
+            : "No data",
+        },
+        {
+          metric: "Highest Revenue Item",
+          value: rankedByRevenue[0]
+            ? `${rankedByRevenue[0].name} (${formatMoney(rankedByRevenue[0].revenue)})`
+            : "No data",
+        },
+        { metric: "Items In Stock", value: inStockItems.length },
+        { metric: "Need Restocking", value: restockItems.length },
+        { metric: "Out Of Stock", value: items.filter((item) => item.stockStatus === "Out of Stock").length },
+        { metric: "Not Tracked", value: items.filter((item) => item.stockStatus === "Not Tracked").length },
+      ]
+    ),
+    section(
+      "Menu Items",
+      [
+        { header: "Menu Item", key: "name" },
+        { header: "Menu Item Type", key: "category" },
+        { header: "Base Price", key: "basePrice", format: formatMoney },
+        { header: "Units Sold", key: "unitsSold" },
+        { header: "Revenue", key: "revenue", format: formatMoney },
+        { header: "Stock", key: "stock" },
+        { header: "Stock Status", key: "stockStatus" },
+      ],
+      items
+    ),
+    section(
+      "Items In Stock",
+      [
+        { header: "Menu Item", key: "name" },
+        { header: "Menu Item Type", key: "category" },
+        { header: "Stock", key: "stock" },
+        { header: "Units Sold", key: "unitsSold" },
+        { header: "Revenue", key: "revenue", format: formatMoney },
+        { header: "Stock Status", key: "stockStatus" },
+      ],
+      inStockItems
+    ),
+    section(
+      "Needs Restocking",
+      [
+        { header: "Inventory Item", key: "itemName" },
+        { header: "Menu Item", key: "menuItemName" },
+        { header: "Menu Item Type", key: "category" },
+        { header: "Stock", key: "stock" },
+        { header: "Status", key: "status" },
+      ],
+      restockItems
+    ),
+  ];
+}
+
 function buildVisibleExportSections(payload, pathname, selectedView, searchTerm) {
   const reportKey = currentReportKey(pathname, selectedView);
+
+  if (reportKey === "menu-report:overview" || reportKey === "item-report:overview") {
+    return buildMenuReportExportSections(payload, searchTerm);
+  }
+
   const topItems = filterRows(payload.topItems, searchTerm, ["name"]);
   const lowInventory = filterRows(payload.lowInventory, searchTerm, ["itemName", "status"]);
   const salesCategories = filterRows(payload.salesCategories, searchTerm, ["category"]);
@@ -347,6 +474,30 @@ function buildVisibleExportSections(payload, pathname, selectedView, searchTerm)
   return reportMap[reportKey] ?? [summarySection, revenueSection, topItemsSection];
 }
 
+function buildExportMetadataLines(metadata) {
+  const dateRangeLabel =
+    metadata.filters?.startDate || metadata.filters?.endDate
+      ? `${metadata.filters.startDate || "Any"} to ${metadata.filters.endDate || "Any"}`
+      : metadata.filters?.days
+        ? `Last ${metadata.filters.days} day${metadata.filters.days === 1 ? "" : "s"}`
+        : "Current selection";
+
+  const lines = [
+    ["Report", metadata.title],
+    ["View", metadata.view || "Overview"],
+    ["Date Range", dateRangeLabel],
+  ];
+
+  if (metadata.filters?.menuItemType && metadata.filters.menuItemType !== "all") {
+    lines.push(["Menu Item Type", metadata.filters.menuItemType]);
+  }
+
+  lines.push(["Search", metadata.searchTerm || "None"]);
+  lines.push(["Exported At", metadata.exportedAt]);
+
+  return lines;
+}
+
 function buildOperationsSection(title, rows) {
   const columnsByTitle = {
     Voids: [
@@ -398,13 +549,7 @@ function csvEscape(value) {
 }
 
 function sectionsToCsv(metadata, sections) {
-  const lines = [
-    ["Report", metadata.title],
-    ["View", metadata.view || "Overview"],
-    ["Date Range", `${metadata.filters.startDate} to ${metadata.filters.endDate}`],
-    ["Search", metadata.searchTerm || "None"],
-    ["Exported At", metadata.exportedAt],
-  ];
+  const lines = buildExportMetadataLines(metadata);
 
   lines.push([]);
 
@@ -504,11 +649,9 @@ function buildPdfContent(metadata, sections) {
     y -= lineHeight;
   }
 
-  addLine(metadata.title, 16);
-  addLine(`View: ${metadata.view || "Overview"}`, 10);
-  addLine(`Date Range: ${metadata.filters.startDate} to ${metadata.filters.endDate}`, 10);
-  addLine(`Search: ${metadata.searchTerm || "None"}`, 10);
-  addLine(`Exported At: ${metadata.exportedAt}`, 10);
+  buildExportMetadataLines(metadata).forEach(([label, value], index) => {
+    addLine(index === 0 ? value : `${label}: ${value}`, index === 0 ? 16 : 10);
+  });
   addLine("", 10);
 
   sections.forEach((item) => {
@@ -577,41 +720,66 @@ export default function ReportsPageLayout({
   children,
   viewOptions = [],
   defaultView,
+  extraFilters = [],
 }) {
   const router = useRouter();
   const fallbackView = defaultView ?? viewOptions[0]?.id ?? "";
+  const defaultExtraFilters = createDefaultExtraFilterValues(extraFilters);
   const [selectedView, setSelectedView] = useState(fallbackView);
   const [defaultFilters] = useState(createDefaultDateFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
+  const [draftExtraFilters, setDraftExtraFilters] = useState(defaultExtraFilters);
   const [datePreset, setDatePreset] = useState("7days");
   const [searchTerm, setSearchTerm] = useState("");
   const [showExportChoices, setShowExportChoices] = useState(false);
-  const [appliedFilters, setAppliedFilters] = useState(filtersForDatePreset("7days"));
+  const [appliedFilters, setAppliedFilters] = useState({
+    ...filtersForDatePreset("7days"),
+    ...defaultExtraFilters,
+  });
   const resolvedSelectedView = viewOptions.some((option) => option.id === selectedView)
     ? selectedView
     : fallbackView;
+  const resolvedExtraFilters = extraFilters.map((filter) => ({
+    ...filter,
+    value: draftExtraFilters[filter.id] ?? filter.defaultValue ?? "",
+    onChange: (value) =>
+      setDraftExtraFilters((current) => ({
+        ...current,
+        [filter.id]: value,
+      })),
+  }));
 
   function applyFilters() {
     if (datePreset === "custom") {
       setAppliedFilters({
+        ...draftExtraFilters,
         startDate: draftFilters.startDate || defaultFilters.startDate,
         endDate: draftFilters.endDate || defaultFilters.endDate,
       });
       return;
     }
 
-    setAppliedFilters(filtersForDatePreset(datePreset));
+    setAppliedFilters({
+      ...filtersForDatePreset(datePreset),
+      ...draftExtraFilters,
+    });
   }
 
   function handleDatePresetChange(nextPreset) {
     setDatePreset(nextPreset);
     if (nextPreset !== "custom") {
-      setAppliedFilters(filtersForDatePreset(nextPreset));
+      setAppliedFilters({
+        ...filtersForDatePreset(nextPreset),
+        ...draftExtraFilters,
+      });
     }
   }
 
   async function handleExport(exportFormat) {
-    const payload = await getReportsDashboard(appliedFilters);
+    const payload =
+      router.pathname === "/reports/menu-report" || router.pathname === "/reports/item-report"
+        ? await getItemReport(buildRequestFilters(appliedFilters), appliedFilters.menuItemType || "all")
+        : await getReportsDashboard(appliedFilters);
     const sections = buildVisibleExportSections(payload, router.pathname, resolvedSelectedView, searchTerm);
     const metadata = {
       title,
@@ -696,6 +864,7 @@ export default function ReportsPageLayout({
           onDatePresetChange={handleDatePresetChange}
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
+          extraFilters={resolvedExtraFilters}
           onApply={applyFilters}
           onExport={() => setShowExportChoices(true)}
         />

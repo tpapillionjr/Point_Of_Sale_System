@@ -13,9 +13,9 @@ const reportSections = [
     href: "/reports/customer-loyalty",
   },
   {
-    id: "item-report",
-    label: "Item Report",
-    href: "/reports/item-report",
+    id: "menu-report",
+    label: "Menu Report",
+    href: "/reports/menu-report",
   },
 ];
 
