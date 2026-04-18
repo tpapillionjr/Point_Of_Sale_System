@@ -4,12 +4,9 @@ import { getReportsDashboard } from "../../lib/api";
 import FilterBar from "./FilterBar";
 
 const sectionOptions = [
-  { value: "/reports", label: "Overview" },
-  { value: "/reports/sales", label: "Sales Reports" },
-  { value: "/reports/labor", label: "Labor Reports" },
-  { value: "/reports/inventory", label: "Inventory & Menu" },
-  { value: "/reports/operations", label: "Operational Reports" },
-  { value: "/reports/customer", label: "Customer Behavior" },
+  { value: "/reports/revenue", label: "Revenue Report" },
+  { value: "/reports/customer-loyalty", label: "Customer Loyalty Report" },
+  { value: "/reports/item-report", label: "Item Report" },
 ];
 
 function toDateInputValue(date) {

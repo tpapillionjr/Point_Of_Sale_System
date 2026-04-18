@@ -674,4 +674,290 @@ async function getReportsOverview(range) {
   };
 }
 
-export { getReportsDashboard, getReportsOverview };
+async function getRevenueReport(range, revenueType = "all") {
+  const filters = normalizeReportFilters(range);
+  const baseSubquery = `
+    SELECT total, created_at AS createdAt, order_type AS type
+    FROM Orders
+    WHERE status <> 'Void'
+
+    UNION ALL
+
+    SELECT total, created_at AS createdAt, 'Online' AS type
+    FROM Online_Orders
+  `;
+
+  const typeCondition =
+    revenueType === "dine_in"
+      ? "AND type = 'Dine_in'"
+      : revenueType === "takeout"
+        ? "AND type = 'Takeout'"
+        : revenueType === "online"
+          ? "AND type = 'Online'"
+          : "";
+
+  const dateFilter = buildRangeFilter(filters, "createdAt");
+
+  const [summaryRows, byTypeRows, trendRows, tipRows, paymentRows] = await Promise.all([
+    db.query(
+      `SELECT
+         ROUND(COALESCE(SUM(total), 0), 2) AS totalRevenue,
+         COUNT(*) AS totalOrders,
+         ROUND(COALESCE(AVG(total), 0), 2) AS avgOrderValue
+       FROM (${baseSubquery}) all_orders
+       WHERE ${dateFilter} ${typeCondition}`
+    ),
+    db.query(
+      `SELECT
+         type AS orderType,
+         COUNT(*) AS orders,
+         ROUND(COALESCE(SUM(total), 0), 2) AS revenue
+       FROM (${baseSubquery}) all_orders
+       WHERE ${dateFilter}
+       GROUP BY type
+       ORDER BY revenue DESC`
+    ),
+    db.query(
+      `SELECT
+         DATE_FORMAT(createdAt, '%b %e') AS date,
+         ROUND(COALESCE(SUM(total), 0), 2) AS revenue,
+         COUNT(*) AS orders
+       FROM (${baseSubquery}) all_orders
+       WHERE ${dateFilter} ${typeCondition}
+       GROUP BY DATE(createdAt), DATE_FORMAT(createdAt, '%b %e')
+       ORDER BY DATE(createdAt) ASC`
+    ),
+    db.query(
+      `SELECT COALESCE(SUM(tip_amount), 0) AS totalTips
+       FROM Payment
+       WHERE status = 'approved'
+         AND ${buildRangeFilter(filters, "paid_at")}`
+    ),
+    db.query(
+      `SELECT
+         payment_type AS method,
+         COUNT(*) AS transactions,
+         ROUND(COALESCE(SUM(amount), 0), 2) AS revenue
+       FROM Payment
+       WHERE status = 'approved'
+         AND ${buildRangeFilter(filters, "paid_at")}
+       GROUP BY payment_type
+       ORDER BY revenue DESC`
+    ),
+  ]);
+
+  return {
+    summary: {
+      totalRevenue: Number(summaryRows[0]?.totalRevenue ?? 0),
+      totalOrders: Number(summaryRows[0]?.totalOrders ?? 0),
+      avgOrderValue: Number(summaryRows[0]?.avgOrderValue ?? 0),
+      totalTips: Number(tipRows[0]?.totalTips ?? 0),
+    },
+    byOrderType: byTypeRows.map((row) => ({
+      type: row.orderType,
+      orders: Number(row.orders || 0),
+      revenue: Number(row.revenue || 0),
+    })),
+    byPaymentMethod: paymentRows.map((row) => ({
+      method: row.method,
+      transactions: Number(row.transactions || 0),
+      revenue: Number(row.revenue || 0),
+    })),
+    trend: trendRows.map((row) => ({
+      date: row.date,
+      revenue: Number(row.revenue || 0),
+      orders: Number(row.orders || 0),
+    })),
+  };
+}
+
+async function getCustomerLoyaltyReport(range) {
+  const filters = normalizeReportFilters(range);
+  const [summaryRows, topCustomersRows, trendRows, recentActivityRows] = await Promise.all([
+    db.query(
+      `SELECT
+         COUNT(DISTINCT c.customer_num_id) AS totalMembers,
+         COALESCE(SUM(c.points_balance), 0) AS totalPointsBalance,
+         COALESCE(SUM(CASE WHEN lt.type = 'earned' THEN lt.points ELSE 0 END), 0) AS totalPointsEarned,
+         COALESCE(SUM(CASE WHEN lt.type = 'redeemed' THEN lt.points ELSE 0 END), 0) AS totalPointsRedeemed
+       FROM Customer c
+       LEFT JOIN Loyalty_Transactions lt
+         ON lt.customer_num_id = c.customer_num_id
+         AND ${buildRangeFilter(filters, "lt.created_at")}
+       WHERE c.is_active = TRUE`
+    ),
+    db.query(
+      `SELECT
+         c.customer_num_id AS customerId,
+         CONCAT(c.first_name, ' ', c.last_name) AS customerName,
+         c.email,
+         COALESCE(SUM(CASE WHEN lt.type = 'earned' THEN lt.points ELSE 0 END), 0) AS pointsEarned,
+         COALESCE(SUM(CASE WHEN lt.type = 'redeemed' THEN lt.points ELSE 0 END), 0) AS pointsRedeemed,
+         c.points_balance AS currentBalance,
+         COUNT(DISTINCT lt.online_order_id) AS orders
+       FROM Customer c
+       LEFT JOIN Loyalty_Transactions lt
+         ON lt.customer_num_id = c.customer_num_id
+         AND ${buildRangeFilter(filters, "lt.created_at")}
+       WHERE c.is_active = TRUE
+       GROUP BY c.customer_num_id, c.first_name, c.last_name, c.email, c.points_balance
+       ORDER BY pointsEarned DESC, currentBalance DESC
+       LIMIT 10`
+    ),
+    db.query(
+      `SELECT
+         DATE_FORMAT(created_at, '%b %e') AS date,
+         COALESCE(SUM(CASE WHEN type = 'earned' THEN points ELSE 0 END), 0) AS pointsEarned,
+         COALESCE(SUM(CASE WHEN type = 'redeemed' THEN points ELSE 0 END), 0) AS pointsRedeemed
+       FROM Loyalty_Transactions
+       WHERE ${buildRangeFilter(filters, "created_at")}
+       GROUP BY DATE(created_at), DATE_FORMAT(created_at, '%b %e')
+       ORDER BY DATE(created_at) ASC`
+    ),
+    db.query(
+      `SELECT
+         CONCAT(c.first_name, ' ', c.last_name) AS customerName,
+         lt.type,
+         lt.points,
+         lt.description,
+         lt.created_at AS date
+       FROM Loyalty_Transactions lt
+       JOIN Customer c ON c.customer_num_id = lt.customer_num_id
+       WHERE c.is_active = TRUE
+         AND ${buildRangeFilter(filters, "lt.created_at")}
+       ORDER BY lt.created_at DESC
+       LIMIT 20`
+    ),
+  ]);
+
+  return {
+    summary: {
+      totalMembers: Number(summaryRows[0]?.totalMembers ?? 0),
+      totalPointsBalance: Number(summaryRows[0]?.totalPointsBalance ?? 0),
+      totalPointsEarned: Number(summaryRows[0]?.totalPointsEarned ?? 0),
+      totalPointsRedeemed: Number(summaryRows[0]?.totalPointsRedeemed ?? 0),
+    },
+    mostLoyalCustomer: topCustomersRows[0]
+      ? {
+          name: topCustomersRows[0].customerName,
+          email: topCustomersRows[0].email,
+          pointsEarned: Number(topCustomersRows[0].pointsEarned || 0),
+          currentBalance: Number(topCustomersRows[0].currentBalance || 0),
+          orders: Number(topCustomersRows[0].orders || 0),
+        }
+      : null,
+    topCustomers: topCustomersRows.map((row) => ({
+      name: row.customerName,
+      email: row.email,
+      pointsEarned: Number(row.pointsEarned || 0),
+      pointsRedeemed: Number(row.pointsRedeemed || 0),
+      currentBalance: Number(row.currentBalance || 0),
+      orders: Number(row.orders || 0),
+    })),
+    trend: trendRows.map((row) => ({
+      date: row.date,
+      pointsEarned: Number(row.pointsEarned || 0),
+      pointsRedeemed: Number(row.pointsRedeemed || 0),
+    })),
+    recentActivity: recentActivityRows.map((row) => ({
+      customerName: row.customerName,
+      type: row.type,
+      points: Number(row.points || 0),
+      description: row.description,
+      date: row.date,
+    })),
+  };
+}
+
+async function getItemReport(range, category = "all") {
+  const filters = normalizeReportFilters(range);
+  const safeCategory = category.replace(/[^a-zA-Z0-9\s\-&]/g, "").trim();
+  const categoryCondition = safeCategory && safeCategory !== "all"
+    ? `AND COALESCE(mi.category, 'Uncategorized') = '${safeCategory}'`
+    : "";
+
+  const [itemRows, categoryRows, lowStockRows] = await Promise.all([
+    db.query(
+      `SELECT
+         mi.menu_item_id AS itemId,
+         mi.name,
+         COALESCE(mi.category, 'Uncategorized') AS category,
+         mi.base_price AS basePrice,
+         COALESCE(SUM(sales.quantity), 0) AS unitsSold,
+         ROUND(COALESCE(SUM(sales.quantity * sales.price), 0), 2) AS revenue,
+         COALESCE(MAX(inv.amount_available), 0) AS stock,
+         COALESCE(MAX(inv.availability_status), TRUE) AS inStock
+       FROM Menu_Item mi
+       LEFT JOIN (
+         SELECT oi.menu_item_id, oi.quantity, oi.price, o.created_at AS createdAt
+         FROM Order_Item oi
+         JOIN Orders o ON o.order_id = oi.order_id
+         WHERE o.status <> 'Void'
+
+         UNION ALL
+
+         SELECT ooi.menu_item_id, ooi.quantity, ooi.price, oo.created_at AS createdAt
+         FROM Online_Order_Item ooi
+         JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+       ) sales ON sales.menu_item_id = mi.menu_item_id
+         AND ${buildRangeFilter(filters, "sales.createdAt")}
+       LEFT JOIN Inventory inv ON inv.menu_item_id = mi.menu_item_id
+       WHERE mi.is_active = TRUE ${categoryCondition}
+       GROUP BY mi.menu_item_id, mi.name, mi.category, mi.base_price
+       ORDER BY unitsSold DESC, revenue DESC, mi.name ASC`
+    ),
+    db.query(
+      `SELECT DISTINCT COALESCE(category, 'Uncategorized') AS category
+       FROM Menu_Item
+       WHERE is_active = TRUE
+       ORDER BY category ASC`
+    ),
+    db.query(
+      `SELECT
+         i.inventory_item_name AS itemName,
+         i.amount_available AS stock,
+         mi.name AS menuItemName,
+         COALESCE(mi.category, 'Uncategorized') AS category,
+         CASE
+           WHEN i.amount_available <= 3 OR i.availability_status = FALSE THEN 'Critical'
+           ELSE 'Low'
+         END AS status
+       FROM Inventory i
+       JOIN Menu_Item mi ON mi.menu_item_id = i.menu_item_id
+       WHERE i.availability_status = FALSE OR i.amount_available <= 10
+       ORDER BY i.amount_available ASC`
+    ),
+  ]);
+
+  const withSales = itemRows.filter((r) => Number(r.unitsSold) > 0);
+  const mostPopular = withSales[0] ?? null;
+  const leastPopular = withSales.length > 1 ? withSales[withSales.length - 1] : null;
+
+  return {
+    summary: {
+      totalItems: itemRows.length,
+      itemsNeedingRestock: lowStockRows.length,
+      mostPopularItem: mostPopular ? { name: mostPopular.name, unitsSold: Number(mostPopular.unitsSold) } : null,
+      leastPopularItem: leastPopular ? { name: leastPopular.name, unitsSold: Number(leastPopular.unitsSold) } : null,
+    },
+    items: itemRows.map((row) => ({
+      name: row.name,
+      category: row.category,
+      basePrice: Number(row.basePrice || 0),
+      unitsSold: Number(row.unitsSold || 0),
+      revenue: Number(row.revenue || 0),
+      stock: Number(row.stock || 0),
+      inStock: Boolean(row.inStock),
+    })),
+    categories: categoryRows.map((r) => r.category),
+    lowStockItems: lowStockRows.map((row) => ({
+      itemName: row.itemName,
+      menuItemName: row.menuItemName,
+      category: row.category,
+      stock: Number(row.stock || 0),
+      status: row.status,
+    })),
+  };
+}
+
+export { getReportsDashboard, getReportsOverview, getRevenueReport, getCustomerLoyaltyReport, getItemReport };

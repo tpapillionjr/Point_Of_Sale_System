@@ -3,34 +3,19 @@ import { useRouter } from "next/router";
 
 const reportSections = [
   {
-    id: "overview",
-    label: "Overview",
-    href: "/reports",
+    id: "revenue",
+    label: "Revenue Report",
+    href: "/reports/revenue",
   },
   {
-    id: "sales",
-    label: "Sales Reports",
-    href: "/reports/sales",
+    id: "customer-loyalty",
+    label: "Customer Loyalty Report",
+    href: "/reports/customer-loyalty",
   },
   {
-    id: "labor",
-    label: "Labor Reports",
-    href: "/reports/labor",
-  },
-  {
-    id: "inventory",
-    label: "Inventory & Menu",
-    href: "/reports/inventory",
-  },
-  {
-    id: "operations",
-    label: "Operational Reports",
-    href: "/reports/operations",
-  },
-  {
-    id: "customer",
-    label: "Customer Behavior",
-    href: "/reports/customer",
+    id: "item-report",
+    label: "Item Report",
+    href: "/reports/item-report",
   },
 ];
 

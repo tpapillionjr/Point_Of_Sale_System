@@ -250,6 +250,41 @@ export async function getReportsDashboard(range) {
   return request(`/api/reports/dashboard${query ? `?${query}` : ""}`);
 }
 
+export async function getRevenueReport(range, revenueType = "all") {
+  const params = new URLSearchParams();
+  if (revenueType && revenueType !== "all") params.set("revenueType", revenueType);
+  if (range && typeof range === "object") {
+    if (range.days) params.set("days", String(range.days));
+    if (range.startDate) params.set("startDate", range.startDate);
+    if (range.endDate) params.set("endDate", range.endDate);
+  }
+  const query = params.toString();
+  return request(`/api/reports/revenue${query ? `?${query}` : ""}`);
+}
+
+export async function getCustomerLoyaltyReport(range) {
+  const params = new URLSearchParams();
+  if (range && typeof range === "object") {
+    if (range.days) params.set("days", String(range.days));
+    if (range.startDate) params.set("startDate", range.startDate);
+    if (range.endDate) params.set("endDate", range.endDate);
+  }
+  const query = params.toString();
+  return request(`/api/reports/customer-loyalty${query ? `?${query}` : ""}`);
+}
+
+export async function getItemReport(range, category = "all") {
+  const params = new URLSearchParams();
+  if (category && category !== "all") params.set("category", category);
+  if (range && typeof range === "object") {
+    if (range.days) params.set("days", String(range.days));
+    if (range.startDate) params.set("startDate", range.startDate);
+    if (range.endDate) params.set("endDate", range.endDate);
+  }
+  const query = params.toString();
+  return request(`/api/reports/item-report${query ? `?${query}` : ""}`);
+}
+
 export async function authenticateShift(credentials) {
   return request("/api/shifts/auth", {
     method: "POST",
