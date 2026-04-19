@@ -20,20 +20,16 @@ const reportSections = [
 ];
 
 function getCurrentSection(pathname) {
-  if (pathname === "/reports") {
-    return "overview";
-  }
-
-  const match = reportSections.find(
-    (section) => section.id !== "overview" && pathname.startsWith(`${section.href}/`)
-  );
-
-  if (match) {
-    return match.id;
-  }
-
   const parentMatch = reportSections.find((section) => section.href === pathname);
-  return parentMatch?.id ?? "overview";
+  if (parentMatch) {
+    return parentMatch.id;
+  }
+
+  const match = reportSections
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((section) => pathname.startsWith(`${section.href}/`));
+
+  return match?.id ?? "revenue";
 }
 
 export default function ReportsSidebar() {

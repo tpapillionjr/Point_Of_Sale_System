@@ -429,17 +429,8 @@ export default function ServerOrderPage() {
           <select
             value={orderType}
             onChange={(e) => setOrderType(e.target.value)}
-            style={{
-              width: "100%",
-              marginTop: "6px",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #d1d5db",
-              fontSize: "14px",
-              color: "#111827",
-              backgroundColor: "white",
-              boxSizing: "border-box",
-            }}
+            className="lumi-report-select"
+            style={{ marginTop: "6px" }}
           >
             <option value="Dine In">Make Reservation</option>
             <option>Takeout</option>

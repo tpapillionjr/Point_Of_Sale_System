@@ -36,7 +36,6 @@ function useRevenueData(selectedRange, revenueType) {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     getRevenueReport(selectedRange, revenueType)
       .then((payload) => {
@@ -64,6 +63,7 @@ function RevenueReportSection({ selectedRange }) {
   }
 
   const summary = data?.summary ?? {};
+  const revenueComponents = data?.revenueComponents ?? [];
   const trend = data?.trend ?? [];
   const byOrderType = data?.byOrderType ?? [];
   const byPaymentMethod = data?.byPaymentMethod ?? [];
@@ -72,7 +72,7 @@ function RevenueReportSection({ selectedRange }) {
     <div className="space-y-8">
       {/* Revenue Type Filter */}
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-slate-600">Filter by type:</span>
+        <span className="text-sm font-semibold text-slate-600">Revenue type:</span>
         {[
           { value: "all", label: "All" },
           { value: "dine_in", label: "Dine-in" },
@@ -106,27 +106,47 @@ function RevenueReportSection({ selectedRange }) {
             <ReportCard title="Total Tips" value={fmt(summary.totalTips)} />
           </div>
 
-          {/* Revenue Trend Chart */}
           <ReportSection title="Revenue Trend">
-            {trend.length === 0 ? (
-              <p className="text-sm text-slate-500">No data for selected range.</p>
-            ) : (
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12 }} width={64} />
-                    <Tooltip formatter={(v) => fmt(v)} />
-                    <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {trend.length === 0 ? (
+                <p className="text-sm text-slate-500">No data for selected range.</p>
+              ) : (
+                <div className="rounded-2xl bg-white p-5 shadow-sm">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={trend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => `$${v}`} tick={{ fontSize: 12 }} width={64} />
+                      <Tooltip formatter={(v) => fmt(v)} />
+                      <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
           </ReportSection>
 
           {/* Breakdown Tables */}
           <div className="grid gap-6 lg:grid-cols-2">
+            <ReportSection title="Revenue Details">
+              <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Revenue Component</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueComponents.map((row) => (
+                      <tr key={row.label} className="border-b border-slate-50 last:border-0">
+                        <td className="px-4 py-3 text-slate-700">{row.label}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(row.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ReportSection>
+
             {/* By Order Type */}
             <ReportSection title="Revenue by Order Type">
               <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
@@ -135,13 +155,15 @@ function RevenueReportSection({ selectedRange }) {
                     <tr className="border-b border-slate-100 bg-slate-50">
                       <th className="px-4 py-3 text-left font-semibold text-slate-600">Type</th>
                       <th className="px-4 py-3 text-right font-semibold text-slate-600">Orders</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Avg Order</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Net Sales</th>
                       <th className="px-4 py-3 text-right font-semibold text-slate-600">Revenue</th>
                     </tr>
                   </thead>
                   <tbody>
                     {byOrderType.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-6 text-center text-slate-400">No data</td>
+                        <td colSpan={5} className="px-4 py-6 text-center text-slate-400">No data</td>
                       </tr>
                     ) : (
                       byOrderType.map((row) => (
@@ -154,6 +176,8 @@ function RevenueReportSection({ selectedRange }) {
                             {row.type === "Dine_in" ? "Dine-in" : row.type}
                           </td>
                           <td className="px-4 py-3 text-right text-slate-700">{row.orders}</td>
+                          <td className="px-4 py-3 text-right text-slate-700">{fmt(row.avgOrderValue)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(row.netRestaurantSales)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(row.revenue)}</td>
                         </tr>
                       ))

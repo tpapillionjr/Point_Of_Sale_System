@@ -3,6 +3,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,6 +16,8 @@ import ReportCard from "../../components/reports/ReportCard";
 import ReportSection from "../../components/reports/ReportSection";
 import ReportsPageLayout from "../../components/reports/ReportsPageLayout";
 import { getItemReport } from "../../lib/api";
+
+const ITEM_CHART_COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"];
 
 function fmt(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -24,7 +30,6 @@ function useItemReportData(selectedRange, category) {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
 
     getItemReport(selectedRange, category)
       .then((payload) => {
@@ -45,6 +50,7 @@ function useItemReportData(selectedRange, category) {
 
 function ItemReportSection({ selectedRange }) {
   const [category, setCategory] = useState("all");
+  const [chartType, setChartType] = useState("bar");
   const { data, isLoading, error } = useItemReportData(selectedRange, category);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
@@ -55,6 +61,19 @@ function ItemReportSection({ selectedRange }) {
   const lowStockItems = data?.lowStockItems ?? [];
 
   const topItems = items.slice(0, 10);
+  const highestRevenueItem = items.reduce(
+    (topItem, item) => (Number(item.revenue || 0) > Number(topItem?.revenue || 0) ? item : topItem),
+    null
+  );
+  const chartToggle = (
+    <button
+      type="button"
+      onClick={() => setChartType((current) => (current === "bar" ? "pie" : "bar"))}
+      className="rounded-md border border-blue-600 bg-white px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50"
+    >
+      {chartType === "bar" ? "Pie Chart" : "Bar Chart"}
+    </button>
+  );
 
   return (
     <div className="space-y-8">
@@ -93,11 +112,15 @@ function ItemReportSection({ selectedRange }) {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <ReportCard title="Total Items" value={String(summary.totalItems ?? 0)} />
             <ReportCard
               title="Most Popular"
               value={summary.mostPopularItem ? `${summary.mostPopularItem.name} (${summary.mostPopularItem.unitsSold} sold)` : "No data"}
+            />
+            <ReportCard
+              title="Highest Revenue"
+              value={highestRevenueItem ? `${highestRevenueItem.name} (${fmt(highestRevenueItem.revenue)})` : "No data"}
             />
             <ReportCard
               title="Least Popular"
@@ -109,75 +132,93 @@ function ItemReportSection({ selectedRange }) {
             />
           </div>
 
-          {/* Top Items Chart */}
-          <ReportSection title="Top 10 Items by Units Sold">
-            {topItems.length === 0 ? (
-              <p className="text-sm text-slate-500">No sales data for selected range.</p>
-            ) : (
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart
-                    data={topItems}
-                    layout="vertical"
-                    margin={{ top: 8, right: 24, left: 80, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 12 }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
-                    <Tooltip formatter={(v, name) => [v, name === "unitsSold" ? "Units Sold" : name]} />
-                    <Bar dataKey="unitsSold" fill="#2563eb" radius={[0, 4, 4, 0]} name="Units Sold" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+          <ReportSection title="Top 10 Items by Units Sold" action={topItems.length > 0 ? chartToggle : null}>
+              {topItems.length === 0 ? (
+                <p className="text-sm text-slate-500">No sales data for selected range.</p>
+              ) : (
+                <div className="rounded-2xl bg-white p-5 shadow-sm">
+                  <ResponsiveContainer width="100%" height={280}>
+                    {chartType === "pie" ? (
+                      <PieChart>
+                        <Tooltip formatter={(value) => [value, "Units Sold"]} />
+                        <Legend />
+                        <Pie
+                          data={topItems}
+                          dataKey="unitsSold"
+                          nameKey="name"
+                          cx="50%"
+                          cy="48%"
+                          outerRadius={95}
+                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                        >
+                          {topItems.map((item, index) => (
+                            <Cell key={item.name} fill={ITEM_CHART_COLORS[index % ITEM_CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    ) : (
+                      <BarChart
+                        data={topItems}
+                        layout="vertical"
+                        margin={{ top: 8, right: 24, left: 80, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 12 }} />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} />
+                        <Tooltip formatter={(v, name) => [v, name === "unitsSold" ? "Units Sold" : name]} />
+                        <Bar dataKey="unitsSold" fill="#2563eb" radius={[0, 4, 4, 0]} name="Units Sold" />
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              )}
           </ReportSection>
 
-          {/* Full Items Table */}
           <ReportSection title="All Menu Items">
-            <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Item</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-600">Category</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Base Price</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Units Sold</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Revenue</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-600">Stock</th>
-                    <th className="px-4 py-3 text-center font-semibold text-slate-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-slate-400">No items found</td>
+              <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Item</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Category</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Base Price</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Units Sold</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Revenue</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Stock</th>
+                      <th className="px-4 py-3 text-center font-semibold text-slate-600">Status</th>
                     </tr>
-                  ) : (
-                    items.map((row) => (
-                      <tr key={row.name} className="border-b border-slate-50 last:border-0">
-                        <td className="px-4 py-3 font-medium text-slate-900">{row.name}</td>
-                        <td className="px-4 py-3 text-slate-500">{row.category}</td>
-                        <td className="px-4 py-3 text-right text-slate-700">{fmt(row.basePrice)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-blue-600">{row.unitsSold}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(row.revenue)}</td>
-                        <td className="px-4 py-3 text-right text-slate-700">{row.stock}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            row.inStock
-                              ? row.stock <= 10
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-green-50 text-green-700"
-                              : "bg-red-50 text-red-700"
-                          }`}>
-                            {row.inStock ? (row.stock <= 10 ? "Low Stock" : "In Stock") : "Out of Stock"}
-                          </span>
-                        </td>
+                  </thead>
+                  <tbody>
+                    {items.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-6 text-center text-slate-400">No items found</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      items.map((row) => (
+                        <tr key={row.name} className="border-b border-slate-50 last:border-0">
+                          <td className="px-4 py-3 font-medium text-slate-900">{row.name}</td>
+                          <td className="px-4 py-3 text-slate-500">{row.category}</td>
+                          <td className="px-4 py-3 text-right text-slate-700">{fmt(row.basePrice)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-blue-600">{row.unitsSold}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(row.revenue)}</td>
+                          <td className="px-4 py-3 text-right text-slate-700">{row.stock}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              row.inStock
+                                ? row.stock <= 10
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-700"
+                            }`}>
+                              {row.inStock ? (row.stock <= 10 ? "Low Stock" : "In Stock") : "Out of Stock"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
           </ReportSection>
 
           {/* Low Stock Alerts */}

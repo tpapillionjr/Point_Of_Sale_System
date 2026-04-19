@@ -64,9 +64,6 @@ export default function FilterBar({
   sectionOptions = [],
   selectedSection,
   onSectionChange,
-  viewOptions = [],
-  selectedView,
-  onViewChange,
   filters,
   onFiltersChange,
   datePreset,
@@ -78,7 +75,7 @@ export default function FilterBar({
 }) {
   return (
     <div className="mb-5">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-3">
         <FilterField label="Report Group">
           <StyledSelect
             value={selectedSection}
@@ -102,20 +99,6 @@ export default function FilterBar({
             className={inputClass}
             aria-label="Search by item name"
           />
-        </FilterField>
-
-        <FilterField label="Report View">
-          <StyledSelect
-            value={selectedView ?? ""}
-            onChange={(event) => onViewChange(event.target.value)}
-            ariaLabel="Report View"
-          >
-            {viewOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </StyledSelect>
         </FilterField>
 
         <FilterField label="Date Range">
