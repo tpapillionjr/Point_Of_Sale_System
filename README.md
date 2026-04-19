@@ -11,16 +11,20 @@
 4. [At Least 3 Queries](#queries)
 5. [At Least 3 Reports](#reports)
 
+## **Live Website**
+[Lumi POS](https://lumipos.vercel.app)
+
 ## **Hosting locally**
 In regards to locally installing the repository:
 
-1. Clone the repository in your IDE
-2. Install the backend dependencies uping 
-3. Install the frontend dependencies
-4. Open a new terminal and run the backend server:
+1. Clone the repository in your IDE using 'git clone https://github.com/tpapillionjr/Point_Of_Sale_System.git'
+2. cd Point_Of_Sale_System
+3. Install the backend dependencies using npm install
+4. Install the frontend dependencies npm install 
+5. Open a new terminal and run the backend server:
 - cd backend
 - npm run dev
-5. On a separate terminal run the frontend:
+6. On a separate terminal run the frontend:
 - cd frontend
 - npm run dev
 
@@ -28,7 +32,7 @@ In regards to locally installing the repository:
 ## **Technologies**
 
 - **Frontend**: ![Next.js Badge](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white) ![React Badge](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black) ![Tailwind CSS Badge](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwind-css&logoColor=white)
-- **Backend**: ![Node.js Badge](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white) ![Express Badge](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+ - **Backend**: ![Node.js Badge](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)  <!--![Express Badge](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white) -->
 - **Database**: ![MySQL Badge](https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
 - **Authentication**: ![JWT Badge](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 - **Deployment**: ![Vercel Badge](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
@@ -49,29 +53,29 @@ We have 4 different user roles implemented. They are managers, employees, kitche
 
 ## **Data Entry Forms to Add New Data, Modify Existing Data, and 'Delete' Data**
 ### Customers:
-- [Customer Sign Up/Login](/customer/login): This page allows customers to sign up or log into their account.
-- [Customer Menu](/customer/menu): This page allows customers to browse the menu and add items to an online order.
-- [Customer Checkout](/customer/customer-checkout): This page allows customers to submit an online pickup order.
-- [Reservations](/customer/reservation): This page allows customers to create a reservation.
-- [Customer Dashboard](/customer/dashboard): This page allows customers to view active orders, order history, loyalty points, and rewards.
+- [Customer Sign Up/Login](https://lumipos.vercel.app/customer/login): This page allows customers to sign up or log into their account.
+- [Customer Menu](https://lumipos.vercel.app/customer/menu): This page allows customers to browse the menu and add items to an online order.
+- [Customer Checkout](https://lumipos.vercel.app/customer/customer-checkout): This page allows customers to submit an online pickup order.
+- [Reservations](https://lumipos.vercel.app/customer/reservation): This page allows customers to create a reservation.
+- [Customer Dashboard](https://lumipos.vercel.app/customer/dashboard): This page allows customers to view active orders, order history, loyalty points, and rewards.
 
 ### Employees
-- [Clock In](/clock-in): This page allows employees to authenticate and clock in.
-- [Tables](/tables): This page allows employees to view table status and select a table for service.
-- [Server Order](/server-order): This page allows employees to add menu items to a dine-in or takeout order.
-- [Checkout](/checkout): This page allows employees to close an order with cash, card, or split payment.
-- [Online Orders](/online-orders): This page allows staff to confirm, deny, cancel, mark paid, and mark picked up for online orders.
+- [Clock In](https://lumipos.vercel.app/clock-in): This page allows employees to authenticate and clock in.
+- [Tables](https://lumipos.vercel.app/tables): This page allows employees to view table status and select a table for service.
+- [Server Order](https://lumipos.vercel.app/server-order): This page allows employees to add menu items to a dine-in or takeout order.
+- [Checkout](https://lumipos.vercel.app/checkout): This page allows employees to close an order with cash, card, or split payment.
+- [Online Orders](https://lumipos.vercel.app/online-orders): This page allows staff to confirm, deny, cancel, mark paid, and mark picked up for online orders.
 
 ### Managers
-- [Back Office Dashboard](/back-office): This page gives managers a summary of restaurant activity.
-- [Inventory](/back-office/inventory): This page allows managers to add, edit, and remove inventory items.
-- [Purchasing](/back-office/purchasing): This page allows managers to receive stock and review reorder needs.
-- [Menu Management](/back-office/menu-management): This page allows managers to add, edit, activate, deactivate, and upload photos for menu items.
-- [Order History](/back-office/order-history): This page allows managers to review active and recent orders.
-- [Labor](/back-office/labor): This page allows managers to create and edit employee shifts.
-- [Create Employees](/back-office/create-employees): This page allows managers to create employees, deactivate employees, and reset passwords.
-- [Customer Loyalty](/back-office/customer-loyalty): This page allows managers to manage customer accounts, rewards, and loyalty point adjustments.
-- [Settings](/back-office/settings): This page allows managers to update tax rate, receipt prefix, and approval settings.
+- [Back Office Dashboard](https://lumipos.vercel.app/back-office): This page gives managers a summary of restaurant activity.
+- [Inventory](https://lumipos.vercel.app/back-office/inventory): This page allows managers to add, edit, and remove inventory items.
+- [Purchasing](https://lumipos.vercel.app/back-office/purchasing): This page allows managers to receive stock and review reorder needs.
+- [Menu Management](https://lumipos.vercel.app/back-office/menu-management): This page allows managers to add, edit, activate, deactivate, and upload photos for menu items.
+- [Order History](https://lumipos.vercel.app/back-office/order-history): This page allows managers to review active and recent orders.
+- [Labor](https://lumipos.vercel.app/back-office/labor): This page allows managers to create and edit employee shifts.
+- [Create Employees](https://lumipos.vercel.app/back-office/create-employees): This page allows managers to create employees, deactivate employees, and reset passwords.
+- [Customer Loyalty](https://lumipos.vercel.app/back-office/customer-loyalty): This page allows managers to manage customer accounts, rewards, and loyalty point adjustments.
+- [Settings](https://lumipos.vercel.app/back-office/settings): This page allows managers to update tax rate, receipt prefix, and approval settings.
 
 ## **Triggers**
 
@@ -109,7 +113,7 @@ BEGIN
 END;
 ```
 
-### Online Order to Kitchen Ticket Trigger
+<!-- ### Online Order to Kitchen Ticket Trigger
 This trigger is designed to create a kitchen ticket when an online order is confirmed.
 ```sql
 CREATE TRIGGER trg_create_kitchen_ticket_on_online_confirm
@@ -142,6 +146,7 @@ BEGIN
     END IF;
 END;
 ```
+-->
 
 ### Kitchen Ticket Ready Trigger
 This trigger is designed to update an online order to ready when its kitchen ticket is marked done.
@@ -156,21 +161,6 @@ BEGIN
     WHERE online_order_id = NEW.online_order_id
       AND customer_status = 'preparing';
   END IF;
-END;
-```
-
-### Failed Login Trigger
-This trigger is designed to increment a user's failed login count when a failed login attempt is inserted into the login audit table.
-```sql
-CREATE TRIGGER trg_increment_failed_login
-BEFORE INSERT ON login_audit
-FOR EACH ROW
-BEGIN
-    IF NEW.attempt_type = 'failed' THEN
-        UPDATE Users
-        SET failed_pin_attempts = failed_pin_attempts + 1
-        WHERE user_id = NEW.user_id;
-    END IF;
 END;
 ```
 
@@ -220,13 +210,13 @@ ORDER BY revenue DESC;
 ```
 
 ## **Reports**
-We have several data reports. The three main reports are Sales, Inventory, and Labor.
+We have three main data reports for managers. These reports are focused on restaurant revenue, customer loyalty, and menu item performance.
 
-### Sales Reports:
-This report shows revenue, order totals, top selling items, sales by category, server performance, and tips. It helps managers understand what menu items are selling, how much money the restaurant is making, and which employees are handling the most sales.
+### [Revenue Report](https://lumipos.vercel.app/reports/revenue):
+This report summarizes restaurant revenue for the selected date range. It shows total revenue, total orders, average order value, tips, revenue trends over time, revenue by order type, payment method breakdowns, and detailed revenue components such as gross menu sales, discounts, tax collected, service charges, refunds, and net restaurant sales. Managers can filter the report by date range and revenue type, including dine-in, takeout, and online orders.
 
-### Inventory Reports:
-This report shows current stock levels, low stock items, unavailable items, ingredient usage, top items, waste/risk indicators, menu coverage, and reorder queues. It helps managers know what needs to be restocked and which menu items may be affected by inventory problems.
+### [Customer Loyalty Report](https://lumipos.vercel.app/reports/customer-loyalty):
+This report tracks customer loyalty activity for the selected date range. It shows total loyalty members, points issued, points redeemed, total points balance, the most loyal customer, point activity over time, top customers by points earned, and recent point activity. Managers can use this report to see which customers are most engaged during different time periods.
 
-### Labor Reports:
-This report shows employee hours, scheduled shifts, worked shifts, latest clock activity, and labor performance. It helps managers review staffing, shift activity, and employee performance.
+### [Item Report](https://lumipos.vercel.app/reports/item-report):
+This report shows how each menu item is performing. It includes total items, most popular item, highest revenue item, least popular item, items needing restocking, top 10 items by units sold, item revenue, current stock, and restock alerts. Managers can filter by date range and menu item category to review which items are selling well and which items need inventory attention.
