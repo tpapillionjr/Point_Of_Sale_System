@@ -38,7 +38,7 @@ In regards to locally installing the repository:
 - **Deployment**: ![Vercel Badge](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 - **Version Control**: ![GitHub Badge](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white) ![Git Badge](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
 
-You can also add links to relevant documentation for each technology:
+Links to relevant documentation for each technology:
 - [Next.js Documentation](https://nextjs.org/docs)
 - [React Documentation](https://react.dev/)
 - [Node.js Documentation](https://nodejs.org/)
