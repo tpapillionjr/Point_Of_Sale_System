@@ -174,6 +174,44 @@ function ItemReportSection({ selectedRange }) {
               )}
           </ReportSection>
 
+          {/* Low Stock Alerts */}
+          {lowStockItems.length > 0 && (
+            <ReportSection title="Restock Alerts">
+              <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Inventory Item</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Menu Item</th>
+                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Category</th>
+                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Stock</th>
+                      <th className="px-4 py-3 text-center font-semibold text-slate-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockItems.map((row) => (
+                      <tr key={row.itemName} className="border-b border-slate-50 last:border-0">
+                        <td className="px-4 py-3 font-medium text-slate-900">{row.itemName}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.menuItemName}</td>
+                        <td className="px-4 py-3 text-slate-500">{row.category}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{row.stock}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            row.status === "Critical"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ReportSection>
+          )}
+
           <ReportSection title="All Menu Items">
               <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
                 <table className="w-full text-sm">
@@ -220,44 +258,6 @@ function ItemReportSection({ selectedRange }) {
                 </table>
               </div>
           </ReportSection>
-
-          {/* Low Stock Alerts */}
-          {lowStockItems.length > 0 && (
-            <ReportSection title="Restock Alerts">
-              <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50">
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Inventory Item</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Menu Item</th>
-                      <th className="px-4 py-3 text-left font-semibold text-slate-600">Category</th>
-                      <th className="px-4 py-3 text-right font-semibold text-slate-600">Stock</th>
-                      <th className="px-4 py-3 text-center font-semibold text-slate-600">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockItems.map((row) => (
-                      <tr key={row.itemName} className="border-b border-slate-50 last:border-0">
-                        <td className="px-4 py-3 font-medium text-slate-900">{row.itemName}</td>
-                        <td className="px-4 py-3 text-slate-700">{row.menuItemName}</td>
-                        <td className="px-4 py-3 text-slate-500">{row.category}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900">{row.stock}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            row.status === "Critical"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-amber-50 text-amber-700"
-                          }`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </ReportSection>
-          )}
         </>
       )}
     </div>
