@@ -215,8 +215,14 @@ We have three main data reports for managers. These reports are focused on resta
 ### [Revenue Report](https://lumipos.vercel.app/reports/revenue):
 This report summarizes restaurant revenue for the selected date range. It shows total revenue, total orders, average order value, tips, revenue trends over time, revenue by order type, payment method breakdowns, and detailed revenue components such as gross menu sales, discounts, tax collected, service charges, refunds, and net restaurant sales. Managers can filter the report by date range and revenue type, including dine-in, takeout, and online orders.
 
+![Revenue Report](https://stzldvawzsb6psiq.public.blob.vercel-storage.com/readme-photos/ReadMe_RevenueReport.png)
+
 ### [Customer Loyalty Report](https://lumipos.vercel.app/reports/customer-loyalty):
 This report tracks customer loyalty activity for the selected date range. It shows total loyalty members, points issued, points redeemed, total points balance, the most loyal customer, point activity over time, top customers by points earned, and recent point activity. Managers can use this report to see which customers are most engaged during different time periods.
 
+![Customer Loyalty Report](https://stzldvawzsb6psiq.public.blob.vercel-storage.com/readme-photos/ReadMe_CustomerLoyaltyReport.png)
+
 ### [Item Report](https://lumipos.vercel.app/reports/item-report):
 This report shows how each menu item is performing. It includes total items, most popular item, highest revenue item, least popular item, items needing restocking, top 10 items by units sold, item revenue, current stock, and restock alerts. Managers can filter by date range and menu item category to review which items are selling well and which items need inventory attention.
+
+![Item Report](https://stzldvawzsb6psiq.public.blob.vercel-storage.com/readme-photos/ReadMe_ItemReport.png)
