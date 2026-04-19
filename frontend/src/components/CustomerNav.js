@@ -13,6 +13,7 @@ export default function CustomerNav({ right }) {
     { href: "/customer/menu", label: "Menu" },
     { href: "/customer/order-tracking", label: "Track Order" },
     { href: "/customer/reservation", label: "Reservations" },
+    { href: "/customer/settings", label: "Settings" },
   ];
 
   return (

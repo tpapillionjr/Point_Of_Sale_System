@@ -775,6 +775,98 @@ async function createCustomerReservation(req, res) {
   }
 }
 
+async function updateCustomerProfile(req, res) {
+  try {
+    const customerId = req.customer.customerId;
+    const { firstName, lastName, email, phone, currentPassword, newPassword } = req.body;
+
+    if (!firstName || !lastName || !email || !phone) {
+      return res.status(400).json({ error: "First name, last name, email, and phone are required." });
+    }
+
+    if (!/^[a-zA-Z]+$/.test(firstName.trim())) {
+      return res.status(400).json({ error: "First name can only contain letters." });
+    }
+
+    if (!/^[a-zA-Z]+$/.test(lastName.trim())) {
+      return res.status(400).json({ error: "Last name can only contain letters." });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Valid email required." });
+    }
+
+    const normalizedPhone = phone.replace(/\D/g, "");
+    if (!/^\d{10}$/.test(normalizedPhone)) {
+      return res.status(400).json({ error: "10-digit phone number required." });
+    }
+
+    const rows = await db.query(
+      `SELECT password_hash FROM Customer WHERE customer_num_id = ? LIMIT 1`,
+      [customerId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: "Current password is required to set a new password." });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters." });
+      }
+      const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+      if (!valid) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+    }
+
+    const duplicate = await db.query(
+      `SELECT customer_num_id FROM Customer
+       WHERE (LOWER(email) = ? OR phone_number = ?)
+         AND customer_num_id <> ?
+       LIMIT 1`,
+      [normalizedEmail, normalizedPhone, customerId]
+    );
+
+    if (duplicate.length > 0) {
+      return res.status(409).json({ error: "Email or phone number is already in use by another account." });
+    }
+
+    if (newPassword) {
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await db.query(
+        `UPDATE Customer SET first_name = ?, last_name = ?, email = ?, phone_number = ?, password_hash = ?
+         WHERE customer_num_id = ?`,
+        [firstName.trim(), lastName.trim(), normalizedEmail, normalizedPhone, newHash, customerId]
+      );
+    } else {
+      await db.query(
+        `UPDATE Customer SET first_name = ?, last_name = ?, email = ?, phone_number = ?
+         WHERE customer_num_id = ?`,
+        [firstName.trim(), lastName.trim(), normalizedEmail, normalizedPhone, customerId]
+      );
+    }
+
+    res.json({
+      customerId,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+    });
+  } catch (error) {
+    console.error("updateCustomerProfile error:", error);
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "Email or phone number already in use." });
+    }
+    res.status(500).json({ error: "Failed to update profile." });
+  }
+}
+
 async function deactivateCustomer(req, res) {
   try {
     const customerId = Number.parseInt(req.params.customerId, 10);
@@ -822,4 +914,5 @@ export {
   getCustomerOrderHistory,
   createCustomerReservation,
   deactivateCustomer,
+  updateCustomerProfile,
 };

@@ -540,6 +540,20 @@ export async function fetchCustomerOrderHistory(customerToken) {
   return res.json();
 }
 
+export async function updateCustomerProfile(customerToken, data) {
+  const res = await fetch(`${API_URL}/api/customer/profile`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${customerToken}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || "Failed to update profile.");
+  return payload;
+}
+
 export async function fetchCustomerLoyaltyInfo(customerToken) {
   const res = await fetch(`${API_URL}/api/loyalty/balance`, {
     headers: {

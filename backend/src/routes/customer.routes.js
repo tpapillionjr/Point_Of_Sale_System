@@ -16,6 +16,7 @@ import {
   getCustomerOrderHistory,
   createCustomerReservation,
   deactivateCustomer,
+  updateCustomerProfile,
 } from "../controllers/customer.controller.js";
 import { requireAuth, requireCustomerAuth, requireManager } from "../../middleware/auth.middleware.js";
 
@@ -37,5 +38,6 @@ router.post("/reservations", requireCustomerAuth, createCustomerReservation);
 router.post("/register", registerCustomer);
 router.post("/login", loginCustomer);
 router.patch("/accounts/:customerId/deactivate", requireAuth, requireManager, deactivateCustomer);
+router.patch("/profile", requireCustomerAuth, updateCustomerProfile);
 
 export default router;
