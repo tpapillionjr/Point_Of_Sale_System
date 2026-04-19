@@ -168,45 +168,69 @@ END;
 We have several queries that let us view information about the restaurant along with queries for reports. Here are three of the best examples.
 
 ### Daily Revenue Query:
-- This query shows daily revenue and order count for the restaurant.
+- This query powers the Revenue Report trend chart. It shows daily revenue and order count for both in-store and online orders.
 ```sql
 SELECT
-  DATE(created_at) AS sales_date,
+  DATE(createdAt) AS sales_date,
   ROUND(SUM(total), 2) AS revenue,
   COUNT(*) AS orders
-FROM Orders
-WHERE status <> 'Void'
-GROUP BY DATE(created_at)
+FROM (
+  SELECT total, created_at AS createdAt
+  FROM Orders
+  WHERE status <> 'Void'
+
+  UNION ALL
+
+  SELECT total, created_at AS createdAt
+  FROM Online_Orders
+) all_orders
+GROUP BY DATE(createdAt)
 ORDER BY sales_date DESC;
 ```
 
 ### Top Selling Menu Items Query:
-- This query shows which menu items sold the most and how much revenue each item generated.
+- This query powers the Item Report. It shows which menu items sold the most, how much revenue each item generated, and includes both in-store and online orders.
 ```sql
 SELECT
-  mi.name,
-  SUM(oi.quantity) AS units_sold,
-  ROUND(SUM(oi.quantity * oi.price), 2) AS revenue
-FROM Order_Item oi
-JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
-JOIN Orders o ON o.order_id = oi.order_id
-WHERE o.status <> 'Void'
-GROUP BY mi.menu_item_id, mi.name
+  item_sales.name,
+  SUM(item_sales.quantity) AS units_sold,
+  ROUND(SUM(item_sales.quantity * item_sales.price), 2) AS revenue
+FROM (
+  SELECT mi.menu_item_id, mi.name, oi.quantity, oi.price
+  FROM Order_Item oi
+  JOIN Menu_Item mi ON mi.menu_item_id = oi.menu_item_id
+  JOIN Orders o ON o.order_id = oi.order_id
+  WHERE o.status <> 'Void'
+
+  UNION ALL
+
+  SELECT mi.menu_item_id, mi.name, ooi.quantity, ooi.price
+  FROM Online_Order_Item ooi
+  JOIN Menu_Item mi ON mi.menu_item_id = ooi.menu_item_id
+  JOIN Online_Orders oo ON oo.online_order_id = ooi.online_order_id
+) item_sales
+GROUP BY item_sales.menu_item_id, item_sales.name
 ORDER BY units_sold DESC, revenue DESC;
 ```
 
-### Employee Sales Performance Query:
-- This query shows how many orders each employee handled and the revenue connected to those orders.
+### Customer Loyalty Query:
+- This query powers the Customer Loyalty Report. It shows which customers earned the most points in the selected date range and helps identify the most loyal customer.
 ```sql
 SELECT
-  u.name,
-  COUNT(o.order_id) AS orders_taken,
-  ROUND(SUM(o.total), 2) AS revenue
-FROM Orders o
-JOIN Users u ON u.user_id = o.created_by
-WHERE o.status <> 'Void'
-GROUP BY u.user_id, u.name
-ORDER BY revenue DESC;
+  c.customer_num_id,
+  CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+  c.email,
+  COALESCE(SUM(CASE WHEN lt.type = 'earned' THEN lt.points ELSE 0 END), 0) AS points_earned,
+  COALESCE(SUM(CASE WHEN lt.type = 'redeemed' THEN lt.points ELSE 0 END), 0) AS points_redeemed,
+  c.points_balance AS current_balance,
+  COUNT(DISTINCT lt.online_order_id) AS orders
+FROM Customer c
+LEFT JOIN Loyalty_Transactions lt
+  ON lt.customer_num_id = c.customer_num_id
+WHERE c.is_active = TRUE
+GROUP BY c.customer_num_id, c.first_name, c.last_name, c.email, c.points_balance
+ORDER BY points_earned DESC, current_balance DESC
+LIMIT 10;
 ```
 
 ## **Reports**

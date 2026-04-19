@@ -279,10 +279,10 @@ async function getSalesByServer(filters) {
 async function getTipSummary(filters) {
   const [totalRows, dailyRows] = await Promise.all([
     db.query(
-      `SELECT COALESCE(SUM(tipAmount), 0) AS totalTips
-       FROM (${paymentSubquery}) all_payments
+      `SELECT COALESCE(SUM(tip_amount), 0) AS totalTips
+       FROM Payment
        WHERE status = 'approved'
-         AND ${paymentDateFilter} ${typeCondition}`
+         AND ${buildRangeFilter(filters, "paid_at")}`
     ),
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS dailyTips
