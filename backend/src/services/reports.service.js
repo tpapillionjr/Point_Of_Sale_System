@@ -279,10 +279,10 @@ async function getSalesByServer(filters) {
 async function getTipSummary(filters) {
   const [totalRows, dailyRows] = await Promise.all([
     db.query(
-      `SELECT COALESCE(SUM(tip_amount), 0) AS totalTips
-       FROM Payment
+      `SELECT COALESCE(SUM(tipAmount), 0) AS totalTips
+       FROM (${paymentSubquery}) all_payments
        WHERE status = 'approved'
-         AND ${buildRangeFilter(filters, "paid_at")}`
+         AND ${paymentDateFilter} ${typeCondition}`
     ),
     db.query(
       `SELECT COALESCE(SUM(tip_amount), 0) AS dailyTips
@@ -677,14 +677,52 @@ async function getReportsOverview(range) {
 async function getRevenueReport(range, revenueType = "all") {
   const filters = normalizeReportFilters(range);
   const baseSubquery = `
-    SELECT total, created_at AS createdAt, order_type AS type
+    SELECT
+      total,
+      subtotal,
+      discount_amount AS discountAmount,
+      tax,
+      service_charge AS serviceCharge,
+      created_at AS createdAt,
+      order_type AS type
     FROM Orders
     WHERE status <> 'Void'
 
     UNION ALL
 
-    SELECT total, created_at AS createdAt, 'Online' AS type
+    SELECT
+      total,
+      subtotal,
+      0 AS discountAmount,
+      tax,
+      0 AS serviceCharge,
+      created_at AS createdAt,
+      'Online' AS type
     FROM Online_Orders
+  `;
+  const paymentSubquery = `
+    SELECT
+      p.payment_type AS method,
+      p.amount,
+      p.tip_amount AS tipAmount,
+      p.status,
+      p.paid_at AS paidAt,
+      o.order_type AS type
+    FROM Payment p
+    JOIN Orders o ON o.order_id = p.order_id
+
+    UNION ALL
+
+    SELECT
+      oo.payment_method AS method,
+      oo.total AS amount,
+      0 AS tipAmount,
+      'approved' AS status,
+      oo.created_at AS paidAt,
+      'Online' AS type
+    FROM Online_Orders oo
+    WHERE oo.payment_status = 'paid'
+      AND oo.payment_method IS NOT NULL
   `;
 
   const typeCondition =
@@ -697,13 +735,19 @@ async function getRevenueReport(range, revenueType = "all") {
           : "";
 
   const dateFilter = buildRangeFilter(filters, "createdAt");
+  const paymentDateFilter = buildRangeFilter(filters, "paidAt");
 
-  const [summaryRows, byTypeRows, trendRows, tipRows, paymentRows] = await Promise.all([
+  const [summaryRows, byTypeRows, trendRows, tipRows, refundRows, paymentRows] = await Promise.all([
     db.query(
       `SELECT
          ROUND(COALESCE(SUM(total), 0), 2) AS totalRevenue,
          COUNT(*) AS totalOrders,
-         ROUND(COALESCE(AVG(total), 0), 2) AS avgOrderValue
+         ROUND(COALESCE(AVG(total), 0), 2) AS avgOrderValue,
+         ROUND(COALESCE(SUM(subtotal), 0), 2) AS grossSales,
+         ROUND(COALESCE(SUM(discountAmount), 0), 2) AS totalDiscounts,
+         ROUND(COALESCE(SUM(tax), 0), 2) AS totalTax,
+         ROUND(COALESCE(SUM(serviceCharge), 0), 2) AS totalServiceCharge,
+         ROUND(COALESCE(SUM(subtotal - discountAmount + serviceCharge), 0), 2) AS netRestaurantSales
        FROM (${baseSubquery}) all_orders
        WHERE ${dateFilter} ${typeCondition}`
     ),
@@ -711,7 +755,9 @@ async function getRevenueReport(range, revenueType = "all") {
       `SELECT
          type AS orderType,
          COUNT(*) AS orders,
-         ROUND(COALESCE(SUM(total), 0), 2) AS revenue
+         ROUND(COALESCE(SUM(total), 0), 2) AS revenue,
+         ROUND(COALESCE(AVG(total), 0), 2) AS avgOrderValue,
+         ROUND(COALESCE(SUM(subtotal - discountAmount + serviceCharge), 0), 2) AS netRestaurantSales
        FROM (${baseSubquery}) all_orders
        WHERE ${dateFilter}
        GROUP BY type
@@ -734,14 +780,20 @@ async function getRevenueReport(range, revenueType = "all") {
          AND ${buildRangeFilter(filters, "paid_at")}`
     ),
     db.query(
+      `SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS totalRefunds
+       FROM (${paymentSubquery}) all_payments
+       WHERE status = 'refunded'
+         AND ${paymentDateFilter} ${typeCondition}`
+    ),
+    db.query(
       `SELECT
-         payment_type AS method,
+         method,
          COUNT(*) AS transactions,
          ROUND(COALESCE(SUM(amount), 0), 2) AS revenue
-       FROM Payment
+       FROM (${paymentSubquery}) all_payments
        WHERE status = 'approved'
-         AND ${buildRangeFilter(filters, "paid_at")}
-       GROUP BY payment_type
+         AND ${paymentDateFilter} ${typeCondition}
+       GROUP BY method
        ORDER BY revenue DESC`
     ),
   ]);
@@ -751,12 +803,29 @@ async function getRevenueReport(range, revenueType = "all") {
       totalRevenue: Number(summaryRows[0]?.totalRevenue ?? 0),
       totalOrders: Number(summaryRows[0]?.totalOrders ?? 0),
       avgOrderValue: Number(summaryRows[0]?.avgOrderValue ?? 0),
+      grossSales: Number(summaryRows[0]?.grossSales ?? 0),
+      netRestaurantSales: Number(summaryRows[0]?.netRestaurantSales ?? 0),
+      totalDiscounts: Number(summaryRows[0]?.totalDiscounts ?? 0),
+      totalTax: Number(summaryRows[0]?.totalTax ?? 0),
+      totalServiceCharge: Number(summaryRows[0]?.totalServiceCharge ?? 0),
       totalTips: Number(tipRows[0]?.totalTips ?? 0),
+      totalRefunds: Number(refundRows[0]?.totalRefunds ?? 0),
     },
+    revenueComponents: [
+      { label: "Gross Menu Sales", value: Number(summaryRows[0]?.grossSales ?? 0) },
+      { label: "Discounts", value: Number(summaryRows[0]?.totalDiscounts ?? 0) },
+      { label: "Tax Collected", value: Number(summaryRows[0]?.totalTax ?? 0) },
+      { label: "Service Charges", value: Number(summaryRows[0]?.totalServiceCharge ?? 0) },
+      { label: "Tips", value: Number(tipRows[0]?.totalTips ?? 0) },
+      { label: "Refunds", value: Number(refundRows[0]?.totalRefunds ?? 0) },
+      { label: "Net Restaurant Sales", value: Number(summaryRows[0]?.netRestaurantSales ?? 0) },
+    ],
     byOrderType: byTypeRows.map((row) => ({
       type: row.orderType,
       orders: Number(row.orders || 0),
       revenue: Number(row.revenue || 0),
+      avgOrderValue: Number(row.avgOrderValue || 0),
+      netRestaurantSales: Number(row.netRestaurantSales || 0),
     })),
     byPaymentMethod: paymentRows.map((row) => ({
       method: row.method,

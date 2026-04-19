@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: "/online-orders", label: "Takeout / Online Orders" },
   { href: "/kitchen", label: "Kitchen" },
   { href: "/back-office", label: "Back Office" },
-  { href: "/reports", label: "Reports" },
+  { href: "/reports/revenue", label: "Reports" },
 ];
 
 function isActiveRoute(pathname, href) {
@@ -18,7 +18,7 @@ function isActiveRoute(pathname, href) {
     return true;
   }
 
-  if (href === "/back-office" || href === "/reports") {
+  if (href === "/back-office" || href.startsWith("/reports")) {
     return pathname.startsWith(href);
   }
 

@@ -3,6 +3,8 @@ const API_URL = (
   "http://localhost:4000"
 ).replace(/\/$/, "");
 
+const inFlightGetRequests = new Map();
+
 async function request(path, options = {}) {
   let token = null;
 
@@ -10,6 +12,27 @@ async function request(path, options = {}) {
     token = window.localStorage.getItem("authToken");
   }
 
+  const method = options.method ?? "GET";
+  const isGetRequest = method.toUpperCase() === "GET";
+  const requestKey = isGetRequest ? `${token ?? "anonymous"}:${path}` : null;
+
+  if (requestKey && inFlightGetRequests.has(requestKey)) {
+    return inFlightGetRequests.get(requestKey);
+  }
+
+  const requestPromise = fetchJson(path, options, token);
+
+  if (requestKey) {
+    inFlightGetRequests.set(requestKey, requestPromise);
+    requestPromise.finally(() => {
+      inFlightGetRequests.delete(requestKey);
+    });
+  }
+
+  return requestPromise;
+}
+
+async function fetchJson(path, options, token) {
   let res;
 
   try {
