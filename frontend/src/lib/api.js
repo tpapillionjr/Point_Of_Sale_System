@@ -471,6 +471,32 @@ export async function fetchCustomerOrderStatus(orderId) {
   return res.json();
 }
 
+export async function fetchReservations({ status, date } = {}) {
+  const params = new URLSearchParams();
+  if (status && status !== "all") params.set("status", status);
+  if (date) params.set("date", date);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request(`/api/back-office/reservations${query}`);
+}
+
+export async function confirmReservation(reservationId) {
+  return request(`/api/back-office/reservations/${reservationId}/confirm`, { method: "PATCH" });
+}
+
+export async function cancelReservation(reservationId) {
+  return request(`/api/back-office/reservations/${reservationId}/cancel`, { method: "PATCH" });
+}
+
+export async function fetchCustomerReservations() {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const res = await fetch(`${API_URL}/api/customer/reservations`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  const data = await res.json().catch(() => ([]));
+  if (!res.ok) throw new Error(data.error || "Failed to fetch reservations.");
+  return data;
+}
+
 export async function createCustomerReservation(payload) {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
   const res = await fetch(`${API_URL}/api/customer/reservations`, {

@@ -1,7 +1,7 @@
 import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic, fetchCustomerOrderHistory } from "../../lib/api";
+import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic, fetchCustomerOrderHistory, fetchCustomerReservations } from "../../lib/api";
 import CustomerNav from "../../components/CustomerNav";
 
 const ORDER_STATUS_LABEL = {
@@ -27,6 +27,8 @@ export default function CustomerDashboardPage() {
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedTrackOrderId, setSelectedTrackOrderId] = useState(null);
+  const [reservations, setReservations] = useState([]);
+  const [showReservations, setShowReservations] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");
@@ -59,6 +61,10 @@ export default function CustomerDashboardPage() {
 
       fetchLoyaltyRewardsPublic()
         .then(setRewards)
+        .catch(() => {});
+
+      fetchCustomerReservations()
+        .then(setReservations)
         .catch(() => {});
 
       fetchCustomerOrderHistory(token)
@@ -244,6 +250,60 @@ export default function CustomerDashboardPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reservations */}
+        {reservations.length > 0 && (
+          <div style={{ backgroundColor: "rgba(255,255,255,0.85)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)", marginBottom: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showReservations ? "16px" : "0" }}>
+              <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", margin: 0 }}>
+                My Reservations ({reservations.length})
+              </p>
+              <button
+                onClick={() => setShowReservations((v) => !v)}
+                style={{ fontSize: "12px", fontWeight: "600", color: "#3b82f6", background: "none", border: "none", cursor: "pointer" }}
+              >
+                {showReservations ? "Hide" : "Show"}
+              </button>
+            </div>
+            {showReservations && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {reservations.map((r) => {
+                  const STATUS = {
+                    requested: { label: "Pending", color: "#d97706", bg: "#fef3c7" },
+                    confirmed: { label: "Confirmed", color: "#16a34a", bg: "#dcfce7" },
+                    seated:    { label: "Seated",    color: "#2563eb", bg: "#dbeafe" },
+                    cancelled: { label: "Cancelled", color: "#6b7280", bg: "#f3f4f6" },
+                  };
+                  const s = STATUS[r.status] ?? { label: r.status, color: "#6b7280", bg: "#f3f4f6" };
+                  const timeLabel = {
+                    "07:00":"7:00 AM","07:30":"7:30 AM","08:00":"8:00 AM","08:30":"8:30 AM",
+                    "09:00":"9:00 AM","09:30":"9:30 AM","10:00":"10:00 AM","10:30":"10:30 AM",
+                    "11:00":"11:00 AM","11:30":"11:30 AM","12:00":"12:00 PM","12:30":"12:30 PM",
+                    "13:00":"1:00 PM","13:30":"1:30 PM","14:00":"2:00 PM",
+                  }[r.time] ?? r.time;
+                  const [yr, mo, dy] = r.date.split("-");
+                  const dateLabel = new Date(Number(yr), Number(mo) - 1, Number(dy)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+                  return (
+                    <div key={r.reservationId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: "10px", backgroundColor: s.bg, border: `1px solid ${s.color}30` }}>
+                      <div>
+                        <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#1e3a5f" }}>{dateLabel} at {timeLabel}</p>
+                        <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#64748b" }}>
+                          {r.partySize} {r.partySize === 1 ? "guest" : "guests"}{r.occasion ? ` · ${r.occasion}` : ""}
+                        </p>
+                      </div>
+                      <span style={{ fontSize: "12px", fontWeight: "700", color: s.color, padding: "3px 10px", borderRadius: "999px", backgroundColor: "white", border: `1px solid ${s.color}50`, whiteSpace: "nowrap" }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+                <Link href="/customer/reservation" style={{ fontSize: "13px", fontWeight: "600", color: "#3b82f6", textDecoration: "none", marginTop: "4px" }}>
+                  + Make another reservation
+                </Link>
               </div>
             )}
           </div>

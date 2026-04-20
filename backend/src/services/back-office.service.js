@@ -1212,6 +1212,142 @@ async function getCustomerOrders(customerIdInput) {
   };
 }
 
+async function getReservations({ status, date } = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (status && status !== "all") {
+    conditions.push("cr.status = ?");
+    params.push(status);
+  }
+
+  if (date) {
+    conditions.push("DATE(cr.reservation_date) = ?");
+    params.push(date);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return db.query(
+    `SELECT
+       cr.reservation_id AS reservationId,
+       DATE_FORMAT(cr.reservation_date, '%Y-%m-%d') AS date,
+       TIME_FORMAT(cr.reservation_time, '%H:%i') AS time,
+       cr.party_size AS partySize,
+       cr.phone,
+       cr.occasion,
+       cr.notes,
+       cr.status,
+       cr.created_at AS createdAt,
+       c.first_name AS firstName,
+       c.last_name AS lastName,
+       c.email
+     FROM Customer_Reservation cr
+     JOIN Customer c ON c.customer_num_id = cr.customer_num_id
+     ${where}
+     ORDER BY cr.reservation_date ASC, cr.reservation_time ASC`,
+    params
+  );
+}
+
+async function confirmReservation(reservationId) {
+  const id = Number(reservationId);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error("Invalid reservation ID.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const rows = await db.query(
+    `SELECT reservation_id AS reservationId, reservation_date AS date, reservation_time AS time,
+            party_size AS partySize, status
+     FROM Customer_Reservation WHERE reservation_id = ? LIMIT 1`,
+    [id]
+  );
+
+  if (rows.length === 0) {
+    const error = new Error("Reservation not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const reservation = rows[0];
+
+  if (reservation.status !== "requested") {
+    const error = new Error(`Cannot confirm a reservation with status '${reservation.status}'.`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const [capacityRows, bookedRows] = await Promise.all([
+    db.query(
+      `SELECT COALESCE(SUM(capacity), 0) AS totalCapacity
+       FROM Dining_Tables
+       WHERE status != 'Inactive'`
+    ),
+    db.query(
+      `SELECT COALESCE(SUM(party_size), 0) AS bookedSeats
+       FROM Customer_Reservation
+       WHERE reservation_date = ?
+         AND reservation_time = ?
+         AND status = 'confirmed'
+         AND reservation_id != ?`,
+      [reservation.date, reservation.time, id]
+    ),
+  ]);
+
+  const totalCapacity = Number(capacityRows[0]?.totalCapacity ?? 0);
+  const bookedSeats = Number(bookedRows[0]?.bookedSeats ?? 0);
+
+  if (bookedSeats + reservation.partySize > totalCapacity) {
+    const error = new Error(
+      `That time slot is full. ${bookedSeats} of ${totalCapacity} seats are already booked.`
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
+  await db.query(
+    `UPDATE Customer_Reservation SET status = 'confirmed' WHERE reservation_id = ?`,
+    [id]
+  );
+
+  return { reservationId: id, status: "confirmed" };
+}
+
+async function cancelReservation(reservationId) {
+  const id = Number(reservationId);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error("Invalid reservation ID.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const rows = await db.query(
+    `SELECT reservation_id AS reservationId, status FROM Customer_Reservation WHERE reservation_id = ? LIMIT 1`,
+    [id]
+  );
+
+  if (rows.length === 0) {
+    const error = new Error("Reservation not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (rows[0].status === "cancelled") {
+    const error = new Error("Reservation is already cancelled.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  await db.query(
+    `UPDATE Customer_Reservation SET status = 'cancelled' WHERE reservation_id = ?`,
+    [id]
+  );
+
+  return { reservationId: id, status: "cancelled" };
+}
+
 export {
   createLaborShift,
   createInventoryItem,
@@ -1219,6 +1355,9 @@ export {
   getBackOfficeDashboard,
   getBackOfficeData,
   getCustomerOrders,
+  getReservations,
+  confirmReservation,
+  cancelReservation,
   receivePurchasingStock,
   updateLaborShift,
   updateInventoryItemAmount,

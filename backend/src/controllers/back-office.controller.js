@@ -5,6 +5,9 @@ import {
   getBackOfficeDashboard,
   getBackOfficeData,
   getCustomerOrders,
+  getReservations,
+  confirmReservation,
+  cancelReservation,
   receivePurchasingStock,
   updateLaborShift,
   updateInventoryItemAmount,
@@ -135,10 +138,44 @@ async function getCustomerOrderHistory(req, res) {
   }
 }
 
+async function getReservationsHandler(req, res) {
+  try {
+    const { status, date } = req.query;
+    const result = await getReservations({ status, date });
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to fetch reservations:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.message ?? "Failed to fetch reservations." });
+  }
+}
+
+async function confirmReservationHandler(req, res) {
+  try {
+    const result = await confirmReservation(req.params.reservationId);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to confirm reservation:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.message ?? "Failed to confirm reservation." });
+  }
+}
+
+async function cancelReservationHandler(req, res) {
+  try {
+    const result = await cancelReservation(req.params.reservationId);
+    res.json(result);
+  } catch (error) {
+    console.error("Failed to cancel reservation:", error.message);
+    res.status(error.statusCode ?? 500).json({ error: error.message ?? "Failed to cancel reservation." });
+  }
+}
+
 export {
   getDashboard,
   getData,
   getCustomerOrderHistory,
+  getReservationsHandler,
+  confirmReservationHandler,
+  cancelReservationHandler,
   getSettings,
   patchInventoryItemAmount,
   patchLaborShift,

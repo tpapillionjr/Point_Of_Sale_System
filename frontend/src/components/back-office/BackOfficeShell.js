@@ -11,6 +11,7 @@ const navSections = [
   { href: "/back-office/labor", label: "Labor" },
   { href: "/back-office/create-employees", label: "Create Employees" },
   { href: "/back-office/customer-loyalty", label: "Customer Loyalty" },
+  { href: "/back-office/reservations", label: "Reservations" },
   { href: "/back-office/settings", label: "Settings" },
 ];
 
