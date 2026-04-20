@@ -340,8 +340,28 @@ async function updateLaborShift(shiftIdInput, payload = {}) {
     throw error;
   }
 
+  const [existingShiftRows] = await db.pool.execute(
+    `SELECT
+       shift_id AS shiftId,
+       scheduled_start AS scheduledStart,
+       scheduled_end AS scheduledEnd
+     FROM Employee_Shift
+     WHERE shift_id = ?
+     LIMIT 1`,
+    [shiftId]
+  );
+
+  if (existingShiftRows.length === 0) {
+    const error = new Error("Labor shift not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const existingShift = existingShiftRows[0];
   const updates = [];
   const params = [];
+  let nextScheduledStart = normalizeOptionalDateTime(existingShift.scheduledStart, "scheduledStart");
+  let nextScheduledEnd = normalizeOptionalDateTime(existingShift.scheduledEnd, "scheduledEnd");
 
   if (Object.hasOwn(payload, "userId")) {
     const userId = Number(payload.userId);
@@ -366,13 +386,15 @@ async function updateLaborShift(shiftIdInput, payload = {}) {
   }
 
   if (Object.hasOwn(payload, "scheduledStart")) {
+    nextScheduledStart = normalizeOptionalDateTime(payload.scheduledStart, "scheduledStart");
     updates.push("scheduled_start = ?");
-    params.push(normalizeOptionalDateTime(payload.scheduledStart, "scheduledStart"));
+    params.push(nextScheduledStart);
   }
 
   if (Object.hasOwn(payload, "scheduledEnd")) {
+    nextScheduledEnd = normalizeOptionalDateTime(payload.scheduledEnd, "scheduledEnd");
     updates.push("scheduled_end = ?");
-    params.push(normalizeOptionalDateTime(payload.scheduledEnd, "scheduledEnd"));
+    params.push(nextScheduledEnd);
   }
 
   if (Object.hasOwn(payload, "clockIn")) {
@@ -399,6 +421,12 @@ async function updateLaborShift(shiftIdInput, payload = {}) {
     throw error;
   }
 
+  if (!nextScheduledStart || !nextScheduledEnd || new Date(nextScheduledEnd) <= new Date(nextScheduledStart)) {
+    const error = new Error("scheduledEnd must be after scheduledStart.");
+    error.statusCode = 400;
+    throw error;
+  }
+
   params.push(shiftId);
   const [result] = await db.pool.execute(
     `UPDATE Employee_Shift
@@ -406,13 +434,6 @@ async function updateLaborShift(shiftIdInput, payload = {}) {
      WHERE shift_id = ?`,
     params
   );
-
-  if (result.affectedRows === 0) {
-    const error = new Error("Labor shift not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-
   return { shiftId, status: "updated" };
 }
 

@@ -1210,26 +1210,26 @@ export function LaborSection() {
   function readShiftFormPayload(formElement = null) {
     const formData = formElement ? new FormData(formElement) : null;
     const payload = {
-      userId: firstFilledValue(shiftForm.userId, shiftUserRef.current?.value, formData?.get("userId")),
+      userId: firstFilledValue(formData?.get("userId"), shiftUserRef.current?.value, shiftForm.userId),
       scheduledStartDate: firstFilledValue(
-        shiftForm.scheduledStartDate,
+        formData?.get("scheduledStartDate"),
         shiftStartDateRef.current?.value,
-        formData?.get("scheduledStartDate")
+        shiftForm.scheduledStartDate
       ),
       scheduledStartTime: firstFilledValue(
-        shiftForm.scheduledStartTime,
+        formData?.get("scheduledStartTime"),
         shiftStartTimeRef.current?.value,
-        formData?.get("scheduledStartTime")
+        shiftForm.scheduledStartTime
       ),
       scheduledEndDate: firstFilledValue(
-        shiftForm.scheduledEndDate,
+        formData?.get("scheduledEndDate"),
         shiftEndDateRef.current?.value,
-        formData?.get("scheduledEndDate")
+        shiftForm.scheduledEndDate
       ),
       scheduledEndTime: firstFilledValue(
-        shiftForm.scheduledEndTime,
+        formData?.get("scheduledEndTime"),
         shiftEndTimeRef.current?.value,
-        formData?.get("scheduledEndTime")
+        shiftForm.scheduledEndTime
       ),
     };
 
