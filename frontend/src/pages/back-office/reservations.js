@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import BackOfficeShell from "../../components/back-office/BackOfficeShell";
 import ReportSection from "../../components/reports/ReportSection";
 import { fetchReservations, confirmReservation, cancelReservation } from "../../lib/api";
@@ -59,7 +59,7 @@ export default function ReservationsPage() {
   const [actionError, setActionError] = useState("");
   const [pendingId, setPendingId] = useState(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setIsLoading(true);
     setError("");
     try {
@@ -70,9 +70,9 @@ export default function ReservationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [dateFilter, statusFilter]);
 
-  useEffect(() => { load(); }, [statusFilter, dateFilter]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleConfirm(reservationId) {
     setActionError("");
@@ -109,23 +109,37 @@ export default function ReservationsPage() {
     >
       <ReportSection title="Filters">
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div>
+          <div className="min-w-64 flex-1">
             <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "4px" }}>
               Status
             </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="lumi-report-select"
-            >
-              <option value="all">All</option>
-              <option value="requested">Requested</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="seated">Seated</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-12 w-full appearance-none rounded-md border border-slate-300 bg-white px-4 pr-10 text-sm text-slate-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="all">All</option>
+                <option value="requested">Requested</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="seated">Seated</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500">
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    d="M5 7.5 10 12.5l5-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </span>
+            </div>
           </div>
-          <div>
+          <div className="min-w-64 flex-1">
             <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "4px" }}>
               Date
             </label>
@@ -134,14 +148,7 @@ export default function ReservationsPage() {
               value={dateFilter}
               min={today}
               onChange={(e) => setDateFilter(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "1px solid rgba(148,163,184,0.4)",
-                fontSize: "14px",
-                color: "#111827",
-                backgroundColor: "white",
-              }}
+              className="h-12 w-full rounded-md border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm transition focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
           {dateFilter && (
