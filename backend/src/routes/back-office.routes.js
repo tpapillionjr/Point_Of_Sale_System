@@ -7,6 +7,9 @@ import {
   getDashboard,
   getData,
   getCustomerOrderHistory,
+  getReservationsHandler,
+  confirmReservationHandler,
+  cancelReservationHandler,
   getSettings,
   patchInventoryItemAmount,
   patchLaborShift,
@@ -30,5 +33,8 @@ router.post("/labor/shifts", requireAuth, requireManager, postLaborShift);
 router.patch("/labor/shifts/:shiftId", requireAuth, requireManager, patchLaborShift);
 router.post("/purchasing/receive", requireAuth, requireManager, postReceivePurchasingStock);
 router.get("/customers/:customerId/orders", requireAuth, requireManager, getCustomerOrderHistory);
+router.get("/reservations", requireAuth, getReservationsHandler);
+router.patch("/reservations/:reservationId/confirm", requireAuth, confirmReservationHandler);
+router.patch("/reservations/:reservationId/cancel", requireAuth, cancelReservationHandler);
 
 export default router;

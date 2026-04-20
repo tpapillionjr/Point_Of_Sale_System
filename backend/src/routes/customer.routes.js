@@ -15,6 +15,7 @@ import {
   deleteOnlineOrder,
   getCustomerOrderHistory,
   createCustomerReservation,
+  getCustomerReservations,
   deactivateCustomer,
   updateCustomerProfile,
 } from "../controllers/customer.controller.js";
@@ -35,6 +36,7 @@ router.patch("/online-orders/:orderId/pickup", requireAuth, markOrderPickedUp);
 router.delete("/online-orders/:orderId", requireAuth, requireManager, deleteOnlineOrder);
 router.get("/orders/history", requireCustomerAuth, getCustomerOrderHistory);
 router.post("/reservations", requireCustomerAuth, createCustomerReservation);
+router.get("/reservations", requireCustomerAuth, getCustomerReservations);
 router.post("/register", registerCustomer);
 router.post("/login", loginCustomer);
 router.patch("/accounts/:customerId/deactivate", requireAuth, requireManager, deactivateCustomer);

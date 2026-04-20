@@ -897,6 +897,33 @@ async function deactivateCustomer(req, res) {
   }
 }
 
+async function getCustomerReservations(req, res) {
+  try {
+    const customerId = Number(req.customer?.customerId);
+    if (!Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(401).json({ error: "Customer login required." });
+    }
+
+    const rows = await db.query(
+      `SELECT reservation_id AS reservationId,
+              DATE_FORMAT(reservation_date, '%Y-%m-%d') AS date,
+              TIME_FORMAT(reservation_time, '%H:%i') AS time,
+              party_size AS partySize,
+              phone, occasion, notes, status,
+              created_at AS createdAt
+       FROM Customer_Reservation
+       WHERE customer_num_id = ?
+       ORDER BY reservation_date DESC, reservation_time DESC`,
+      [customerId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("getCustomerReservations error:", error);
+    res.status(500).json({ error: "Failed to fetch reservations." });
+  }
+}
+
 export {
   getCustomerMenu,
   createCustomerOrder,
@@ -913,6 +940,7 @@ export {
   deleteOnlineOrder,
   getCustomerOrderHistory,
   createCustomerReservation,
+  getCustomerReservations,
   deactivateCustomer,
   updateCustomerProfile,
 };

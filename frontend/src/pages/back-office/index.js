@@ -106,6 +106,7 @@ export default function BackOfficePage() {
               ["/back-office/labor", "Labor Management", "Adjust roles, staffing plans, pay settings, and attendance notes."],
               ["/back-office/order-history", "Order Review", "Search receipts, review exceptions, and document refund decisions."],
               ["/back-office/customer-loyalty", "Customer & Loyalty", "Find guests, update profiles, and adjust loyalty balances."],
+              ["/back-office/reservations", "Reservations", "Review and confirm customer reservation requests; capacity is checked automatically."],
               ["/back-office/settings", "System Settings", "Maintain taxes, receipt rules, approval controls, and device defaults."],
             ].map(([href, title, body]) => (
               <Link
