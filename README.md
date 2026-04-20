@@ -113,41 +113,6 @@ BEGIN
 END;
 ```
 
-<!-- ### Online Order to Kitchen Ticket Trigger
-This trigger is designed to create a kitchen ticket when an online order is confirmed.
-```sql
-CREATE TRIGGER trg_create_kitchen_ticket_on_online_confirm
-AFTER UPDATE ON online_orders
-FOR EACH ROW
-BEGIN
-    IF OLD.customer_status <> 'confirmed'
-       AND NEW.customer_status = 'confirmed'
-       AND NOT EXISTS (
-           SELECT 1
-           FROM Kitchen_Ticket kt
-           WHERE kt.online_order_id = NEW.online_order_id
-       )
-    THEN
-        INSERT INTO Kitchen_Ticket (
-            order_id,
-            online_order_id,
-            table_id,
-            status,
-            created_at,
-            updated_at
-        ) VALUES (
-            NULL,
-            NEW.online_order_id,
-            1,
-            'new',
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-        );
-    END IF;
-END;
-```
--->
-
 ### Kitchen Ticket Ready Trigger
 This trigger is designed to update an online order to ready when its kitchen ticket is marked done.
 ```sql
