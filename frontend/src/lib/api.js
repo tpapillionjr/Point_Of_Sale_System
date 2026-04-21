@@ -1,7 +1,18 @@
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:4000"
-).replace(/\/$/, "");
+function resolveApiUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    return "http://localhost:4000";
+  }
+
+  return "";
+}
+
+const API_URL = resolveApiUrl();
 
 const inFlightGetRequests = new Map();
 
@@ -34,6 +45,10 @@ async function request(path, options = {}) {
 
 async function fetchJson(path, options, token) {
   let res;
+
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for this deployment.");
+  }
 
   try {
     res = await fetch(`${API_URL}${path}`, {

@@ -6,7 +6,10 @@ import { useCustomerSession } from "../../lib/useCustomerSession";
 import CustomerNav from "../../components/CustomerNav";
 import { MENU_CATEGORIES, normalizeMenuCategory, isBeverageCategory } from "../../lib/menuCategories";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:4000"
+    : "");
 
 export default function CustomerMenuPage() {
   const router = useRouter();

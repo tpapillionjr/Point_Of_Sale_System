@@ -101,8 +101,8 @@ export default function CustomerLoginPage() {
         });
         routeStaffUser(staffData.user);
       }
-    } catch {
-      setError("Invalid email or password.");
+    } catch (error) {
+      setError(error?.message || "Invalid email or password.");
     } finally {
       setIsSubmitting(false);
     }
