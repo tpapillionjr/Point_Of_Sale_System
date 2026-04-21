@@ -3,7 +3,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 const CUSTOMER_JWT_SECRET = process.env.JWT_SECRET;
-const CUSTOMER_JWT_EXPIRES_IN = "7d";
+const CUSTOMER_JWT_EXPIRES_IN =
+  process.env.CUSTOMER_JWT_EXPIRES_IN || process.env.JWT_EXPIRES_IN || "7d";
 const ONLINE_ORDER_CANCELED_STATUSES = new Set(["canceled", "denied"]);
 
 function isCanceledOnlineOrderStatus(status) {

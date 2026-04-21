@@ -19,6 +19,8 @@ import {
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
+const STAFF_JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
+
 async function verifyPassword(password, passwordHash) {
   if (!passwordHash) {
     return false;
@@ -220,6 +222,12 @@ async function postLogin(req, res) {
       });
     }
 
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        error: "JWT secret is not configured.",
+      });
+    }
+
     // 5. Successful login
     const metrics = await trackLoginAttempt(user.user_id, ipAddress, true);
 
@@ -249,8 +257,8 @@ async function postLogin(req, res) {
         name: user.name,
         role: user.role,
       },
-      process.env.JWT_SECRET || "your-secret-key",
-      { expiresIn: "8h" }
+      process.env.JWT_SECRET,
+      { expiresIn: STAFF_JWT_EXPIRES_IN }
     );
 
     res.json({
@@ -284,6 +292,12 @@ async function postValidateCaptcha(req, res) {
     if (!captchaToken || !loginIdentifier || !password) {
       return res.status(400).json({
         error: "CAPTCHA token, username/email, and password are required.",
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        error: "JWT secret is not configured.",
       });
     }
 
@@ -335,8 +349,8 @@ async function postValidateCaptcha(req, res) {
         name: user.name,
         role: user.role,
       },
-      process.env.JWT_SECRET || "your-secret-key",
-      { expiresIn: "8h" }
+      process.env.JWT_SECRET,
+      { expiresIn: STAFF_JWT_EXPIRES_IN }
     );
 
     res.json({
