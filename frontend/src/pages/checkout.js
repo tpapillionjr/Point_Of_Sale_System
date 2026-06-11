@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { canMutateManagerData } from "../lib/session";
 import { cancelOrder, closeOrder, fetchActiveOrderByTable } from "../lib/api";
 
 const TAX_RATE = 0.0825;
@@ -180,7 +181,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (employee?.role !== "manager") {
+    if (!canMutateManagerData(employee)) {
       setMessage("Only managers can cancel an order.");
       return;
     }
@@ -827,7 +828,7 @@ export default function CheckoutPage() {
             {isClosing ? "CLOSING..." : `CLOSE CHECK — $${total.toFixed(2)}`}
           </button>
 
-          {employee?.role === "manager" && (
+          {canMutateManagerData(employee) && (
             <button
               onClick={handleCancelOrder}
               disabled={isClosing || isCanceling || !order?.orderId}

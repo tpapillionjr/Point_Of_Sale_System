@@ -3,10 +3,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { customerLogin, customerRegister, staffLogin } from "../../lib/api";
-import { saveStaffSession } from "../../lib/session";
+import { canAccessManagerRoutes, saveStaffSession } from "../../lib/session";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [forgotEmail, setForgotEmail] = useState("");
@@ -62,7 +63,7 @@ export default function CustomerLoginPage() {
       return;
     }
 
-    if (user.role === "manager") {
+    if (canAccessManagerRoutes(user)) {
       router.push("/back-office");
       return;
     }
@@ -271,6 +272,25 @@ export default function CustomerLoginPage() {
             </div>
           )}
 
+          <button
+            type="button"
+            onClick={() => setShowDemoModal(true)}
+            style={{
+              width: "100%",
+              padding: "10px 14px",
+              marginBottom: "16px",
+              borderRadius: "12px",
+              border: "1px dashed rgba(59,130,246,0.35)",
+              backgroundColor: "rgba(239,246,255,0.9)",
+              color: "#2563eb",
+              fontSize: "13px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            View Demo Account Credentials
+          </button>
+
           {/* Login form */}
           {mode === "login" && (
             <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -465,6 +485,45 @@ export default function CustomerLoginPage() {
 
         </div>
       </div>
+
+      {showDemoModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+          <div onClick={() => setShowDemoModal(false)} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(15,23,42,0.4)" }} />
+          <div style={{ position: "relative", width: "100%", maxWidth: "400px", borderRadius: "22px", backgroundColor: "white", padding: "24px", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+            <p style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.12em", color: "#60a5fa", margin: "0 0 8px" }}>
+              Demo Access
+            </p>
+            <h3 style={{ fontSize: "22px", fontWeight: "800", color: "#1e3a5f", margin: "0 0 10px" }}>
+              Read-only manager account
+            </h3>
+            <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.6, margin: "0 0 18px" }}>
+              Use this to review Back Office and Reports without editing live data.
+            </p>
+            {[
+              ["Email", "demo.manager@pos.local"],
+              ["Password", "DemoView2026!"],
+              ["Clock-In PIN", "2468"],
+            ].map(([label, value]) => (
+              <div key={label} style={{ borderRadius: "14px", border: "1px solid rgba(148,163,184,0.25)", backgroundColor: "#f8fbff", padding: "12px 14px", marginBottom: "10px" }}>
+                <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>{label}</p>
+                <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>{value}</p>
+              </div>
+            ))}
+            <p style={{ fontSize: "12px", color: "#92400e", backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: "12px", padding: "10px 12px", lineHeight: 1.5, margin: "8px 0 18px" }}>
+              Demo mode is read-only. Write actions such as menu edits, staff changes, and loyalty adjustments are disabled.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowDemoModal(false)}
+                style={{ padding: "10px 16px", borderRadius: "999px", border: "none", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", cursor: "pointer" }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer style={{ textAlign: "center", padding: "24px", color: "#94a3b8", fontSize: "13px", borderTop: "1px solid rgba(148,163,184,0.15)" }}>
         © 2026 Lumi Restaurant · All rights reserved.

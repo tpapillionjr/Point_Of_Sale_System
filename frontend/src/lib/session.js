@@ -65,5 +65,13 @@ export function isManagerRoute(pathname) {
 }
 
 export function canAccessManagerRoutes(employee) {
+  return ["manager", "demo_manager"].includes(employee?.role);
+}
+
+export function canMutateManagerData(employee) {
   return employee?.role === "manager";
+}
+
+export function isDemoManager(employee) {
+  return employee?.role === "demo_manager";
 }

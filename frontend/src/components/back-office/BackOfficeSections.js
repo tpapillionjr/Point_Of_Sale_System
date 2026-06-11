@@ -32,7 +32,7 @@ import {
   updateMenuItem,
 } from "../../lib/api";
 import { MENU_CATEGORIES, normalizeMenuCategory } from "../../lib/menuCategories";
-import { getStoredEmployee } from "../../lib/session";
+import { canMutateManagerData, getStoredEmployee, isDemoManager } from "../../lib/session";
 
 function SimpleTable({ headers, rows, renderRow }) {
   return (
@@ -1601,6 +1601,8 @@ const EMPTY_FORM = {
 };
 
 export function MenuManagementSection() {
+  const employee = getStoredEmployee();
+  const canManageMenu = canMutateManagerData(employee);
   const { data, isLoading, error } = useBackOfficeData("30days");
   const menu = data?.menu;
 
@@ -1639,6 +1641,10 @@ export function MenuManagementSection() {
   }, []);
 
   function openAdd() {
+    if (!canManageMenu) {
+      setActionMessage("Error: Demo managers can review menu data, but only full managers can change menu items.");
+      return;
+    }
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setFormError(null);
@@ -1646,6 +1652,10 @@ export function MenuManagementSection() {
   }
 
   function openEdit(item) {
+    if (!canManageMenu) {
+      setActionMessage("Error: Demo managers can review menu data, but only full managers can change menu items.");
+      return;
+    }
     setEditTarget(item);
     setForm({
       name: item.name,
@@ -1670,6 +1680,12 @@ export function MenuManagementSection() {
   }
 
   function handlePhotoChange(event) {
+    if (!canManageMenu) {
+      setFormError("Demo managers can review menu data, but only full managers can change menu items.");
+      event.target.value = "";
+      return;
+    }
+
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -1704,6 +1720,11 @@ export function MenuManagementSection() {
   }
 
   function handleRemovePhoto() {
+    if (!canManageMenu) {
+      setFormError("Demo managers can review menu data, but only full managers can change menu items.");
+      return;
+    }
+
     setForm((current) => ({
       ...current,
       photoUrl: "",
@@ -1728,6 +1749,10 @@ export function MenuManagementSection() {
   }
 
   async function handleSave() {
+    if (!canManageMenu) {
+      setFormError("Demo managers can review menu data, but only full managers can change menu items.");
+      return;
+    }
     if (!form.name.trim()) { setFormError("Name is required."); return; }
     if (!form.category.trim()) { setFormError("Category is required."); return; }
     const price = Number(form.basePrice);
@@ -1763,6 +1788,10 @@ export function MenuManagementSection() {
   }
 
   async function handleToggle(item) {
+    if (!canManageMenu) {
+      setActionMessage("Error: Demo managers can review menu data, but only full managers can change menu items.");
+      return;
+    }
     const next = !item.isActive;
     try {
       await toggleMenuItemActive(item.menuItemId, next);
@@ -1779,6 +1808,12 @@ export function MenuManagementSection() {
         <SummaryCards cards={menu?.summaryCards} isLoading={isLoading} error={error} />
       </ReportSection>
 
+      {isDemoManager(employee) ? (
+        <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Demo manager mode is read-only on menu management. Add, edit, photo upload, and status changes are disabled.
+        </p>
+      ) : null}
+
       {actionMessage && (
         <p className="mb-4 rounded bg-green-50 px-4 py-2 text-sm font-medium text-green-700">{actionMessage}</p>
       )}
@@ -1788,6 +1823,7 @@ export function MenuManagementSection() {
         action={
           <button
             onClick={openAdd}
+            disabled={!canManageMenu}
             className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
             + Add Item
@@ -1868,12 +1904,14 @@ export function MenuManagementSection() {
                     <td className="py-3 pr-2 flex gap-2">
                       <button
                         onClick={() => openEdit(item)}
+                        disabled={!canManageMenu}
                         className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleToggle(item)}
+                        disabled={!canManageMenu}
                         className={`rounded px-2 py-1 text-xs font-semibold ${item.isActive ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
                       >
                         {item.isActive ? "Deactivate" : "Activate"}
@@ -1926,6 +1964,7 @@ export function MenuManagementSection() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  disabled={!canManageMenu}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g. Grilled Salmon"
                 />
@@ -1935,6 +1974,7 @@ export function MenuManagementSection() {
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  disabled={!canManageMenu}
                   className="lumi-report-select"
                 >
                   <option value="">— Select category —</option>
@@ -1951,6 +1991,7 @@ export function MenuManagementSection() {
                   step="0.01"
                   value={form.basePrice}
                   onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+                  disabled={!canManageMenu}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0.00"
                 />
@@ -1961,6 +2002,7 @@ export function MenuManagementSection() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={handlePhotoChange}
+                  disabled={!canManageMenu}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {form.photoFileName ? (
@@ -1972,6 +2014,7 @@ export function MenuManagementSection() {
                   <button
                     type="button"
                     onClick={handleRemovePhoto}
+                    disabled={!canManageMenu}
                     className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
                   >
                     Remove Photo
@@ -1990,6 +2033,7 @@ export function MenuManagementSection() {
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  disabled={!canManageMenu}
                   className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="A short description customers can read on the menu."
                 />
@@ -2000,6 +2044,7 @@ export function MenuManagementSection() {
                   type="text"
                   value={form.commonAllergens}
                   onChange={(e) => setForm({ ...form, commonAllergens: e.target.value })}
+                  disabled={!canManageMenu}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g. Milk, Eggs, Wheat, Soy"
                 />
@@ -2011,7 +2056,7 @@ export function MenuManagementSection() {
             <div className="mt-6 flex gap-3">
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !canManageMenu}
                 className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {saving ? "Saving..." : editTarget ? "Save Changes" : "Add Item"}
@@ -2055,7 +2100,7 @@ export function OrderHistorySection() {
 
   async function handleManagerCancel(orderId, reason) {
     const employee = getStoredEmployee();
-    if (!employee?.userId || employee.role !== "manager") {
+    if (!employee?.userId || !canMutateManagerData(employee)) {
       setCancelError("Only a logged-in manager can cancel an active order.");
       return false;
     }
@@ -2109,7 +2154,7 @@ export function OrderHistorySection() {
 
   async function handleDeleteOnlineOrder(orderId) {
     const employee = getStoredEmployee();
-    if (!employee?.userId || employee.role !== "manager") {
+    if (!employee?.userId || !canMutateManagerData(employee)) {
       setCancelError("Only a logged-in manager can cancel online orders.");
       return false;
     }
@@ -2254,7 +2299,7 @@ export function OrderHistorySection() {
                                 Picked Up
                               </button>
                             ) : null}
-                            {getStoredEmployee()?.role === "manager" ? (
+                            {canMutateManagerData(getStoredEmployee()) ? (
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -2402,6 +2447,8 @@ export function OrderHistorySection() {
 const EMPTY_REWARD_FORM = { name: "", pointsCost: "", menuItemId: "" };
 
 function CustomerDetailPanel({ customer, onPointsAdjusted }) {
+  const employee = getStoredEmployee();
+  const canManageCustomerLoyalty = canMutateManagerData(employee);
   const [orders, setOrders] = useState(null);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [pointsDelta, setPointsDelta] = useState("");
@@ -2419,6 +2466,10 @@ function CustomerDetailPanel({ customer, onPointsAdjusted }) {
 
   async function handleAdjust(e) {
     e.preventDefault();
+    if (!canManageCustomerLoyalty) {
+      setAdjustError("Demo managers can review loyalty history, but only full managers can adjust points.");
+      return;
+    }
     const delta = Number(pointsDelta);
     if (!Number.isInteger(delta) || delta === 0) { setAdjustError("Enter a non-zero whole number."); return; }
     setAdjusting(true);
@@ -2486,6 +2537,7 @@ function CustomerDetailPanel({ customer, onPointsAdjusted }) {
             value={pointsDelta}
             onChange={(e) => setPointsDelta(e.target.value)}
             placeholder="+50 or -25"
+            disabled={!canManageCustomerLoyalty}
             className="rounded-lg border px-3 py-2 text-sm"
           />
           <input
@@ -2493,11 +2545,12 @@ function CustomerDetailPanel({ customer, onPointsAdjusted }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason (service recovery, correction...)"
+            disabled={!canManageCustomerLoyalty}
             className="rounded-lg border px-3 py-2 text-sm"
           />
           <button
             type="submit"
-            disabled={adjusting}
+            disabled={adjusting || !canManageCustomerLoyalty}
             className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:bg-gray-300"
           >
             {adjusting ? "Saving..." : "Adjust Points"}
@@ -2509,6 +2562,8 @@ function CustomerDetailPanel({ customer, onPointsAdjusted }) {
 }
 
 export function CustomerLoyaltySection() {
+  const employee = getStoredEmployee();
+  const canManageCustomerLoyalty = canMutateManagerData(employee);
   const [refreshToken, setRefreshToken] = useState(0);
   const { data, isLoading, error } = useBackOfficeData("30days", refreshToken);
   const customers = data?.customers;
@@ -2534,7 +2589,6 @@ export function CustomerLoyaltySection() {
     const q = customerSearch.toLowerCase();
     return (
       `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
       c.phoneNumber?.includes(q)
     );
   });
@@ -2564,6 +2618,10 @@ export function CustomerLoyaltySection() {
   }
 
   function openEdit(reward) {
+    if (!canManageCustomerLoyalty) {
+      setActionMessage("Error: Demo managers can review rewards, but only full managers can change them.");
+      return;
+    }
     setEditTarget(reward);
     setForm({
       name: reward.name,
@@ -2582,6 +2640,10 @@ export function CustomerLoyaltySection() {
   }
 
   async function handleSave() {
+    if (!canManageCustomerLoyalty) {
+      setFormError("Demo managers can review rewards, but only full managers can change them.");
+      return;
+    }
     if (!form.name.trim()) { setFormError("Name is required."); return; }
     const pointsCost = Number(form.pointsCost);
     if (!Number.isInteger(pointsCost) || pointsCost < 1) { setFormError("Points cost must be a positive whole number."); return; }
@@ -2625,6 +2687,10 @@ export function CustomerLoyaltySection() {
   }
 
   async function handleToggle(reward) {
+    if (!canManageCustomerLoyalty) {
+      setActionMessage("Error: Demo managers can review rewards, but only full managers can change them.");
+      return;
+    }
     try {
       await toggleLoyaltyReward(reward.reward_id);
       setRewards((prev) => prev.map((r) =>
@@ -2643,11 +2709,17 @@ export function CustomerLoyaltySection() {
         <SummaryCards cards={customers?.summaryCards} isLoading={isLoading} error={error} />
       </ReportSection>
 
+      {isDemoManager(employee) ? (
+        <p className="rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Demo manager mode is read-only on loyalty pages. Customer and reward changes are disabled.
+        </p>
+      ) : null}
+
       <ReportSection title="Customer Records">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Search by name, email, or phone..."
+            placeholder="Search by name or phone..."
             value={customerSearch}
             onChange={(e) => setCustomerSearch(e.target.value)}
             className="w-full rounded-lg border px-3 py-2 text-sm md:w-80"
@@ -2663,7 +2735,7 @@ export function CustomerLoyaltySection() {
           <ErrorState message={error} />
         ) : filteredCustomers.length ? (
           <SimpleTable
-            headers={["Name", "Email", "Phone", "Points", "Actions", ""]}
+            headers={["Name", "Phone", "Points", "Actions", ""]}
             rows={filteredCustomers}
             renderRow={(item) => (
               <>
@@ -2673,12 +2745,15 @@ export function CustomerLoyaltySection() {
                   onClick={() => setSelectedCustomer(selectedCustomer?.customerId === item.customerId ? null : item)}
                 >
                   <td className="py-3 pr-4 font-medium text-gray-800">{item.firstName} {item.lastName}</td>
-                  <td className="py-3 pr-4 text-gray-600">{item.email}</td>
                   <td className="py-3 pr-4 text-gray-600">{item.phoneNumber}</td>
                   <td className="py-3 pr-4 font-semibold text-blue-600">{item.pointsBalance} pts</td>
                   <td className="py-3 pr-4" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={async () => {
+                        if (!canManageCustomerLoyalty) {
+                          setActionMessage("Error: Demo managers can review customers, but only full managers can change account status.");
+                          return;
+                        }
                         if (!confirm(`${item.isActive ? "Deactivate" : "Reactivate"} ${item.firstName} ${item.lastName}?`)) return;
                         try {
                           await toggleCustomerActive(item.customerId);
@@ -2698,7 +2773,7 @@ export function CustomerLoyaltySection() {
                 </tr>
                 {selectedCustomer?.customerId === item.customerId && (
                   <tr key={`${item.customerId}-detail`}>
-                    <td colSpan={6} className="bg-gray-50 px-4 pb-4 pt-2">
+                  <td colSpan={5} className="bg-gray-50 px-4 pb-4 pt-2">
                       <CustomerDetailPanel
                         customer={item}
                         onPointsAdjusted={(newBalance) => {
@@ -2726,6 +2801,7 @@ export function CustomerLoyaltySection() {
         action={
           <button
             onClick={openAdd}
+            disabled={!canManageCustomerLoyalty}
             className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
             + Add Reward
@@ -2754,12 +2830,14 @@ export function CustomerLoyaltySection() {
                 <td className="flex gap-2 py-3 pr-2">
                   <button
                     onClick={() => openEdit(reward)}
+                    disabled={!canManageCustomerLoyalty}
                     className="rounded px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleToggle(reward)}
+                    disabled={!canManageCustomerLoyalty}
                     className={`rounded px-2 py-1 text-xs font-semibold ${reward.is_active ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
                   >
                     {reward.is_active ? "Deactivate" : "Activate"}
@@ -2846,6 +2924,8 @@ export function CustomerLoyaltySection() {
 export function SettingsSection() {
   const { data, isLoading, error } = useBackOfficeData("7days");
   const settingsSummary = data?.settings;
+  const employee = getStoredEmployee();
+  const canManageSettings = canMutateManagerData(employee);
   const [settingsData, setSettingsData] = useState(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState("");
@@ -2898,6 +2978,11 @@ export function SettingsSection() {
   }, []);
 
   async function handleSaveSettings() {
+    if (!canManageSettings) {
+      setSaveMessage("Error: Demo managers can review settings, but only full managers can change them.");
+      return;
+    }
+
     const taxRate = Number(form.taxRate);
     if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 1) {
       setSaveMessage("Error: Tax rate must be a decimal between 0 and 1.");
@@ -2942,6 +3027,11 @@ export function SettingsSection() {
       </ReportSection>
 
       <ReportSection title="Manager Controls">
+        {isDemoManager(employee) ? (
+          <p className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Demo manager mode is read-only. Settings changes are disabled.
+          </p>
+        ) : null}
         {saveMessage ? (
           <p
             className={`mb-4 rounded px-4 py-2 text-sm font-medium ${
@@ -2971,6 +3061,7 @@ export function SettingsSection() {
                     step="0.0001"
                     value={form.taxRate}
                     onChange={(event) => setForm((current) => ({ ...current, taxRate: event.target.value }))}
+                    disabled={!canManageSettings}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="mt-2 text-xs text-gray-500">Use decimal form, like `0.0825` for 8.25%.</p>
@@ -2985,6 +3076,7 @@ export function SettingsSection() {
                     onChange={(event) =>
                       setForm((current) => ({ ...current, receiptPrefix: event.target.value.toUpperCase() }))
                     }
+                    disabled={!canManageSettings}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="mt-2 text-xs text-gray-500">Shown on receipt references and manager order views.</p>
@@ -3014,6 +3106,7 @@ export function SettingsSection() {
                       onChange={(event) =>
                         setForm((current) => ({ ...current, [item.key]: event.target.checked }))
                       }
+                      disabled={!canManageSettings}
                       className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span>
@@ -3028,7 +3121,7 @@ export function SettingsSection() {
                 <button
                   type="button"
                   onClick={handleSaveSettings}
-                  disabled={isSaving}
+                  disabled={isSaving || !canManageSettings}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {isSaving ? "Saving..." : "Save Settings"}

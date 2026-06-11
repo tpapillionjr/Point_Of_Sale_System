@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth, requireCustomerAuth, requireManager } from "../../middleware/auth.middleware.js";
+import { requireAuth, requireCustomerAuth, requireBackOfficeViewer, requireManager } from "../../middleware/auth.middleware.js";
 import {
   adjustLoyaltyPoints,
   getRewards,
@@ -25,7 +25,7 @@ router.get("/lookup", requireAuth, lookupCustomer);
 router.post("/staff-award", requireAuth, awardPoints);
 
 // Back-office (manager only)
-router.get("/manage/rewards", requireAuth, requireManager, listAllRewards);
+router.get("/manage/rewards", requireAuth, requireBackOfficeViewer, listAllRewards);
 router.post("/manage/rewards", requireAuth, requireManager, createLoyaltyReward);
 router.put("/manage/rewards/:id", requireAuth, requireManager, updateLoyaltyReward);
 router.patch("/manage/rewards/:id/toggle", requireAuth, requireManager, toggleLoyaltyReward);

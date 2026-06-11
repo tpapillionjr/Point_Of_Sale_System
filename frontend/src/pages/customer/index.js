@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { useCustomerSession } from "../../lib/useCustomerSession";
 import CustomerNav from "../../components/CustomerNav";
 
@@ -14,6 +15,7 @@ const FEATURED_ITEMS = [
 
 export default function CustomerHomePage() {
   const { customer } = useCustomerSession();
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   return (
     <div style={{
@@ -99,6 +101,22 @@ export default function CustomerHomePage() {
           }}>
             Make Reservation
           </Link>
+          <button
+            type="button"
+            onClick={() => setShowDemoModal(true)}
+            style={{
+              padding: "13px 32px",
+              borderRadius: "999px",
+              backgroundColor: "rgba(255,255,255,0.82)",
+              border: "1px dashed rgba(59,130,246,0.45)",
+              color: "#2563eb",
+              fontSize: "15px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            Demo Access
+          </button>
         </div>
       </section>
 
@@ -188,6 +206,72 @@ export default function CustomerHomePage() {
         © 2026 Lumi Restaurant · All rights reserved.
       </footer>
 
+      {showDemoModal && (
+        <DemoAccessModal onClose={() => setShowDemoModal(false)} />
+      )}
+
+    </div>
+  );
+}
+
+function DemoAccessModal({ onClose }) {
+  const credentialBox = {
+    borderRadius: "14px",
+    border: "1px solid rgba(148,163,184,0.25)",
+    backgroundColor: "#f8fbff",
+    padding: "12px 14px",
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(15,23,42,0.4)" }} />
+      <div style={{ position: "relative", width: "100%", maxWidth: "420px", borderRadius: "24px", backgroundColor: "white", padding: "28px", boxShadow: "0 24px 60px rgba(15,23,42,0.2)" }}>
+        <p style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.12em", color: "#60a5fa", margin: "0 0 10px" }}>
+          Demo Access
+        </p>
+        <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#1e3a5f", margin: "0 0 10px" }}>
+          Read-only manager preview
+        </h3>
+        <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.6, margin: "0 0 18px" }}>
+          Use this account to explore Back Office and Reports without being able to change live restaurant data.
+        </p>
+
+        <div style={{ display: "grid", gap: "12px", marginBottom: "18px" }}>
+          <div style={credentialBox}>
+            <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>Email</p>
+            <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>demo.manager@pos.local</p>
+          </div>
+          <div style={credentialBox}>
+            <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>Password</p>
+            <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>DemoView2026!</p>
+          </div>
+          <div style={credentialBox}>
+            <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>Clock-In PIN</p>
+            <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>2468</p>
+          </div>
+        </div>
+
+        <p style={{ fontSize: "12px", color: "#92400e", backgroundColor: "#fffbeb", border: "1px solid #fde68a", borderRadius: "12px", padding: "10px 12px", lineHeight: 1.5, margin: "0 0 18px" }}>
+          Demo manager mode is intentionally read-only. Menu edits, loyalty changes, staff changes, and other write actions are disabled.
+        </p>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ padding: "10px 16px", borderRadius: "999px", border: "1px solid rgba(148,163,184,0.35)", backgroundColor: "white", color: "#475569", fontWeight: "700", cursor: "pointer" }}
+          >
+            Close
+          </button>
+          <Link
+            href="/customer/login"
+            onClick={onClose}
+            style={{ padding: "10px 16px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none" }}
+          >
+            Open Login
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

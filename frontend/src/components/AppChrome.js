@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { canAccessManagerRoutes, clearStaffSession, getStoredEmployee } from "../lib/session";
+import { canAccessManagerRoutes, clearStaffSession, getStoredEmployee, isDemoManager } from "../lib/session";
 
 const NAV_ITEMS = [
   { href: "/clock-in", label: "Clock In" },
@@ -114,6 +114,11 @@ export default function AppChrome({ children }) {
       </header>
 
       <main className="app-shell__content">{children}</main>
+      {isDemoManager(employee) ? (
+        <div style={{ position: "sticky", bottom: 0, zIndex: 20, padding: "10px 16px", backgroundColor: "#fef3c7", color: "#92400e", fontSize: "13px", fontWeight: 600, borderTop: "1px solid #fcd34d" }}>
+          Demo manager mode: you can view back-office and reports, but write actions are disabled.
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,17 @@
 import jwt from "jsonwebtoken";
 import db from "../src/db/index.js";
 
+const BACK_OFFICE_VIEWER_ROLES = new Set(["manager", "demo_manager"]);
+const MANAGER_EDITOR_ROLES = new Set(["manager"]);
+
+export function canViewBackOffice(role) {
+  return BACK_OFFICE_VIEWER_ROLES.has(role);
+}
+
+export function canEditBackOffice(role) {
+  return MANAGER_EDITOR_ROLES.has(role);
+}
+
 export function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -20,8 +31,16 @@ export function requireAuth(req, res, next) {
 }
 
 export function requireManager(req, res, next) {
-  if (req.user?.role !== "manager") {
+  if (!canEditBackOffice(req.user?.role)) {
     return res.status(403).json({ error: "Manager access required" });
+  }
+
+  next();
+}
+
+export function requireBackOfficeViewer(req, res, next) {
+  if (!canViewBackOffice(req.user?.role)) {
+    return res.status(403).json({ error: "Back-office access required" });
   }
 
   next();

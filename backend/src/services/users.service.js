@@ -19,9 +19,9 @@ function validateUserPayload(payload) {
     issues.push("password must be at least 6 characters.");
   }
 
-  const allowedRoles = new Set(["employee", "manager", "kitchen"]);
+  const allowedRoles = new Set(["employee", "manager", "demo_manager", "kitchen"]);
   if (!payload?.role || !allowedRoles.has(payload.role)) {
-    issues.push("role must be employee, manager, or kitchen.");
+    issues.push("role must be employee, manager, demo_manager, or kitchen.");
   }
 
   if (issues.length > 0) {

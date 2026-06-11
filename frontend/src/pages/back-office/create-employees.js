@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import BackOfficeShell from "../../components/back-office/BackOfficeShell";
-import { getStoredEmployee } from "../../lib/session";
+import { canMutateManagerData, getStoredEmployee } from "../../lib/session";
 import { createUser, fetchUsers, deactivateUser, resetUserPassword } from "../../lib/api";
 
 export default function CreateEmployeesPage() {
@@ -23,9 +23,10 @@ export default function CreateEmployeesPage() {
   });
 
   const employee = getStoredEmployee();
+  const canManageStaff = canMutateManagerData(employee);
   const resetEmailIsValid = resetForm.email.trim().includes("@");
   const resetPasswordIsValid = resetForm.password.length >= 6;
-  const canResetPassword = resetEmailIsValid && resetPasswordIsValid && !isResetting;
+  const canResetPassword = canManageStaff && resetEmailIsValid && resetPasswordIsValid && !isResetting;
 
   useEffect(() => {
     loadUsers();
@@ -48,6 +49,9 @@ export default function CreateEmployeesPage() {
     setError("");
 
     try {
+      if (!canManageStaff) {
+        throw new Error("Demo managers can view staff accounts, but only full managers can change them.");
+      }
       const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
       await createUser({ name: fullName, email: form.email, password: form.password, role: form.role, requestingUserId: employee?.userId });
       setMessage(`Account created for ${fullName}.`);
@@ -63,6 +67,9 @@ export default function CreateEmployeesPage() {
     setError("");
 
     try {
+      if (!canManageStaff) {
+        throw new Error("Demo managers can view staff accounts, but only full managers can change them.");
+      }
       await deactivateUser(userId, employee?.userId);
       setMessage(`${name} has been deactivated.`);
       loadUsers();
@@ -78,6 +85,10 @@ export default function CreateEmployeesPage() {
 
     if (!resetEmailIsValid || !resetPasswordIsValid) {
       setError("Enter a valid email and a password with at least 6 characters.");
+      return;
+    }
+    if (!canManageStaff) {
+      setError("Demo managers can view staff accounts, but only full managers can change them.");
       return;
     }
 
@@ -104,6 +115,11 @@ export default function CreateEmployeesPage() {
       description="Create new employee accounts and manage existing staff."
     >
       <div className="grid gap-8 lg:grid-cols-2">
+        {!canManageStaff && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 lg:col-span-2">
+            Demo manager mode is read-only on this page. You can review staff accounts, but account creation, deactivation, and password resets are disabled.
+          </div>
+        )}
 
         <div className="flex flex-col gap-6">
           {/* Create Account Form */}
@@ -123,6 +139,7 @@ export default function CreateEmployeesPage() {
                     onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                     placeholder="First name"
                     required
+                    disabled={!canManageStaff}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                   />
                 </div>
@@ -134,6 +151,7 @@ export default function CreateEmployeesPage() {
                     onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                     placeholder="Last name"
                     required
+                    disabled={!canManageStaff}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
                   />
                 </div>
@@ -147,6 +165,7 @@ export default function CreateEmployeesPage() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="employee@email.com"
                   required
+                  disabled={!canManageStaff}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                 />
               </div>
@@ -159,6 +178,7 @@ export default function CreateEmployeesPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   placeholder="At least 6 characters"
                   required
+                  disabled={!canManageStaff}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                 />
               </div>
@@ -168,16 +188,19 @@ export default function CreateEmployeesPage() {
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  disabled={!canManageStaff}
                   className="lumi-report-select"
                 >
                   <option value="employee">Server</option>
                   <option value="kitchen">Kitchen</option>
                   <option value="manager">Manager</option>
+                  <option value="demo_manager">Demo Manager</option>
                 </select>
               </div>
 
               <button
                 type="submit"
+                disabled={!canManageStaff}
                 className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
               >
                 Create Account
@@ -201,6 +224,7 @@ export default function CreateEmployeesPage() {
                   onChange={(e) => setResetForm({ ...resetForm, email: e.target.value })}
                   placeholder="employee@email.com"
                   required
+                  disabled={!canManageStaff}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                 />
               </div>
@@ -213,6 +237,7 @@ export default function CreateEmployeesPage() {
                   onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })}
                   placeholder="At least 6 characters"
                   required
+                  disabled={!canManageStaff}
                   className="w-full rounded-lg border px-3 py-2 text-sm"
                 />
               </div>
@@ -258,6 +283,7 @@ export default function CreateEmployeesPage() {
                 {user.is_active ? (
                   <button
                     onClick={() => handleDeactivate(user.user_id, user.name)}
+                    disabled={!canManageStaff}
                     className="rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200"
                   >
                     Deactivate

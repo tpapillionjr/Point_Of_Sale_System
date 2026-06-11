@@ -8,7 +8,7 @@ import {
   markOnlineOrderPickedUp,
   fetchActiveTakeoutOrders,
 } from "../lib/api";
-import { getStoredEmployee } from "../lib/session";
+import { canMutateManagerData, getStoredEmployee } from "../lib/session";
 
 const TAKEOUT_STATUS_META = {
   Open: { label: "Pending", color: "#f97316", bg: "#fff7ed", border: "#fed7aa" },
@@ -103,7 +103,7 @@ export default function OnlineOrdersPage() {
   }
 
   async function handleCancel(orderId) {
-    if (employee?.role !== "manager") {
+    if (!canMutateManagerData(employee)) {
       setMessage("Only managers can cancel online orders.");
       return;
     }
@@ -190,7 +190,7 @@ export default function OnlineOrdersPage() {
                     onDeny={handleDeny}
                     onCheckout={handleCheckout}
                     onPickup={handlePickup}
-                    canCancel={employee?.role === "manager"}
+                    canCancel={canMutateManagerData(employee)}
                   />
                 ))}
               </div>
@@ -212,7 +212,7 @@ export default function OnlineOrdersPage() {
                     onDeny={handleDeny}
                     onCheckout={handleCheckout}
                     onPickup={handlePickup}
-                    canCancel={employee?.role === "manager"}
+                    canCancel={canMutateManagerData(employee)}
                   />
                 ))}
               </div>

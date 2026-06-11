@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { authenticateShift, clockInShift, clockOutShift } from "../lib/api";
-import { notifyStaffSessionChange, saveStaffSession } from "../lib/session";
+import { canAccessManagerRoutes, notifyStaffSessionChange, saveStaffSession } from "../lib/session";
 
 export default function ClockinPage() {
   const router = useRouter();
@@ -161,7 +161,7 @@ export default function ClockinPage() {
       return;
     }
 
-    if (user.role === "manager") {
+    if (canAccessManagerRoutes(user)) {
       router.push("/back-office");
       return;
     }
