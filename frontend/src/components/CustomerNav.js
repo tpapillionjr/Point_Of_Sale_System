@@ -2,12 +2,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useCustomerSession } from "../lib/useCustomerSession";
+import { withCustomerPreview } from "../lib/customerSession";
 
 export default function CustomerNav({ right }) {
   const router = useRouter();
-  const { customer } = useCustomerSession();
+  const { customer, isPreview } = useCustomerSession();
+  const isEmbeddedPreview = router.query.embed === "1";
 
-  const navLinks = [
+  if (isEmbeddedPreview) {
+    return null;
+  }
+
+  const navLinks = isPreview ? [
+    { href: "/customer", label: "Home" },
+    { href: "/customer/menu", label: "Menu" },
+    { href: "/customer/reservation", label: "Reservations" },
+  ] : [
     { href: "/customer", label: "Home" },
     { href: "/customer/dashboard", label: "Dashboard" },
     { href: "/customer/menu", label: "Menu" },
@@ -29,19 +39,24 @@ export default function CustomerNav({ right }) {
       top: 0,
       zIndex: 10,
     }}>
-      <Link href={customer ? "/customer/dashboard" : "/customer"} style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+      <Link href={withCustomerPreview(customer && !isPreview ? "/customer/dashboard" : "/customer", isPreview)} style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
         <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
         <span style={{ fontSize: "20px", fontWeight: "700", color: "#334e6e" }}>lumi</span>
       </Link>
 
       {customer && (
-        <div style={{ display: "flex", gap: "4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {isPreview ? (
+            <span style={{ fontSize: "11px", fontWeight: "800", color: "#1d4ed8", backgroundColor: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: "999px", padding: "6px 10px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Preview
+            </span>
+          ) : null}
           {navLinks.map(({ href, label }) => {
             const isActive = router.pathname === href || router.asPath.startsWith(href + "?");
             return (
               <Link
                 key={href}
-                href={href}
+                href={withCustomerPreview(href, isPreview)}
                 style={{
                   fontSize: "13px",
                   fontWeight: isActive ? "700" : "500",

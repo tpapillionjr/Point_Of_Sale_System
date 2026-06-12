@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { createCustomerReservation } from "../../lib/api";
 import CustomerNav from "../../components/CustomerNav";
+import { isCustomerPreviewMode, readStoredCustomerInfo, withCustomerPreview } from "../../lib/customerSession";
 
 const TIME_SLOTS = [
   ["07:00", "7:00 AM"],
@@ -45,16 +46,20 @@ export default function CustomerReservationPage() {
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("customerInfo");
-    if (!stored) {
+    const preview = isCustomerPreviewMode();
+    const stored = readStoredCustomerInfo(preview);
+    setIsPreview(preview);
+
+    if (!stored && !preview) {
       router.replace("/customer/login?redirect=/customer/reservation");
       return;
     }
 
     startTransition(() => {
-      setCustomer(JSON.parse(stored));
+      setCustomer(stored);
     });
   }, [router]);
 
@@ -84,6 +89,11 @@ export default function CustomerReservationPage() {
 
     if (!/^\d{10}$/.test(form.phone)) {
       setError("Phone number must be exactly 10 digits.");
+      return;
+    }
+
+    if (isPreview) {
+      setError("Preview mode is read-only. You can review the reservation form here, but requests are disabled.");
       return;
     }
 
@@ -137,7 +147,11 @@ export default function CustomerReservationPage() {
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <CustomerNav right={
-        <Link href="/customer/dashboard" style={{ fontSize: "13px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>My Account</Link>
+        isPreview ? (
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#1d4ed8" }}>Preview Mode</span>
+        ) : (
+          <Link href="/customer/dashboard" style={{ fontSize: "13px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>My Account</Link>
+        )
       } />
 
       <main style={{ maxWidth: "760px", margin: "0 auto", padding: "48px 24px" }}>
@@ -177,13 +191,18 @@ export default function CustomerReservationPage() {
               >
                 Make Another
               </button>
-              <Link href="/customer/dashboard" style={{ padding: "11px 22px", borderRadius: "8px", backgroundColor: "#3b82f6", color: "white", fontSize: "14px", fontWeight: "800", textDecoration: "none" }}>
+              <Link href={withCustomerPreview("/customer/dashboard", isPreview)} style={{ padding: "11px 22px", borderRadius: "8px", backgroundColor: "#3b82f6", color: "white", fontSize: "14px", fontWeight: "800", textDecoration: "none" }}>
                 Back to Account
               </Link>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ backgroundColor: "rgba(255,255,255,0.88)", borderRadius: "16px", padding: "28px", border: "1px solid rgba(148,163,184,0.18)", boxShadow: "0 8px 28px rgba(15,23,42,0.08)", display: "grid", gap: "18px" }}>
+            {isPreview ? (
+              <div style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", color: "#1d4ed8", padding: "10px 12px", fontSize: "13px", fontWeight: "700" }}>
+                Preview mode is active. This form is for layout review only and will not create a reservation.
+              </div>
+            ) : null}
             {error ? (
               <div style={{ backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#b91c1c", padding: "10px 12px", fontSize: "13px", fontWeight: "700" }}>
                 {error}
@@ -230,8 +249,8 @@ export default function CustomerReservationPage() {
               <textarea placeholder="Anything we should know?" value={form.notes} onChange={(e) => updateField("notes", e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
             </div>
 
-            <button type="submit" disabled={isSubmitting} style={{ width: "100%", padding: "14px", borderRadius: "8px", border: "none", backgroundColor: isSubmitting ? "#93c5fd" : "#3b82f6", color: "white", fontSize: "15px", fontWeight: "900", cursor: isSubmitting ? "not-allowed" : "pointer", boxShadow: isSubmitting ? "none" : "0 4px 14px rgba(59,130,246,0.3)" }}>
-              {isSubmitting ? "Requesting..." : "Request Reservation"}
+            <button type="submit" disabled={isSubmitting || isPreview} style={{ width: "100%", padding: "14px", borderRadius: "8px", border: "none", backgroundColor: isSubmitting || isPreview ? "#93c5fd" : "#3b82f6", color: "white", fontSize: "15px", fontWeight: "900", cursor: isSubmitting || isPreview ? "not-allowed" : "pointer", boxShadow: isSubmitting || isPreview ? "none" : "0 4px 14px rgba(59,130,246,0.3)" }}>
+              {isPreview ? "Preview Only" : isSubmitting ? "Requesting..." : "Request Reservation"}
             </button>
           </form>
         )}

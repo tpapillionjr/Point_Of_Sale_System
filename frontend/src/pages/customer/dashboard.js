@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { fetchCustomerLoyaltyInfo, fetchLoyaltyRewardsPublic, fetchCustomerOrderHistory, fetchCustomerReservations } from "../../lib/api";
 import CustomerNav from "../../components/CustomerNav";
+import { withCustomerPreview } from "../../lib/customerSession";
 
 const ORDER_STATUS_LABEL = {
   placed: { label: "Placed", color: "#f97316" },
@@ -18,6 +19,7 @@ const ACTIVE_ORDER_STATUSES = new Set(["placed", "confirmed", "preparing", "read
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
+  const isPreview = router.query.preview === "1" || router.query.preview === "true";
   const [customer, setCustomer] = useState(null);
   const [lastOrderId, setLastOrderId] = useState(null);
   const [loyaltyInfo, setLoyaltyInfo] = useState(null);
@@ -29,6 +31,31 @@ export default function CustomerDashboardPage() {
   const [selectedTrackOrderId, setSelectedTrackOrderId] = useState(null);
   const [reservations, setReservations] = useState([]);
   const [showReservations, setShowReservations] = useState(true);
+
+  if (isPreview) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <CustomerNav right={<span style={{ fontSize: "12px", fontWeight: "700", color: "#1d4ed8" }}>Preview Mode</span>} />
+        <div style={{ maxWidth: "760px", margin: "0 auto", padding: "56px 24px" }}>
+          <div style={{ backgroundColor: "rgba(255,255,255,0.92)", borderRadius: "20px", padding: "32px", border: "1px solid rgba(148,163,184,0.18)", boxShadow: "0 8px 28px rgba(15,23,42,0.08)" }}>
+            <p style={{ margin: "0 0 8px", color: "#60a5fa", fontSize: "12px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.1em" }}>Customer Preview</p>
+            <h1 style={{ margin: "0 0 12px", color: "#1e3a5f", fontSize: "30px", fontWeight: "900" }}>Account pages stay disabled in preview</h1>
+            <p style={{ margin: "0 0 22px", color: "#64748b", fontSize: "15px", lineHeight: 1.6 }}>
+              This keeps the admin-side preview isolated from live customer history, rewards, and profile data.
+            </p>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <Link href={withCustomerPreview("/customer/menu", true)} style={{ padding: "11px 20px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "14px", fontWeight: "800", textDecoration: "none" }}>
+                Open Menu Preview
+              </Link>
+              <Link href={withCustomerPreview("/customer/reservation", true)} style={{ padding: "11px 20px", borderRadius: "999px", border: "1px solid rgba(100,116,139,0.25)", backgroundColor: "white", color: "#334e6e", fontSize: "14px", fontWeight: "700", textDecoration: "none" }}>
+                View Reservation Flow
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");

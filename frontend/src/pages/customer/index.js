@@ -1,8 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import { useRouter } from "next/router";
 import { useCustomerSession } from "../../lib/useCustomerSession";
 import CustomerNav from "../../components/CustomerNav";
+import { withCustomerPreview } from "../../lib/customerSession";
 
 const FEATURED_ITEMS = [
   { id: 1, name: "All-Star Special", description: "Our signature breakfast platter with eggs, bacon, and toast.", price: 11.99, category: "Entrees" },
@@ -14,32 +16,152 @@ const FEATURED_ITEMS = [
 ];
 
 export default function CustomerHomePage() {
-  const { customer } = useCustomerSession();
+  const router = useRouter();
+  const { customer, isPreview } = useCustomerSession();
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [showInlineDemoPanel, setShowInlineDemoPanel] = useState(true);
+  const isEmbeddedPreview = router.query.embed === "1";
 
   return (
     <div style={{
       minHeight: "100vh",
       background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)",
       fontFamily: "system-ui, -apple-system, sans-serif",
+      position: "relative",
     }}>
 
       <CustomerNav right={
         customer ? (
-          <Link href="/customer/dashboard" style={{ padding: "7px 18px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
-            My Account
-          </Link>
+          isPreview ? (
+            <span style={{ padding: "7px 14px", borderRadius: "999px", backgroundColor: "rgba(59,130,246,0.08)", color: "#1d4ed8", fontSize: "12px", fontWeight: "700", border: "1px solid rgba(59,130,246,0.18)" }}>
+              Preview Mode
+            </span>
+          ) : (
+            <Link href="/customer/dashboard" style={{ padding: "7px 18px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+              My Account
+            </Link>
+          )
         ) : (
           <div style={{ display: "flex", gap: "8px" }}>
-            <Link href="/customer/login" style={{ padding: "7px 16px", borderRadius: "999px", border: "1px solid rgba(100,116,139,0.3)", backgroundColor: "rgba(255,255,255,0.8)", color: "#334e6e", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+            <Link href={withCustomerPreview("/customer/login", isPreview)} style={{ padding: "7px 16px", borderRadius: "999px", border: "1px solid rgba(100,116,139,0.3)", backgroundColor: "rgba(255,255,255,0.8)", color: "#334e6e", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
               Log In
             </Link>
-            <Link href="/customer/login?mode=signup" style={{ padding: "7px 16px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+            <Link href={withCustomerPreview("/customer/login?mode=signup", isPreview)} style={{ padding: "7px 16px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
               Sign Up
             </Link>
           </div>
         )
       } />
+
+      {!isEmbeddedPreview ? (
+        <section style={{ position: "absolute", top: "88px", left: 0, right: 0, zIndex: 5, pointerEvents: "none", padding: "0 24px" }}>
+          <div style={{ maxWidth: "1180px", margin: "0 auto", display: "flex", justifyContent: "flex-end", alignItems: "flex-start", gap: "18px" }}>
+            {showInlineDemoPanel ? (
+              <div style={{
+                width: "min(100%, 340px)",
+                borderRadius: "18px",
+                border: "1px solid rgba(96,165,250,0.28)",
+                background: "linear-gradient(135deg, rgba(239,246,255,0.96) 0%, rgba(255,255,255,0.94) 100%)",
+                boxShadow: "0 8px 24px rgba(59,130,246,0.10)",
+                padding: "14px 16px",
+                pointerEvents: "auto",
+              }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+                  <div>
+                    <p style={{ fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.12em", color: "#60a5fa", margin: "0 0 4px" }}>
+                      Demo Access
+                    </p>
+                    <h2 style={{ fontSize: "16px", fontWeight: "800", color: "#1e3a5f", margin: 0 }}>
+                      Read-only manager
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineDemoPanel(false)}
+                    style={{
+                      border: "none",
+                      backgroundColor: "transparent",
+                      color: "#94a3b8",
+                      fontSize: "18px",
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      padding: "0 2px",
+                    }}
+                    aria-label="Close demo access panel"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
+                  {[
+                    ["Email", "demo.manager@pos.local"],
+                    ["Password", "DemoView2026!"],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      style={{
+                        borderRadius: "12px",
+                        border: "1px solid rgba(148,163,184,0.22)",
+                        backgroundColor: "rgba(255,255,255,0.82)",
+                        padding: "10px 12px",
+                      }}
+                    >
+                      <p style={{ fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", margin: "0 0 3px" }}>
+                        {label}
+                      </p>
+                      <p style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a", margin: 0, wordBreak: "break-word" }}>
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+                  <p style={{ fontSize: "11px", color: "#92400e", margin: 0 }}>
+                    Read-only demo mode.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowDemoModal(true)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "999px",
+                      border: "1px solid rgba(59,130,246,0.28)",
+                      backgroundColor: "white",
+                      color: "#2563eb",
+                      fontSize: "12px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Details
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowInlineDemoPanel(true)}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "999px",
+                  border: "1px dashed rgba(59,130,246,0.38)",
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#2563eb",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  boxShadow: "0 6px 18px rgba(59,130,246,0.08)",
+                  pointerEvents: "auto",
+                }}
+              >
+                Demo Access
+              </button>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {/* Hero */}
       <section style={{
@@ -47,7 +169,7 @@ export default function CustomerHomePage() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "80px 24px 60px",
+        padding: !isEmbeddedPreview ? "160px 24px 60px" : "80px 24px 60px",
         textAlign: "center",
       }}>
         <div style={{ marginBottom: "24px" }}>
@@ -76,7 +198,7 @@ export default function CustomerHomePage() {
         </p>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "center" }}>
-          <Link href="/customer/menu" style={{
+          <Link href={withCustomerPreview("/customer/menu", isPreview)} style={{
             padding: "13px 32px",
             borderRadius: "999px",
             backgroundColor: "#3b82f6",
@@ -88,7 +210,7 @@ export default function CustomerHomePage() {
           }}>
             Order Online
           </Link>
-          <Link href={customer ? "/customer/reservation" : "/customer/login?redirect=/customer/reservation"} style={{
+          <Link href={withCustomerPreview(customer ? "/customer/reservation" : "/customer/login?redirect=/customer/reservation", isPreview)} style={{
             padding: "13px 32px",
             borderRadius: "999px",
             backgroundColor: "rgba(255,255,255,0.85)",
@@ -101,22 +223,6 @@ export default function CustomerHomePage() {
           }}>
             Make Reservation
           </Link>
-          <button
-            type="button"
-            onClick={() => setShowDemoModal(true)}
-            style={{
-              padding: "13px 32px",
-              borderRadius: "999px",
-              backgroundColor: "rgba(255,255,255,0.82)",
-              border: "1px dashed rgba(59,130,246,0.45)",
-              color: "#2563eb",
-              fontSize: "15px",
-              fontWeight: "700",
-              cursor: "pointer",
-            }}
-          >
-            Demo Access
-          </button>
         </div>
       </section>
 
@@ -180,7 +286,7 @@ export default function CustomerHomePage() {
         </div>
 
         <div style={{ textAlign: "center", marginTop: "36px" }}>
-          <Link href="/customer/menu" style={{
+          <Link href={withCustomerPreview("/customer/menu", isPreview)} style={{
             padding: "11px 28px",
             borderRadius: "999px",
             backgroundColor: "rgba(255,255,255,0.85)",
@@ -206,9 +312,9 @@ export default function CustomerHomePage() {
         © 2026 Lumi Restaurant · All rights reserved.
       </footer>
 
-      {showDemoModal && (
+      {showDemoModal && !isEmbeddedPreview ? (
         <DemoAccessModal onClose={() => setShowDemoModal(false)} />
-      )}
+      ) : null}
 
     </div>
   );
@@ -229,12 +335,37 @@ function DemoAccessModal({ onClose }) {
         <p style={{ fontSize: "11px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.12em", color: "#60a5fa", margin: "0 0 10px" }}>
           Demo Access
         </p>
-        <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#1e3a5f", margin: "0 0 10px" }}>
-          Read-only manager preview
-        </h3>
+            <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#1e3a5f", margin: "0 0 10px" }}>
+              Read-only manager preview
+            </h3>
         <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.6, margin: "0 0 18px" }}>
           Use this account to explore Back Office and Reports without being able to change live restaurant data.
         </p>
+
+        <div style={{ display: "grid", gap: "10px", marginBottom: "18px" }}>
+          {[
+            ["What it does", "Customer ordering, live tracking, back-office management, reporting, and demo-safe previews."],
+            ["Key features", "Read-only demo manager, embedded customer preview, simulated tracking, reports, and reservations."],
+            ["Tech stack", "Next.js frontend, Express backend, MySQL on Railway, and role-based access controls."],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                borderRadius: "14px",
+                border: "1px solid rgba(148,163,184,0.2)",
+                backgroundColor: "rgba(248,251,255,0.95)",
+                padding: "12px 14px",
+              }}
+            >
+              <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+                {label}
+              </p>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.55, color: "#475569", fontWeight: "600" }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
 
         <div style={{ display: "grid", gap: "12px", marginBottom: "18px" }}>
           <div style={credentialBox}>
@@ -244,10 +375,6 @@ function DemoAccessModal({ onClose }) {
           <div style={credentialBox}>
             <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>Password</p>
             <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>DemoView2026!</p>
-          </div>
-          <div style={credentialBox}>
-            <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>Clock-In PIN</p>
-            <p style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", margin: 0 }}>2468</p>
           </div>
         </div>
 

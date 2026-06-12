@@ -1,15 +1,37 @@
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import CustomerNav from "../../components/CustomerNav";
 import { updateCustomerProfile } from "../../lib/api";
+import { withCustomerPreview } from "../../lib/customerSession";
 
 export default function CustomerSettingsPage() {
   const router = useRouter();
+  const isPreview = router.query.preview === "1" || router.query.preview === "true";
   const [customer, setCustomer] = useState(null);
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", currentPassword: "", newPassword: "", confirmPassword: "" });
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  if (isPreview) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#f1f5f9" }}>
+        <CustomerNav right={<span style={{ fontSize: "12px", fontWeight: "700", color: "#1d4ed8" }}>Preview Mode</span>} />
+        <div style={{ maxWidth: "520px", margin: "48px auto", padding: "0 16px" }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "32px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+            <h1 style={{ fontSize: "28px", fontWeight: "700", color: "#1e293b", marginBottom: "8px" }}>Settings are disabled in preview</h1>
+            <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "24px", lineHeight: 1.6 }}>
+              We keep profile changes out of the admin-side preview so you can review the customer UI without touching live account data.
+            </p>
+            <Link href={withCustomerPreview("/customer", true)} style={{ display: "inline-block", padding: "11px 20px", borderRadius: "999px", backgroundColor: "#1d4ed8", color: "#fff", fontSize: "14px", fontWeight: "700", textDecoration: "none" }}>
+              Back to Customer Preview
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem("customerInfo");

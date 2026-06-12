@@ -1,16 +1,25 @@
 import { useState, useEffect, startTransition } from "react";
+import { useRouter } from "next/router";
+import { isCustomerPreviewMode, readStoredCustomerInfo, subscribeToCustomerSession } from "./customerSession";
 
 export function useCustomerSession() {
+  const router = useRouter();
   const [customer, setCustomer] = useState(null);
+  const [isPreview, setIsPreview] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("customerInfo");
-    startTransition(() => {
-      setCustomer(stored ? JSON.parse(stored) : null);
-      setLoaded(true);
-    });
-  }, []);
+    function syncSession() {
+      startTransition(() => {
+        setCustomer(readStoredCustomerInfo());
+        setIsPreview(isCustomerPreviewMode());
+        setLoaded(true);
+      });
+    }
 
-  return { customer, loaded };
+    syncSession();
+    return subscribeToCustomerSession(syncSession);
+  }, [router.asPath]);
+
+  return { customer, loaded, isPreview };
 }

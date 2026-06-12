@@ -4,17 +4,17 @@ import Image from "next/image";
 import { useRouter } from "next/router";
 import { placeCustomerOrder, fetchLoyaltyRewardsPublic } from "../../lib/api";
 import { useCustomerSession } from "../../lib/useCustomerSession";
+import { readStoredCustomerCart, withCustomerPreview, writeStoredCustomerCart, writeStoredEstimatedPoints } from "../../lib/customerSession";
 
 const TAX_RATE = 0.0825;
 
 export default function CustomerOrderPage() {
   const router = useRouter();
-  const { customer, loaded } = useCustomerSession();
+  const { customer, loaded, isPreview } = useCustomerSession();
   const [cart, setCart] = useState([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("customerCart");
-    if (stored) startTransition(() => setCart(JSON.parse(stored)));
+    startTransition(() => setCart(readStoredCustomerCart()));
   }, []);
 
   function updateCartQty(id, qty) {
@@ -22,7 +22,7 @@ export default function CustomerOrderPage() {
       const next = qty <= 0
         ? prev.filter((c) => c.menu_item_id !== id)
         : prev.map((c) => c.menu_item_id === id ? { ...c, quantity: qty } : c);
-      localStorage.setItem("customerCart", JSON.stringify(next));
+      writeStoredCustomerCart(next);
       return next;
     });
   }
@@ -56,7 +56,7 @@ export default function CustomerOrderPage() {
     }
   }, [customer]);
 
-  if (loaded && !customer) {
+  if (loaded && !customer && !isPreview) {
     router.replace("/customer/login?redirect=/customer/customer-checkout");
     return null;
   }
@@ -66,7 +66,7 @@ export default function CustomerOrderPage() {
       <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #dbeafe 0%, #eff6ff 40%, #f8fafc 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui, sans-serif" }}>
         <div style={{ textAlign: "center" }}>
           <p style={{ color: "#64748b", marginBottom: "16px" }}>Your cart is empty.</p>
-          <Link href="/customer/menu" style={{ padding: "10px 24px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none", fontSize: "14px" }}>
+          <Link href={withCustomerPreview("/customer/menu", isPreview)} style={{ padding: "10px 24px", borderRadius: "999px", backgroundColor: "#3b82f6", color: "white", fontWeight: "700", textDecoration: "none", fontSize: "14px" }}>
             ← Back to Menu
           </Link>
         </div>
@@ -126,6 +126,11 @@ export default function CustomerOrderPage() {
   }
 
   async function handlePlaceOrder() {
+    if (isPreview) {
+      setOrderError("Preview mode is read-only. You can review the customer flow here, but live orders are disabled.");
+      return;
+    }
+
     const { errs, cardErrs } = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     if (Object.keys(cardErrs).length > 0) { return; }
@@ -153,12 +158,12 @@ export default function CustomerOrderPage() {
         rewardId: selectedRewardId ?? null,
       });
 
-      localStorage.removeItem("customerCart");
+      writeStoredCustomerCart([]);
       if (customer?.customerId) {
         localStorage.setItem(`lastOrderId:${customer.customerId}`, orderId);
       }
-      localStorage.setItem("estimatedPoints", estimatedPoints);
-      router.push(`/customer/order-tracking?orderId=${orderId}`);
+      writeStoredEstimatedPoints(estimatedPoints);
+      router.push(withCustomerPreview(`/customer/order-tracking?orderId=${orderId}`, isPreview));
     } catch (err) {
       setOrderError(err.message || "Something went wrong. Please try again.");
       setIsSubmitting(false);
@@ -182,11 +187,11 @@ export default function CustomerOrderPage() {
 
       {/* Navbar */}
       <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", backgroundColor: "rgba(255,255,255,0.7)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>
-        <Link href="/customer" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+        <Link href={withCustomerPreview("/customer", isPreview)} style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
           <Image src="/lumii2.png" alt="Lumi logo" width={36} height={36} style={{ objectFit: "contain" }} />
           <span style={{ fontSize: "20px", fontWeight: "700", color: "#334e6e" }}>lumi</span>
         </Link>
-        <Link href="/customer/menu" style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", textDecoration: "none" }}>
+        <Link href={withCustomerPreview("/customer/menu", isPreview)} style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", textDecoration: "none" }}>
           ← Return to Menu
         </Link>
       </nav>
@@ -201,6 +206,11 @@ export default function CustomerOrderPage() {
 
             {/* Contact info */}
             <div style={{ backgroundColor: "rgba(255,255,255,0.8)", borderRadius: "16px", padding: "24px", border: "1px solid rgba(148,163,184,0.18)", backdropFilter: "blur(8px)" }}>
+              {isPreview ? (
+                <div style={{ marginBottom: "18px", borderRadius: "12px", border: "1px solid rgba(96,165,250,0.28)", backgroundColor: "#eff6ff", padding: "12px 14px", color: "#1d4ed8", fontSize: "13px", fontWeight: "700" }}>
+                  Preview mode is active. Form changes stay local to this modal and order submission is disabled.
+                </div>
+              ) : null}
               <p style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: "20px" }}>Contact Information</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -481,10 +491,10 @@ export default function CustomerOrderPage() {
 
             <button
               onClick={handlePlaceOrder}
-              disabled={isSubmitting}
-              style={{ width: "100%", padding: "15px", borderRadius: "999px", border: "none", backgroundColor: isSubmitting ? "#93c5fd" : "#3b82f6", color: "white", fontSize: "16px", fontWeight: "800", cursor: isSubmitting ? "not-allowed" : "pointer", boxShadow: "0 4px 14px rgba(59,130,246,0.3)", letterSpacing: "0.02em" }}
+              disabled={isSubmitting || isPreview}
+              style={{ width: "100%", padding: "15px", borderRadius: "999px", border: "none", backgroundColor: isSubmitting || isPreview ? "#93c5fd" : "#3b82f6", color: "white", fontSize: "16px", fontWeight: "800", cursor: isSubmitting || isPreview ? "not-allowed" : "pointer", boxShadow: isSubmitting || isPreview ? "none" : "0 4px 14px rgba(59,130,246,0.3)", letterSpacing: "0.02em" }}
             >
-              {isSubmitting ? "Placing Order..." : `Place Order · $${total.toFixed(2)}`}
+              {isPreview ? "Preview Only" : isSubmitting ? "Placing Order..." : `Place Order · $${total.toFixed(2)}`}
             </button>
 
             <p style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", margin: 0 }}>

@@ -1,3 +1,5 @@
+import { readStoredCustomerToken } from "./customerSession";
+
 function resolveApiUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 
@@ -453,7 +455,7 @@ export async function staffLogin(payload) {
 
 // Customer-facing endpoints attach the customer token when a shopper is logged in.
 export async function placeCustomerOrder(payload) {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const token = readStoredCustomerToken();
   const res = await fetch(`${API_URL}/api/customer/orders`, {
     method: "POST",
     headers: {
@@ -470,7 +472,7 @@ export async function placeCustomerOrder(payload) {
 }
 
 export async function fetchCustomerOrderStatus(orderId) {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const token = readStoredCustomerToken();
   const res = await fetch(`${API_URL}/api/customer/orders/${orderId}/status`, {
     headers: {
       "Content-Type": "application/json",
@@ -503,7 +505,7 @@ export async function cancelReservation(reservationId) {
 }
 
 export async function fetchCustomerReservations() {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const token = readStoredCustomerToken();
   const res = await fetch(`${API_URL}/api/customer/reservations`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   });
@@ -513,7 +515,7 @@ export async function fetchCustomerReservations() {
 }
 
 export async function createCustomerReservation(payload) {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("customerAuthToken") : null;
+  const token = readStoredCustomerToken();
   const res = await fetch(`${API_URL}/api/customer/reservations`, {
     method: "POST",
     headers: {

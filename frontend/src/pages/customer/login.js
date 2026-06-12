@@ -4,10 +4,12 @@ import Image from "next/image";
 import { useRouter } from "next/router";
 import { customerLogin, customerRegister, staffLogin } from "../../lib/api";
 import { canAccessManagerRoutes, saveStaffSession } from "../../lib/session";
+import { withCustomerPreview, writeStoredCustomerInfo, writeStoredCustomerToken } from "../../lib/customerSession";
 
 export default function CustomerLoginPage() {
   const router = useRouter();
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const isPreview = router.query.preview === "1" || router.query.preview === "true";
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [forgotEmail, setForgotEmail] = useState("");
@@ -28,7 +30,8 @@ export default function CustomerLoginPage() {
 
   function getCustomerRedirect() {
     const redirect = Array.isArray(router.query.redirect) ? router.query.redirect[0] : router.query.redirect;
-    return typeof redirect === "string" && redirect.startsWith("/customer") ? redirect : "/customer/dashboard";
+    const nextPath = typeof redirect === "string" && redirect.startsWith("/customer") ? redirect : "/customer/dashboard";
+    return withCustomerPreview(nextPath, isPreview);
   }
 
   function handleModeSwitch(next) {
@@ -85,8 +88,8 @@ export default function CustomerLoginPage() {
     try {
       try {
         const data = await customerLogin({ email: loginForm.email, password: loginForm.password });
-        localStorage.setItem("customerAuthToken", data.token);
-        localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, pointsBalance: data.pointsBalance }));
+        writeStoredCustomerToken(data.token, isPreview);
+        writeStoredCustomerInfo({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, pointsBalance: data.pointsBalance }, isPreview);
         router.push(getCustomerRedirect());
       } catch (customerError) {
         if (customerError.message?.toLowerCase().includes("deactivated")) {
@@ -129,8 +132,8 @@ export default function CustomerLoginPage() {
     setIsSubmitting(true);
     try {
       const data = await customerRegister({ firstName, lastName, email, phone, password });
-      localStorage.setItem("customerAuthToken", data.token);
-      localStorage.setItem("customerInfo", JSON.stringify({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone }));
+      writeStoredCustomerToken(data.token, isPreview);
+      writeStoredCustomerInfo({ customerId: data.customerId, firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone }, isPreview);
       router.push(getCustomerRedirect());
     } catch (err) {
       setError(err.message);
@@ -191,11 +194,11 @@ export default function CustomerLoginPage() {
         backdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(148,163,184,0.15)",
       }}>
-        <Link href="/customer" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
+        <Link href={withCustomerPreview("/customer", isPreview)} style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
           <Image src="/lumii2.png" alt="Lumi logo" width={32} height={32} style={{ objectFit: "contain" }} />
           <span style={{ fontSize: "20px", fontWeight: "700", color: "#334e6e", letterSpacing: "-0.01em" }}>lumi</span>
         </Link>
-        <Link href="/customer" style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", textDecoration: "none" }}>
+        <Link href={withCustomerPreview("/customer", isPreview)} style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", textDecoration: "none" }}>
           ← Back to Home
         </Link>
       </nav>
@@ -499,10 +502,33 @@ export default function CustomerLoginPage() {
             <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.6, margin: "0 0 18px" }}>
               Use this to review Back Office and Reports without editing live data.
             </p>
+            <div style={{ display: "grid", gap: "10px", marginBottom: "18px" }}>
+              {[
+                ["What it does", "Customer ordering, live tracking, back-office management, reporting, and demo-safe previews."],
+                ["Key features", "Read-only demo manager, embedded customer preview, simulated tracking, reports, and reservations."],
+                ["Tech stack", "Next.js frontend, Express backend, MySQL on Railway, and role-based access controls."],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{
+                    borderRadius: "14px",
+                    border: "1px solid rgba(148,163,184,0.2)",
+                    backgroundColor: "rgba(248,251,255,0.95)",
+                    padding: "12px 14px",
+                  }}
+                >
+                  <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+                    {label}
+                  </p>
+                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.55, color: "#475569", fontWeight: "600" }}>
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
             {[
               ["Email", "demo.manager@pos.local"],
               ["Password", "DemoView2026!"],
-              ["Clock-In PIN", "2468"],
             ].map(([label, value]) => (
               <div key={label} style={{ borderRadius: "14px", border: "1px solid rgba(148,163,184,0.25)", backgroundColor: "#f8fbff", padding: "12px 14px", marginBottom: "10px" }}>
                 <p style={{ fontSize: "12px", fontWeight: "700", color: "#94a3b8", margin: "0 0 4px" }}>{label}</p>

@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { useCustomerSession } from "../../lib/useCustomerSession";
 import CustomerNav from "../../components/CustomerNav";
 import { MENU_CATEGORIES, normalizeMenuCategory, isBeverageCategory } from "../../lib/menuCategories";
+import { readStoredCustomerCart, withCustomerPreview, writeStoredCustomerCart } from "../../lib/customerSession";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
@@ -13,21 +14,20 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ||
 
 export default function CustomerMenuPage() {
   const router = useRouter();
-  const { customer } = useCustomerSession();
+  const { customer, isPreview } = useCustomerSession();
   const [menu, setMenu] = useState({});
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [cart, setCart] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
-      const stored = localStorage.getItem("customerCart");
-      return stored ? JSON.parse(stored) : [];
+      return readStoredCustomerCart();
     } catch { return []; }
   });
   const [showCart, setShowCart] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem("customerCart", JSON.stringify(cart));
+    writeStoredCustomerCart(cart);
   }, [cart]);
 
   useEffect(() => {
@@ -95,8 +95,8 @@ export default function CustomerMenuPage() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   function handleCheckout() {
-    localStorage.setItem("customerCart", JSON.stringify(cart));
-    router.push("/customer/customer-checkout");
+    writeStoredCustomerCart(cart);
+    router.push(withCustomerPreview("/customer/customer-checkout", isPreview));
   }
 
   if (isLoading) {
@@ -116,7 +116,7 @@ export default function CustomerMenuPage() {
       <CustomerNav right={
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {!customer && (
-            <Link href="/customer/login" style={{ fontSize: "13px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>Log In</Link>
+            <Link href={withCustomerPreview("/customer/login", isPreview)} style={{ fontSize: "13px", fontWeight: "600", color: "#475569", textDecoration: "none" }}>Log In</Link>
           )}
           <button
             onClick={() => setShowCart(true)}
